@@ -119,4 +119,9 @@ public class DmlRequest extends DataSourceBaseRequest implements DataSourceConso
      */
     private Boolean isExecuteCompile = false;
 
+    /**
+     * Whether the user explicitly confirmed SQL identified as high risk.
+     */
+    private Boolean confirmDangerousSql = false;
+
 }

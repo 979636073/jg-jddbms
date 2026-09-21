@@ -2,6 +2,7 @@ package com.jd.biz.controller.rdb;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import com.alibaba.druid.DbType;
 import com.alibaba.fastjson2.JSON;
 import com.jd.biz.aspect.ConnectionInfoAspect;
 import com.jd.biz.controller.rdb.converter.RdbWebConverter;
@@ -18,6 +19,7 @@ import com.jd.biz.domain.api.param.DlExecuteParam;
 import com.jd.biz.domain.api.param.OrderByParam;
 import com.jd.biz.domain.api.param.UpdateSelectResultParam;
 import com.jd.biz.domain.api.service.DlTemplateService;
+import com.jd.biz.domain.core.util.SqlSafetyChecker;
 import com.jd.biz.http.GatewayClientService;
 import com.jd.common.annotation.Log;
 import com.jd.common.constant.Constants;
@@ -31,6 +33,7 @@ import com.jd.spi.jdbc.DefaultValueHandler;
 import com.jd.spi.model.ExecuteResult;
 import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.SQLExecutor;
+import com.jd.spi.util.JdbcUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -96,6 +99,13 @@ public class RdbDmlController {
             String sql = request.getSql();
             sql = String.format(Constants.SELECT_Y, sql);
             request.setSql(sql);
+        }
+        if (!Boolean.TRUE.equals(request.getConfirmDangerousSql())) {
+            DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
+            List<String> risks = SqlSafetyChecker.findRisks(request.getSql(), dbType);
+            if (!risks.isEmpty()) {
+                return ListResult.error("sql.confirmRequired", String.join("；", risks));
+            }
         }
         DlExecuteParam param = rdbWebConverter.request2param(request);
         param.setIsErrorExecute(request.getIsErrorExecute());

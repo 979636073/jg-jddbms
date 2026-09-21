@@ -465,9 +465,44 @@ export default {
           send.sessionId = this.sessionId;
         }
         status ? (send.isExecuteCompile = true) : "";
-        sqlServer
-          .executeSql(send)
-          .then((res) => {
+        this.requestSqlExecution(send);
+      } else {
+        this.execute();
+      }
+    },
+    requestSqlExecution(send) {
+      sqlServer
+        .executeSql(send)
+        .then((res) => {
+          if (
+            res.errorCode === "sql.confirmRequired" &&
+            !send.confirmDangerousSql
+          ) {
+            this.sqlLoading = false;
+            const target = [
+              send.databaseType || send.type,
+              send.dataSourceName,
+              send.schemaName,
+            ]
+              .filter(Boolean)
+              .join(" / ");
+            this.$confirm(
+              `${res.errorMessage}。目标：${target || "当前连接"}。确认继续执行吗？`,
+              "高风险 SQL 确认",
+              {
+                confirmButtonText: "确认执行",
+                cancelButtonText: "取消",
+                type: "warning",
+              }
+            )
+              .then(() => {
+                send.confirmDangerousSql = true;
+                this.sqlLoading = true;
+                this.requestSqlExecution(send);
+              })
+              .catch(() => {});
+            return;
+          }
             const results = Array.isArray(res.data) ? res.data : [];
             this.lastExecutionDuration = results[0] && results[0].duration !== undefined
               ? Number(results[0].duration)
@@ -508,13 +543,10 @@ export default {
             //   this.errorShow = true;
             //   this.errorMsg = res.data[0].message;
             // }
-          })
-          .catch(() => {
-            this.sqlLoading = false;
-          });
-      } else {
-        this.execute();
-      }
+        })
+        .catch(() => {
+          this.sqlLoading = false;
+        });
     },
     // 清空
     emptySql() {
