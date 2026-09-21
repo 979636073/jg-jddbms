@@ -34,6 +34,13 @@ public class IDriverManager {
     private static final Map<String, ClassLoader> CLASS_LOADER_MAP = new ConcurrentHashMap();
     private static final Map<String, DriverEntry> DRIVER_ENTRY_MAP = new ConcurrentHashMap();
     private static final String SQL_STATE_CODE = "08001";
+    private static final String ORACLE_TIMEZONE_AS_REGION = "oracle.jdbc.timezoneAsRegion";
+
+    static {
+        if (System.getProperty(ORACLE_TIMEZONE_AS_REGION) == null) {
+            System.setProperty(ORACLE_TIMEZONE_AS_REGION, "false");
+        }
+    }
 
     public static Connection getConnection(String url, DriverConfig driver) throws SQLException {
         Properties info = new Properties();
@@ -80,6 +87,7 @@ public class IDriverManager {
         if (Objects.isNull(url)) {
             throw new SQLException("The url cannot be null", SQL_STATE_CODE);
         }
+        applyConnectionDefaults(url, info);
 
         DriverEntry driverEntry = DRIVER_ENTRY_MAP.get(driver.getJdbcDriver());
         if (Objects.isNull(driverEntry)) {
@@ -102,6 +110,15 @@ public class IDriverManager {
             }
 
             return con;
+        }
+    }
+
+    static void applyConnectionDefaults(String url, Properties info) {
+        if (StringUtils.startsWithIgnoreCase(url, "jdbc:oracle:")) {
+            info.putIfAbsent(ORACLE_TIMEZONE_AS_REGION, "false");
+            if (System.getProperty(ORACLE_TIMEZONE_AS_REGION) == null) {
+                System.setProperty(ORACLE_TIMEZONE_AS_REGION, "false");
+            }
         }
     }
 
