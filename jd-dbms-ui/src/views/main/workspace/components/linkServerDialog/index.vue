@@ -111,6 +111,15 @@
               </el-form-item>
             </el-col>
           </el-row>
+          <el-alert
+            v-if="isLoopbackHost"
+            class="host-warning"
+            title="Docker 部署提示"
+            description="127.0.0.1 或 localhost 指向后端容器；连接宿主机数据库请使用 host.docker.internal。"
+            type="warning"
+            show-icon
+            :closable="false"
+          ></el-alert>
           <template v-if="formData.type == 'ORACLE'">
             <el-row :gutter="20">
               <el-col :span="12">
@@ -154,6 +163,12 @@ export default {
     visibleDialog: {
       type: Boolean,
       default: true,
+    },
+  },
+  computed: {
+    isLoopbackHost() {
+      const host = (this.formData.host || "").trim().toLowerCase();
+      return host === "127.0.0.1" || host === "localhost";
     },
   },
   watch: {
@@ -427,7 +442,9 @@ export default {
                 this.$router.replace({ path: "/workspace/look/" + pageId });
               }
             } else {
-              this.$message.error(res.errorCode);
+              this.$message.error(
+                res.errorMessage || res.errorCode || "数据库连接失败"
+              );
             }
           }).finally(() => {
             if (flag === "save") this.connecting = false;

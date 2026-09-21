@@ -400,23 +400,55 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
                     testParam.getUsername(), testParam.getPassword(), testParam.getDbType(),
                     driverConfig, param.getSsh(), KeyValue.toMap(param.getExtendInfo()));
             if (BooleanUtils.isNotTrue(dataSourceConnect.getSuccess())) {
-                String message = "";
-                if (dataSourceConnect.getMessage().contains("用户名") || dataSourceConnect.getMessage().toUpperCase(Locale.ROOT).contains("PASSWORD")) {
-                    message = "用户名或密码错误";
-                } else {
-                    message = "数据源连接异常";
-                }
-                return ActionResult.fail(message, dataSourceConnect.getDescription(),
-                        dataSourceConnect.getErrorDetail());
+                return ActionResult.fail(connectionFailureMessage(param.getHost(), param.getPort(),
+                        dataSourceConnect.getMessage()));
             }
         } catch (Exception e) {
-            if (e.getMessage().contains("用户名") || e.getMessage().toUpperCase(Locale.ROOT).contains("PASSWORD")) {
-                throw new BusinessException("用户名或密码错误");
-            } else {
-                throw new BusinessException("数据源连接异常");
-            }
+            log.error("preConnect error", e);
+            return ActionResult.fail(connectionFailureMessage(param.getHost(), param.getPort(), e.getMessage()));
         }
         return ActionResult.isSuccess();
+    }
+
+    static String connectionFailureMessage(String host, String port, String rawMessage) {
+        String message = StringUtils.defaultString(rawMessage);
+        String upperMessage = message.toUpperCase(Locale.ROOT);
+        if (upperMessage.contains("ORA-01017") || upperMessage.contains("INVALID USERNAME/PASSWORD")
+                || upperMessage.contains("PASSWORD") || message.contains("用户名") || message.contains("口令")) {
+            return "用户名或密码错误";
+        }
+        if (upperMessage.contains("ORA-12514")) {
+            return "Oracle 服务名不存在或尚未注册到监听器";
+        }
+        if (upperMessage.contains("ORA-12505")) {
+            return "Oracle SID 不存在或尚未注册到监听器";
+        }
+        if (upperMessage.contains("ORA-12154")) {
+            return "Oracle 连接标识无法解析，请检查服务名或 SID";
+        }
+        if (upperMessage.contains("UNKNOWNHOSTEXCEPTION") || upperMessage.contains("UNKNOWN HOST")
+                || upperMessage.contains("NAME OR SERVICE NOT KNOWN")) {
+            return "无法解析数据库主机：" + StringUtils.defaultIfBlank(host, "未填写");
+        }
+        if (upperMessage.contains("TIMED OUT") || upperMessage.contains("TIMEOUT")) {
+            return "连接数据库超时，请检查主机、端口和网络";
+        }
+        if (upperMessage.contains("ORA-12541") || upperMessage.contains("CONNECTION REFUSED")
+                || upperMessage.contains("NETWORK ADAPTER COULD NOT ESTABLISH")) {
+            String target = StringUtils.defaultIfBlank(host, "未填写") + ":"
+                    + StringUtils.defaultIfBlank(port, "未填写");
+            if ("127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host)) {
+                return "无法连接到 " + target + "；Docker 部署时请将主机号改为 host.docker.internal";
+            }
+            return "无法连接到数据库 " + target + "，请检查地址、端口和数据库服务状态";
+        }
+        if (upperMessage.contains("NO SUITABLE DRIVER") || upperMessage.contains("DRIVER.LOAD")) {
+            return "JDBC 驱动不可用，请检查驱动配置";
+        }
+        if (upperMessage.contains("ORA-01882")) {
+            return "Oracle 客户端与数据库时区配置不兼容";
+        }
+        return "数据库连接失败，请检查连接参数或查看服务端日志";
     }
 
     @Override

@@ -167,7 +167,8 @@ public class JdbcUtils {
             while (t.getCause() != null) {
                 t = t.getCause();
             }
-            dataSourceConnect.setMessage(t.getMessage());
+            dataSourceConnect.setMessage(t.getClass().getSimpleName() + ": "
+                    + StringUtils.defaultString(t.getMessage()));
             dataSourceConnect.setErrorDetail(ExceptionUtils.getErrorInfoFromException(t));
             return dataSourceConnect;
         } finally {

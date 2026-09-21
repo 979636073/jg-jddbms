@@ -22,6 +22,8 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -54,6 +56,47 @@ public class DataSourceServiceImplTest {
         } catch (QueryInspectedException expected) {
             // The mapper asserts the generated duplicate lookup before stopping the method.
         }
+    }
+
+    @Test
+    public void shouldExplainDockerLoopbackConnectionFailure() {
+        String message = DataSourceServiceImpl.connectionFailureMessage(
+                "127.0.0.1", "1521", "java.net.ConnectException: Connection refused");
+
+        assertTrue(message.contains("host.docker.internal"));
+        assertTrue(message.contains("127.0.0.1:1521"));
+    }
+
+    @Test
+    public void shouldExplainOracleServiceNameFailure() {
+        assertEquals("Oracle 服务名不存在或尚未注册到监听器",
+                DataSourceServiceImpl.connectionFailureMessage(
+                        "database.internal", "1521", "ORA-12514: listener does not currently know of service"));
+    }
+
+    @Test
+    public void shouldExplainUnknownHostFailure() {
+        assertEquals("无法解析数据库主机：missing.database.internal",
+                DataSourceServiceImpl.connectionFailureMessage(
+                        "missing.database.internal", "5236", "UnknownHostException: missing.database.internal"));
+    }
+
+    @Test
+    public void shouldExplainAuthenticationFailureWithoutReturningRawMessage() {
+        String message = DataSourceServiceImpl.connectionFailureMessage(
+                "database.internal", "5236", "invalid password: secret-value");
+
+        assertEquals("用户名或密码错误", message);
+        assertFalse(message.contains("secret-value"));
+    }
+
+    @Test
+    public void shouldHideUnexpectedConnectionDetails() {
+        String message = DataSourceServiceImpl.connectionFailureMessage(
+                "database.internal", "5236", "unexpected failure password=secret-value");
+
+        assertEquals("用户名或密码错误", message);
+        assertFalse(message.contains("secret-value"));
     }
 
     private static void authenticate(Long userId) {

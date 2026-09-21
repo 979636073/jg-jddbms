@@ -20,7 +20,10 @@ export default {
     };
   },
   mounted(){
-     const createData = JSON.parse(sessionStorage.getItem('createData'))
+     const createDataCache = sessionStorage.getItem('createData')
+     const createData = createDataCache && createDataCache !== 'undefined'
+       ? JSON.parse(createDataCache)
+       : null
      if (this.$route.path === "/workspace" && !this.$route.query?.isShow) {
        const firstView = this.$store.getters.visitedViews2[0]
          || (JSON.parse(localStorage.getItem("saveVisitedViews2")) || [])[0]

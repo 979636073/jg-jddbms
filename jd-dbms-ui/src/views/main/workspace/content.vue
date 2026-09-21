@@ -77,7 +77,10 @@ export default {
     };
   },
   created() {
-    let createData = JSON.parse(sessionStorage.getItem("createData"));
+    const createDataCache = sessionStorage.getItem("createData");
+    const createData = createDataCache && createDataCache !== "undefined"
+      ? JSON.parse(createDataCache)
+      : null;
     if (createData) {
       this.$store.commit(
         "workspaceData/SET_DATA_BASE_INFO",
