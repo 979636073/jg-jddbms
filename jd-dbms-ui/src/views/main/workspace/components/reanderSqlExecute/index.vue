@@ -79,6 +79,7 @@ export default {
       recentScriptsVisible: false,
       lastExecutionDuration: null,
       lastResultCount: 0,
+      lastOperationStatus: "",
       resultTab: "success",
     };
   },
@@ -126,8 +127,22 @@ export default {
     },
     consoleStatus() {
       if (this.sqlLoading) return "执行中";
+      if (this.lastOperationStatus) return this.lastOperationStatus;
       if (this.lastExecutionDuration !== null) return `最近执行 ${this.lastExecutionDuration}ms`;
       return "就绪";
+    },
+    affectedRowCount() {
+      return this.successList.reduce((total, result) => {
+        return this.hasUpdateCount(result)
+          ? total + Number(result.updateCount)
+          : total;
+      }, 0);
+    },
+    hasAffectedRows() {
+      return this.successList.some((result) => this.hasUpdateCount(result));
+    },
+    hasPendingTransaction() {
+      return this.successList.some((result) => Boolean(result.sign));
     },
   },
   watch: {
@@ -236,6 +251,45 @@ export default {
     }
   },
   methods: {
+    hasUpdateCount(result) {
+      if (
+        !result ||
+        result.updateCount === null ||
+        result.updateCount === undefined
+      ) {
+        return false;
+      }
+      const updateCount = Number(result.updateCount);
+      return (
+        Number.isFinite(updateCount) &&
+        updateCount >= 0 &&
+        (updateCount > 0 || Boolean(result.sign))
+      );
+    },
+    formatExecutionResult(result) {
+      if (!result) return "";
+      const parts = [result.message || result.description || "执行成功"];
+      if (this.hasUpdateCount(result)) {
+        parts.push(`影响 ${result.updateCount} 行`);
+      }
+      if (result.sign) {
+        parts.push("事务待提交");
+      }
+      if (result.duration !== null && result.duration !== undefined) {
+        parts.push(`${result.duration}ms`);
+      }
+      return parts.join(" · ");
+    },
+    buildExecutionSummary(results) {
+      return results
+        .map((result, index) => {
+          const status = result.success
+            ? this.formatExecutionResult(result)
+            : result.message || "执行失败";
+          return `第${index + 1}条：${status}`;
+        })
+        .join("\n");
+    },
     loadRecentSqlScripts() {
       try {
         const stored = JSON.parse(localStorage.getItem("jd-dbms-recent-sql") || "[]");
@@ -314,6 +368,11 @@ export default {
           this.resultTab = results.some((item) => item.success) ? "success" : "error";
           this.isShow = results.length > 0;
           this.$emit("setCurrentConfig", "sqlData", results);
+          this.lastExecutionDuration = null;
+          this.lastResultCount = results.length;
+          this.lastOperationStatus = results[0] && results[0].success
+            ? "事务已回滚"
+            : "回滚失败";
           this.sqlLoading = false;
           this.isSuccessShow = results.some((item) => item.success);
           this.errorShow = false;
@@ -366,6 +425,11 @@ export default {
           this.resultTab = results.some((item) => item.success) ? "success" : "error";
           this.isShow = results.length > 0;
           this.$emit("setCurrentConfig", "sqlData", results);
+          this.lastExecutionDuration = null;
+          this.lastResultCount = results.length;
+          this.lastOperationStatus = results[0] && results[0].success
+            ? "事务已提交"
+            : "提交失败";
           this.sqlLoading = false;
           this.isSuccessShow = results.some((item) => item.success);
           this.errorShow = false;
@@ -434,6 +498,7 @@ export default {
       this.saveRecentSqlScript(sql);
       this.successCurrentIndex = 0;
       this.errorCurrentIndex = 0;
+      this.lastOperationStatus = "";
       this.sqlLoading = true;
 
       if (type == "run") {
@@ -503,46 +568,51 @@ export default {
               .catch(() => {});
             return;
           }
-            const results = Array.isArray(res.data) ? res.data : [];
-            this.lastExecutionDuration = results[0] && results[0].duration !== undefined
-              ? Number(results[0].duration)
-              : null;
-            this.lastResultCount = results.length;
-            this.resultTab = results.some((item) => item.success) ? "success" : "error";
-            this.isShow = results.length > 0;
-            console.log(res.data, "(res.data");
-            // if (res.data[0].success) {
+          const results = Array.isArray(res.data) ? res.data : [];
+          const durations = results
+            .filter((item) => item.duration !== null && item.duration !== undefined)
+            .map((item) => Number(item.duration));
+          this.lastExecutionDuration = durations.length
+            ? durations.reduce((total, duration) => total + duration, 0)
+            : null;
+          this.lastResultCount = results.length;
+          this.resultTab = results.some((item) => item.success) ? "success" : "error";
+          this.isShow = results.length > 0;
+          console.log(res.data, "(res.data");
+          // if (res.data[0].success) {
 
-            if (results.length < 2) {
-              if (results[0]) {
-                results[0].params = send;
-                this.sessionId = results[0].sessionId;
-                this.disableCommit = results[0].sign;
-                this.disableRollBack = results[0].sign;
-              }
-              this.$emit("setCurrentConfig", "sqlData", results);
-            } else {
-              if (results[0]) {
-                this.disableCommit = results[0].sign;
-                this.disableRollBack = results[0].sign;
-                this.sessionId = results[0].sessionId;
-              }
-              this.tableData = results;
-              this.$emit("setCurrentConfig", "sqlData", this.tableData);
+          if (results.length < 2) {
+            if (results[0]) {
+              results[0].params = send;
+              this.sessionId = results[0].sessionId;
+              this.disableCommit = results[0].sign;
+              this.disableRollBack = results[0].sign;
             }
-            this.messageData = results[0] && results[0].allMessage ? results[0].allMessage : "";
-            this.Allmessage = true;
-            this.successCurrentIndex = null;
-            this.sqlLoading = false;
-            this.isSuccessShow = results.some((item) => item.success);
-            // this.errorShow = false;
-            // } else {
-            //   this.sqlLoading = false;
-            //   this.$message.error(res.data[0].message);
-            //   this.isSuccessShow = false;
-            //   this.errorShow = true;
-            //   this.errorMsg = res.data[0].message;
-            // }
+            this.$emit("setCurrentConfig", "sqlData", results);
+          } else {
+            if (results[0]) {
+              this.disableCommit = results[0].sign;
+              this.disableRollBack = results[0].sign;
+              this.sessionId = results[0].sessionId;
+            }
+            this.tableData = results;
+            this.$emit("setCurrentConfig", "sqlData", this.tableData);
+          }
+          this.messageData = results[0] && results[0].allMessage
+            ? results[0].allMessage
+            : this.buildExecutionSummary(results);
+          this.Allmessage = true;
+          this.successCurrentIndex = null;
+          this.sqlLoading = false;
+          this.isSuccessShow = results.some((item) => item.success);
+          // this.errorShow = false;
+          // } else {
+          //   this.sqlLoading = false;
+          //   this.$message.error(res.data[0].message);
+          //   this.isSuccessShow = false;
+          //   this.errorShow = true;
+          //   this.errorMsg = res.data[0].message;
+          // }
         })
         .catch(() => {
           this.sqlLoading = false;
@@ -561,6 +631,7 @@ export default {
       this.messageData = "";
       this.lastExecutionDuration = null;
       this.lastResultCount = 0;
+      this.lastOperationStatus = "";
     },
     importSqlFile() {
       if (this.importingSqlFile) return;
@@ -1000,6 +1071,8 @@ export default {
         <span class="sql-console-status" :class="{ 'is-running': sqlLoading }">
           <i :class="sqlLoading ? 'el-icon-loading' : 'el-icon-time'"></i>
           {{ consoleStatus }}<template v-if="lastResultCount"> · {{ lastResultCount }} 个结果集</template>
+          <template v-if="hasAffectedRows"> · 影响 {{ affectedRowCount }} 行</template>
+          <template v-if="hasPendingTransaction"> · <strong>事务待提交</strong></template>
         </span>
       </div>
       <draggable class="draggble2" :group="{ name: 'componentsGroup' }">
@@ -1068,12 +1141,9 @@ export default {
                 (newVal) => (successList[successCurrentIndex] = newVal)
               "
             />
-            <div v-else class="sql_result">
+            <div v-else class="sql_result sql_result--success">
               <span v-if="!Allmessage">
-                {{
-                  successList[successCurrentIndex].message ||
-                  successList[successCurrentIndex].description
-                }}
+                {{ formatExecutionResult(successList[successCurrentIndex]) }}
               </span>
               <div v-else v-html="lineTexts" class="sql_result_content"></div>
             </div>
@@ -1403,6 +1473,9 @@ export default {
           height: 100%;
           margin-top: 1%;
         }
+      }
+      .sql_result--success {
+        color: #409eff;
       }
       & > .el-tabs {
         height: 100%;
