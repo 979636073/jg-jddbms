@@ -1,0 +1,175 @@
+/**
+ * Alipay.com Inc.
+ * Copyright (c) 2004-2022 All Rights Reserved.
+ */
+package com.jd.biz.controller.system;
+
+import com.jd.biz.controller.system.util.SystemUtils;
+import com.jd.biz.controller.system.vo.AppVersionVO;
+import com.jd.biz.controller.system.vo.SystemVO;
+import com.jd.biz.domain.api.model.Config;
+import com.jd.biz.domain.api.param.SystemConfigParam;
+import com.jd.biz.domain.api.service.ConfigService;
+import com.jd.biz.domain.core.cache.CacheManage;
+import com.jd.common.tools.base.wrapper.result.ActionResult;
+import com.jd.common.tools.base.wrapper.result.DataResult;
+import com.jd.common.tools.common.config.Chat2dbProperties;
+import com.jd.common.tools.common.enums.ModeEnum;
+import com.jd.common.tools.common.model.ConfigJson;
+import com.jd.common.tools.common.util.ConfigUtils;
+import com.jd.common.tools.common.util.EasyEnumUtils;
+import com.jd.spi.ssh.SSHManager;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringApplication;
+import org.springframework.context.ApplicationContext;
+import org.springframework.web.bind.annotation.*;
+
+
+/**
+ * @author jipengfei
+ * @version : HomeController.java, v 0.1 2022年09月18日 14:52 jipengfei Exp $
+ */
+@RestController
+@RequestMapping("/api/system")
+@Slf4j
+public class SystemController {
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Autowired
+    private Chat2dbProperties chat2dbProperties;
+
+    @Autowired
+    private ConfigService configService;
+
+    /**
+     * 检测是否成功
+     *
+     * @return
+     */
+    @GetMapping
+    public DataResult<SystemVO> get() {
+        String clientVersion = System.getProperty("client.version");
+        String version = ConfigUtils.getLatestLocalVersion();
+        log.error("clientVersion:{},version:{}", clientVersion, version);
+        if (!StringUtils.equals(clientVersion, version) && !StringUtils.isEmpty(clientVersion)) {
+            stop();
+            return null;
+        } else {
+            ConfigJson configJson = ConfigUtils.getConfig();
+            return DataResult.of(SystemVO.builder()
+                    .systemUuid(configJson.getSystemUuid())
+                    .build());
+        }
+    }
+
+    private static final String UPDATE_TYPE = "client_update_type";
+
+    @GetMapping("/get_latest_version")
+    public DataResult<AppVersionVO> getLatestVersion(String currentVersion) {
+        ModeEnum mode = EasyEnumUtils.getEnum(ModeEnum.class, System.getProperty("chat2db.mode"));
+        if (mode != ModeEnum.DESKTOP) {
+            // In this mode, no user login is required, so only local access is available
+            return DataResult.of(null);
+        }
+        String user = "";
+        AppVersionVO appVersionVO = SystemUtils.getLatestVersion(currentVersion, "manual", user);
+        if (appVersionVO == null) {
+            appVersionVO = new AppVersionVO();
+            appVersionVO.setVersion(currentVersion);
+            appVersionVO.setType("manual");
+        }
+        DataResult<Config> updateType = configService.find(UPDATE_TYPE);
+        if (updateType.getData() != null) {
+            appVersionVO.setType(updateType.getData().getContent());
+        }
+        // In this mode, no user login is required, so only local access is available
+        appVersionVO.setDesktop(true);
+        return DataResult.of(appVersionVO);
+    }
+
+    @PostMapping("/update_desktop_version")
+    public DataResult<String> updateDesktopVersion(@RequestBody AppVersionVO version) {
+        new Thread(() -> {
+            SystemUtils.upgrade(version);
+        }).start();
+        return DataResult.of(version.getVersion());
+    }
+
+    @GetMapping("/is_update_success")
+    public DataResult<Boolean> isUpdateSuccess(String version) {
+        String localVersion = ConfigUtils.getLocalVersion();
+        if (StringUtils.isEmpty(localVersion)) {
+            return DataResult.of(false);
+        }
+        return DataResult.of(localVersion.equals(version));
+    }
+
+    @PostMapping("/set_update_type")
+    public ActionResult setUpdateType(@RequestBody String updateType) {
+        SystemConfigParam systemConfigParam = new SystemConfigParam();
+        systemConfigParam.setCode(UPDATE_TYPE);
+        systemConfigParam.setContent(updateType);
+        systemConfigParam.setSummary("client update type");
+        configService.createOrUpdate(systemConfigParam);
+        return ActionResult.isSuccess();
+    }
+
+    /**
+     * 获取当前版本号
+     *
+     * @return
+     */
+    @GetMapping("/get-version-a")
+    public DataResult<String> getVersion() {
+        return DataResult.of(chat2dbProperties.getVersion());
+    }
+
+    /**
+     * 退出服务
+     */
+    @RequestMapping("/stop")
+    public DataResult<String> stop(boolean forceQuit) {
+        log.info("退出应用");
+        if (forceQuit) {
+            stop();
+        } else {
+//            String clientVersion = System.getProperty("client.version");
+//            String version = ConfigUtils.getLatestLocalVersion();
+//            log.error("clientVersion:{},version:{}", clientVersion, version);
+//            if (!StringUtils.equals(clientVersion, version)) {
+            stop();
+            //}
+        }
+        return DataResult.of("ok");
+    }
+
+    private void stop() {
+        new Thread(() -> {
+            // 会在100ms以后 退出后台
+            try {
+                Thread.sleep(200L);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            log.info("开始退出Spring应用");
+            SSHManager.close();
+            try {
+                SpringApplication.exit(applicationContext);
+            } catch (Exception ignore) {
+            }
+            // 有可能SpringApplication.exit 会退出失败
+            // 直接系统退出
+            log.info("开始退出系统应用");
+            CacheManage.close();
+            try {
+                System.exit(0);
+            } catch (Exception ignore) {
+            }
+
+        }).start();
+    }
+}

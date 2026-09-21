@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysDeptMapper">
+
+    <resultMap type="com.jd.common.core.domain.entity.SysDept" id="SysDeptResult">
+        <id property="deptId" column="DEPT_ID"/>
+        <result property="parentId" column="PARENT_ID"/>
+        <result property="ancestors" column="ANCESTORS"/>
+        <result property="deptName" column="DEPT_NAME"/>
+        <result property="orderNum" column="ORDER_NUM"/>
+        <result property="leader" column="LEADER"/>
+        <result property="phone" column="PHONE"/>
+        <result property="email" column="EMAIL"/>
+        <result property="status" column="STATUS"/>
+        <result property="delFlag" column="DEL_FLAG"/>
+        <result property="parentName" column="PARENT_NAME"/>
+        <result property="createBy" column="CREATE_BY"/>
+        <result property="createTime" column="CREATE_TIME"/>
+        <result property="updateBy" column="UPDATE_BY"/>
+        <result property="updateTime" column="UPDATE_TIME"/>
+    </resultMap>
+
+    <sql id="selectDeptVo">
+        SELECT D.DEPT_ID,
+               D.PARENT_ID,
+               D.ANCESTORS,
+               D.DEPT_NAME,
+               D.ORDER_NUM,
+               D.LEADER,
+               D.PHONE,
+               D.EMAIL,
+               D.STATUS,
+               D.DEL_FLAG,
+               D.CREATE_BY,
+               D.CREATE_TIME
+        FROM SYS_DEPT D
+    </sql>
+
+    <select id="selectDeptList" parameterType="com.jd.common.core.domain.entity.SysDept" resultMap="SysDeptResult">
+        <include refid="selectDeptVo"/>
+        where d.DEL_FLAG = '0'
+        <if test="deptId != null and deptId != 0">
+            AND DEPT_ID = #{deptId}
+        </if>
+        <if test="parentId != null and parentId != 0">
+            AND PARENT_ID = #{parentId}
+        </if>
+        <if test="deptName != null and deptName != ''">
+            AND DEPT_NAME like concat('%', #{deptName}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND STATUS = #{status}
+        </if>
+        <!-- 数据范围过滤 -->
+        ${params.dataScope}
+        order by d.PARENT_ID, d.ORDER_NUM
+    </select>
+
+    <select id="selectDeptListByRoleId" resultType="Long">
+        select d.DEPT_ID
+        from SYS_DEPT d
+        left join SYS_ROLE_DEPT rd on d.DEPT_ID = rd.DEPT_ID
+        where rd.ROLE_ID = #{roleId}
+        <if test="deptCheckStrictly">
+            AND D.DEPT_ID NOT IN (SELECT D.PARENT_ID FROM SYS_DEPT D INNER JOIN SYS_ROLE_DEPT RD ON D.DEPT_ID =
+            RD.DEPT_ID AND RD.ROLE_ID = #{roleId})
+        </if>
+        ORDER BY D.PARENT_ID, D.ORDER_NUM
+    </select>
+
+    <select id="selectDeptById" parameterType="Long" resultMap="SysDeptResult">
+        select d.DEPT_ID,
+               d.PARENT_ID,
+               d.ANCESTORS,
+               d.DEPT_NAME,
+               d.ORDER_NUM,
+               d.LEADER,
+               d.PHONE,
+               d.EMAIL,
+               d.STATUS,
+               (select DEPT_NAME from SYS_DEPT where DEPT_ID = d.PARENT_ID) parent_name
+        from SYS_DEPT d
+        where d.DEPT_ID = #{deptId}
+    </select>
+
+    <select id="checkDeptExistUser" parameterType="Long" resultType="int">
+        select count(1)
+        from SYS_USER
+        where DEPT_ID = #{deptId}
+          and DEL_FLAG = '0'
+    </select>
+
+    <select id="hasChildByDeptId" parameterType="Long" resultType="int">
+        select count(1)
+        from SYS_DEPT
+        where DEL_FLAG = '0'
+          and PARENT_ID = #{deptId} limit 1
+    </select>
+
+    <select id="selectChildrenDeptById" parameterType="Long" resultMap="SysDeptResult">
+        select DISTINCT *
+        from SYS_DEPT START WITH PARENT_ID = #{deptId}
+        CONNECT BY PARENT_ID = PRIOR DEPT_ID
+    </select>
+
+    <select id="selectNormalChildrenDeptById" parameterType="Long" resultType="int">
+        SELECT
+            count(*)
+        FROM
+            (
+                SELECT
+                    DISTINCT *
+                FROM
+                    SYS_DEPT
+                WHERE
+                    STATUS = 0
+                  AND DEL_FLAG = '0'
+                    START WITH
+                    PARENT_ID = #{deptId}
+                CONNECT BY
+                    PARENT_ID = PRIOR DEPT_ID)
+    </select>
+
+    <select id="checkDeptNameUnique" resultMap="SysDeptResult">
+        <include refid="selectDeptVo"/>
+        where DEPT_NAME=#{deptName} and PARENT_ID = #{parentId} and DEL_FLAG = '0' limit 1
+    </select>
+
+    <insert id="insertDept" parameterType="com.jd.common.core.domain.entity.SysDept">
+        insert into SYS_DEPT(
+        <if test="parentId != null and parentId != 0">PARENT_ID,</if>
+        <if test="deptName != null and deptName != ''">DEPT_NAME,</if>
+        <if test="ancestors != null and ancestors != ''">ANCESTORS,</if>
+        <if test="orderNum != null">ORDER_NUM,</if>
+        <if test="leader != null and leader != ''">LEADER,</if>
+        <if test="phone != null and phone != ''">PHONE,</if>
+        <if test="email != null and email != ''">EMAIL,</if>
+        <if test="status != null">STATUS,</if>
+        <if test="createBy != null and createBy != ''">CREATE_BY,</if>
+        CREATE_TIME
+        )values(
+        <if test="deptId != null and deptId != 0">#{deptId},</if>
+        <if test="parentId != null and parentId != 0">#{parentId},</if>
+        <if test="deptName != null and deptName != ''">#{deptName},</if>
+        <if test="ancestors != null and ancestors != ''">#{ancestors},</if>
+        <if test="orderNum != null">#{orderNum},</if>
+        <if test="leader != null and leader != ''">#{leader},</if>
+        <if test="phone != null and phone != ''">#{phone},</if>
+        <if test="email != null and email != ''">#{email},</if>
+        <if test="status != null">#{status},</if>
+        <if test="createBy != null and createBy != ''">#{createBy},</if>
+        CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <update id="updateDept" parameterType="com.jd.common.core.domain.entity.SysDept">
+        update SYS_DEPT
+        <set>
+            <if test="parentId != null and parentId != 0">PARENT_ID = #{parentId},</if>
+            <if test="deptName != null and deptName != ''">DEPT_NAME = #{deptName},</if>
+            <if test="ancestors != null and ancestors != ''">ANCESTORS = #{ancestors},</if>
+            <if test="orderNum != null">ORDER_NUM = #{orderNum},</if>
+            <if test="leader != null">LEADER = #{leader},</if>
+            <if test="phone != null">PHONE = #{phone},</if>
+            <if test="email != null">EMAIL = #{email},</if>
+            <if test="status != null and status != ''">STATUS = #{status},</if>
+            <if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+            UPDATE_TIME = CURRENT_TIMESTAMP
+        </set>
+        where DEPT_ID = #{deptId}
+    </update>
+
+    <update id="updateDeptChildren" parameterType="java.util.List">
+        update SYS_DEPT set ANCESTORS =
+        <foreach collection="depts" item="item" index="index"
+                 separator=" " open="case dept_id" close="end">
+            when #{item.deptId} then #{item.ancestors}
+        </foreach>
+        where DEPT_ID in
+        <foreach collection="depts" item="item" index="index"
+                 separator="," open="(" close=")">
+            #{item.deptId}
+        </foreach>
+    </update>
+
+    <update id="updateDeptStatusNormal" parameterType="Long">
+        update SYS_DEPT set STATUS = '0' where DEPT_ID in
+        <foreach collection="array" item="deptId" open="(" separator="," close=")">
+            #{deptId}
+        </foreach>
+    </update>
+
+    <delete id="deleteDeptById" parameterType="Long">
+        update SYS_DEPT
+        set DEL_FLAG = '2'
+        where DEPT_ID = #{deptId}
+    </delete>
+
+</mapper> 

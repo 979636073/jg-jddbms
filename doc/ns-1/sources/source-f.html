@@ -1,0 +1,214 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > OperationLogServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: OperationLogServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">OperationLogServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    80%
+  </span>
+  <span class="absValue">
+    (4/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    76.3%
+  </span>
+  <span class="absValue">
+    (29/38)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<i class="no-highlight">4</i>&nbsp;import com.jd.biz.domain.api.model.DataSource;
+<i class="no-highlight">5</i>&nbsp;import com.jd.biz.domain.api.model.OperationLog;
+<i class="no-highlight">6</i>&nbsp;import com.jd.biz.domain.api.param.operation.OperationLogCreateParam;
+<i class="no-highlight">7</i>&nbsp;import com.jd.biz.domain.api.param.operation.OperationLogPageQueryParam;
+<i class="no-highlight">8</i>&nbsp;import com.jd.biz.domain.api.service.DataSourceService;
+<i class="no-highlight">9</i>&nbsp;import com.jd.biz.domain.api.service.OperationLogService;
+<i class="no-highlight">10</i>&nbsp;import com.jd.biz.domain.core.converter.OperationLogConverter;
+<i class="no-highlight">11</i>&nbsp;import com.jd.biz.domain.repository.entity.OperationLogDO;
+<i class="no-highlight">12</i>&nbsp;import com.jd.biz.domain.repository.mapper.OperationLogMapper;
+<i class="no-highlight">13</i>&nbsp;import com.jd.common.tools.base.wrapper.param.OrderBy;
+<i class="no-highlight">14</i>&nbsp;import com.jd.common.tools.base.wrapper.result.DataResult;
+<i class="no-highlight">15</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ListResult;
+<i class="no-highlight">16</i>&nbsp;import com.jd.common.tools.base.wrapper.result.PageResult;
+<i class="no-highlight">17</i>&nbsp;import com.jd.common.tools.common.model.EasyLambdaQueryWrapper;
+<i class="no-highlight">18</i>&nbsp;import com.jd.common.tools.common.util.ContextUtils;
+<i class="no-highlight">19</i>&nbsp;import com.jd.common.tools.common.util.EasySqlUtils;
+<i class="no-highlight">20</i>&nbsp;import com.baomidou.mybatisplus.core.metadata.IPage;
+<i class="no-highlight">21</i>&nbsp;import com.baomidou.mybatisplus.core.metadata.OrderItem;
+<i class="no-highlight">22</i>&nbsp;import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<i class="no-highlight">23</i>&nbsp;import org.apache.commons.collections4.CollectionUtils;
+<i class="no-highlight">24</i>&nbsp;import org.springframework.beans.factory.annotation.Autowired;
+<i class="no-highlight">25</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">26</i>&nbsp;
+<i class="no-highlight">27</i>&nbsp;import javax.annotation.Resource;
+<i class="no-highlight">28</i>&nbsp;import java.time.LocalDateTime;
+<i class="no-highlight">29</i>&nbsp;import java.util.Arrays;
+<i class="no-highlight">30</i>&nbsp;import java.util.Collections;
+<i class="no-highlight">31</i>&nbsp;import java.util.List;
+<i class="no-highlight">32</i>&nbsp;import java.util.Map;
+<i class="no-highlight">33</i>&nbsp;import java.util.Objects;
+<i class="no-highlight">34</i>&nbsp;import java.util.function.Function;
+<i class="no-highlight">35</i>&nbsp;import java.util.stream.Collectors;
+<i class="no-highlight">36</i>&nbsp;
+<i class="no-highlight">37</i>&nbsp;/**
+<i class="no-highlight">38</i>&nbsp; * @author moji
+<i class="no-highlight">39</i>&nbsp; * @version UserExecutedDdlCoreServiceImpl.java, v 0.1 2022年09月25日 14:07 moji Exp $
+<i class="no-highlight">40</i>&nbsp; * @date 2022/09/25
+<i class="no-highlight">41</i>&nbsp; */
+<b class="nc"><i class="no-highlight">42</i>&nbsp;@Service</b>
+<b class="fc"><i class="no-highlight">43</i>&nbsp;public class OperationLogServiceImpl implements OperationLogService {</b>
+<i class="no-highlight">44</i>&nbsp;
+<i class="no-highlight">45</i>&nbsp;    @Resource
+<i class="no-highlight">46</i>&nbsp;    private OperationLogMapper operationLogMapper;
+<i class="no-highlight">47</i>&nbsp;
+<i class="no-highlight">48</i>&nbsp;    @Autowired
+<i class="no-highlight">49</i>&nbsp;    private OperationLogConverter operationLogConverter;
+<i class="no-highlight">50</i>&nbsp;
+<i class="no-highlight">51</i>&nbsp;    @Autowired
+<i class="no-highlight">52</i>&nbsp;    private DataSourceService dataSourceService;
+<i class="no-highlight">53</i>&nbsp;
+<i class="no-highlight">54</i>&nbsp;    @Override
+<i class="no-highlight">55</i>&nbsp;    public DataResult&lt;Long&gt; create(OperationLogCreateParam param) {
+<b class="fc"><i class="no-highlight">56</i>&nbsp;        OperationLogDO userExecutedDdlDO = operationLogConverter.param2do(param);</b>
+<b class="fc"><i class="no-highlight">57</i>&nbsp;        userExecutedDdlDO.setGmtCreate(LocalDateTime.now());</b>
+<b class="fc"><i class="no-highlight">58</i>&nbsp;        userExecutedDdlDO.setGmtModified(LocalDateTime.now());</b>
+<b class="fc"><i class="no-highlight">59</i>&nbsp;        Long userId = null;</b>
+<i class="no-highlight">60</i>&nbsp;        try {
+<b class="fc"><i class="no-highlight">61</i>&nbsp;            if (Objects.nonNull(ContextUtils.getUserId())) {</b>
+<b class="nc"><i class="no-highlight">62</i>&nbsp;                userId = ContextUtils.getUserId();</b>
+<i class="no-highlight">63</i>&nbsp;            } else {
+<b class="nc"><i class="no-highlight">64</i>&nbsp;                userId = 1L;</b>
+<i class="no-highlight">65</i>&nbsp;            }
+<b class="fc"><i class="no-highlight">66</i>&nbsp;        } catch (Exception e) {</b>
+<b class="fc"><i class="no-highlight">67</i>&nbsp;            userId = 1L;</b>
+<b class="nc"><i class="no-highlight">68</i>&nbsp;        }</b>
+<b class="fc"><i class="no-highlight">69</i>&nbsp;        userExecutedDdlDO.setUserId(userId);</b>
+<b class="fc"><i class="no-highlight">70</i>&nbsp;        operationLogMapper.insert(userExecutedDdlDO);</b>
+<b class="fc"><i class="no-highlight">71</i>&nbsp;        return DataResult.of(userExecutedDdlDO.getId());</b>
+<i class="no-highlight">72</i>&nbsp;    }
+<i class="no-highlight">73</i>&nbsp;
+<i class="no-highlight">74</i>&nbsp;    @Override
+<i class="no-highlight">75</i>&nbsp;    public PageResult&lt;OperationLog&gt; queryPage(OperationLogPageQueryParam param) {
+<b class="fc"><i class="no-highlight">76</i>&nbsp;        LambdaQueryWrapper&lt;OperationLogDO&gt; queryWrapper = new LambdaQueryWrapper&lt;&gt;();</b>
+<b class="fc"><i class="no-highlight">77</i>&nbsp;        queryWrapper.eq(OperationLogDO::getUserId, param.getUserId());</b>
+<i class="no-highlight">78</i>&nbsp;//        queryWrapper.eq(OperationLogDO::getDataSourceId, param.getDataSourceId());
+<i class="no-highlight">79</i>&nbsp;//        queryWrapper.eq(OperationLogDO::getDatabaseName, param.getDatabaseName());
+<i class="no-highlight">80</i>&nbsp;//        queryWrapper.eq(OperationLogDO::getSchemaName, param.getSchemaName());
+<b class="fc"><i class="no-highlight">81</i>&nbsp;        if (Objects.nonNull(param.getParams())) {</b>
+<b class="nc"><i class="no-highlight">82</i>&nbsp;            if (Objects.nonNull(param.getParams().get(&quot;beginTime&quot;))) {</b>
+<b class="nc"><i class="no-highlight">83</i>&nbsp;                queryWrapper.ge(OperationLogDO::getGmtCreate, param.getParams().get(&quot;beginTime&quot;) + &quot; 00:00:00&quot;);</b>
+<i class="no-highlight">84</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">85</i>&nbsp;            if (Objects.nonNull(param.getParams().get(&quot;endTime&quot;))) {</b>
+<b class="nc"><i class="no-highlight">86</i>&nbsp;                queryWrapper.le(OperationLogDO::getGmtCreate, param.getParams().get(&quot;endTime&quot;) + &quot; 23:59:59&quot;);</b>
+<i class="no-highlight">87</i>&nbsp;            }
+<i class="no-highlight">88</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">89</i>&nbsp;        queryWrapper.orderByDesc(OperationLogDO::getGmtCreate);</b>
+<b class="fc"><i class="no-highlight">90</i>&nbsp;        Integer start = param.getPageNo();</b>
+<b class="fc"><i class="no-highlight">91</i>&nbsp;        Integer offset = param.getPageSize();</b>
+<b class="fc"><i class="no-highlight">92</i>&nbsp;        Page&lt;OperationLogDO&gt; page = new Page&lt;&gt;(start, offset);</b>
+<b class="fc"><i class="no-highlight">93</i>&nbsp;        IPage&lt;OperationLogDO&gt; executedDdlDOIPage = operationLogMapper.selectPage(page, queryWrapper);</b>
+<b class="fc"><i class="no-highlight">94</i>&nbsp;        List&lt;OperationLog&gt; executedDdlDTOS = operationLogConverter.do2dto(executedDdlDOIPage.getRecords());</b>
+<b class="fc"><i class="no-highlight">95</i>&nbsp;        if (CollectionUtils.isEmpty(executedDdlDTOS)) {</b>
+<b class="nc"><i class="no-highlight">96</i>&nbsp;            return PageResult.empty(param.getPageNo(), param.getPageSize());</b>
+<i class="no-highlight">97</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">98</i>&nbsp;        List&lt;Long&gt; dataSourceIds = executedDdlDTOS.stream().map(OperationLog::getDataSourceId).collect(Collectors.toList());</b>
+<b class="fc"><i class="no-highlight">99</i>&nbsp;        ListResult&lt;DataSource&gt; dataSourceListResult = dataSourceService.queryByIds(dataSourceIds);</b>
+<b class="fc"><i class="no-highlight">100</i>&nbsp;        Map&lt;Long, DataSource&gt; dataSourceMap = dataSourceListResult.getData().stream().collect(</b>
+<b class="fc"><i class="no-highlight">101</i>&nbsp;                Collectors.toMap(DataSource::getId, Function.identity(), (a, b) -&gt; a));</b>
+<b class="fc"><i class="no-highlight">102</i>&nbsp;        executedDdlDTOS.forEach(executeDdl -&gt; {</b>
+<b class="fc"><i class="no-highlight">103</i>&nbsp;            if (dataSourceMap.containsKey(executeDdl.getDataSourceId())) {</b>
+<b class="fc"><i class="no-highlight">104</i>&nbsp;                executeDdl.setDataSourceName(dataSourceMap.get(executeDdl.getDataSourceId()).getAlias());</b>
+<i class="no-highlight">105</i>&nbsp;            }
+<i class="no-highlight">106</i>&nbsp;        });
+<b class="fc"><i class="no-highlight">107</i>&nbsp;        return PageResult.of(executedDdlDTOS, executedDdlDOIPage.getTotal(), param);</b>
+<i class="no-highlight">108</i>&nbsp;    }
+<i class="no-highlight">109</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

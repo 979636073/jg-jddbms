@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysDictTypeMapper">
+
+	<resultMap type="com.jd.common.core.domain.entity.SysDictType" id="SysDictTypeResult">
+		<id     property="dictId"     column="DICT_ID"     />
+		<result property="dictName"   column="DICT_NAME"   />
+		<result property="dictType"   column="DICT_TYPE"   />
+		<result property="status"     column="STATUS"      />
+		<result property="createBy"   column="CREATE_BY"   />
+		<result property="createTime" column="CREATE_TIME" />
+		<result property="updateBy"   column="UPDATE_BY"   />
+		<result property="updateTime" column="UPDATE_TIME" />
+	</resultMap>
+	
+	<sql id="selectDictTypeVo">
+        SELECT DICT_ID, DICT_NAME, DICT_TYPE, STATUS, CREATE_BY, CREATE_TIME, REMARK
+		FROM SYS_DICT_TYPE
+    </sql>
+
+	<select id="selectDictTypeList" parameterType="com.jd.common.core.domain.entity.SysDictType" resultMap="SysDictTypeResult">
+	    <include refid="selectDictTypeVo"/>
+		<where>
+		    <if test="dictName != null and dictName != ''">
+				AND DICT_NAME like concat('%', #{dictName}, '%')
+			</if>
+			<if test="status != null and status != ''">
+				AND STATUS = #{status}
+			</if>
+			<if test="dictType != null and dictType != ''">
+				AND DICT_TYPE like concat('%', #{dictType}, '%')
+			</if>
+			<if test="params.beginTime != null and params.beginTime != ''"><!-- 开始时间检索 -->
+				and CREATE_TIME &gt;= to_date(#{params.beginTime},'yyyy-MM-dd')
+			</if>
+			<if test="params.endTime != null and params.endTime != ''"><!-- 结束时间检索 -->
+				and CREATE_TIME &lt;= to_date(#{params.endTime},'yyyy-MM-dd')
+			</if>
+	    </where>
+	</select>
+	
+	<select id="selectDictTypeAll" resultMap="SysDictTypeResult">
+		<include refid="selectDictTypeVo"/>
+	</select>
+	
+	<select id="selectDictTypeById" parameterType="Long" resultMap="SysDictTypeResult">
+		<include refid="selectDictTypeVo"/>
+		where DICT_ID = #{dictId}
+	</select>
+	
+	<select id="selectDictTypeByType" parameterType="String" resultMap="SysDictTypeResult">
+		<include refid="selectDictTypeVo"/>
+		where DICT_TYPE = #{dictType}
+	</select>
+	
+	<select id="checkDictTypeUnique" parameterType="String" resultMap="SysDictTypeResult">
+		<include refid="selectDictTypeVo"/>
+		where DICT_TYPE = #{dictType} limit 1
+	</select>
+	
+	<delete id="deleteDictTypeById" parameterType="Long">
+ 		delete from SYS_DICT_TYPE where DICT_ID = #{dictId}
+ 	</delete>
+ 	
+ 	<delete id="deleteDictTypeByIds" parameterType="Long">
+ 		delete from SYS_DICT_TYPE where DICT_ID in
+ 		<foreach collection="array" item="dictId" open="(" separator="," close=")">
+ 			#{dictId}
+        </foreach> 
+ 	</delete>
+
+ 	<update id="updateDictType" parameterType="com.jd.common.core.domain.entity.SysDictType">
+ 		update SYS_DICT_TYPE
+ 		<set>
+ 			<if test="dictName != null and dictName != ''">DICT_NAME = #{dictName},</if>
+ 			<if test="dictType != null and dictType != ''">DICT_TYPE = #{dictType},</if>
+ 			<if test="status != null">STATUS = #{status},</if>
+ 			<if test="remark != null">REMARK = #{remark},</if>
+ 			<if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+ 			UPDATE_TIME = CURRENT_TIMESTAMP
+ 		</set>
+ 		where DICT_ID = #{dictId}
+	</update>
+ 	
+ 	<insert id="insertDictType" parameterType="com.jd.common.core.domain.entity.SysDictType">
+ 		insert into SYS_DICT_TYPE(
+ 			<if test="dictName != null and dictName != ''">DICT_NAME,</if>
+ 			<if test="dictType != null and dictType != ''">DICT_TYPE,</if>
+ 			<if test="status != null">STATUS,</if>
+ 			<if test="remark != null and remark != ''">REMARK,</if>
+ 			<if test="createBy != null and createBy != ''">CREATE_BY,</if>
+ 			CREATE_TIME
+ 		)values(
+ 			<if test="dictName != null and dictName != ''">#{dictName},</if>
+ 			<if test="dictType != null and dictType != ''">#{dictType},</if>
+ 			<if test="status != null">#{status},</if>
+ 			<if test="remark != null and remark != ''">#{remark},</if>
+ 			<if test="createBy != null and createBy != ''">#{createBy},</if>
+ 			CURRENT_TIMESTAMP
+ 		)
+	</insert>
+	
+</mapper> 

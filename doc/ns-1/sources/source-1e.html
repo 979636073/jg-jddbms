@@ -1,0 +1,246 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > TestServiceTWOImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: TestServiceTWOImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">TestServiceTWOImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (5/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    86.4%
+  </span>
+  <span class="absValue">
+    (57/66)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;
+<i class="no-highlight">4</i>&nbsp;import cn.hutool.core.date.DatePattern;
+<i class="no-highlight">5</i>&nbsp;import cn.hutool.core.util.StrUtil;
+<i class="no-highlight">6</i>&nbsp;import com.alibaba.druid.sql.SQLUtils;
+<i class="no-highlight">7</i>&nbsp;import com.alibaba.druid.sql.visitor.VisitorFeature;
+<i class="no-highlight">8</i>&nbsp;import com.jd.common.enums.DBTypeEnum;
+<i class="no-highlight">9</i>&nbsp;import com.jd.biz.controller.rdb.request.DmpImportRequest;
+<i class="no-highlight">10</i>&nbsp;import com.jd.biz.domain.api.enums.TaskStatusEnum;
+<i class="no-highlight">11</i>&nbsp;import com.jd.biz.util.OSUtils;
+<i class="no-highlight">12</i>&nbsp;import com.jd.common.config.HzbConfig;
+<i class="no-highlight">13</i>&nbsp;import com.jd.common.constant.CacheConstants;
+<i class="no-highlight">14</i>&nbsp;import com.jd.common.core.redis.RedisCache;
+<i class="no-highlight">15</i>&nbsp;import com.jd.common.tools.common.model.Context;
+<i class="no-highlight">16</i>&nbsp;import com.jd.common.tools.common.model.LoginUser;
+<i class="no-highlight">17</i>&nbsp;import com.jd.common.tools.common.util.ContextUtils;
+<i class="no-highlight">18</i>&nbsp;import com.jd.spi.MetaData;
+<i class="no-highlight">19</i>&nbsp;import com.jd.spi.model.DmpImportVo;
+<i class="no-highlight">20</i>&nbsp;import com.jd.spi.sql.Chat2DBContext;
+<i class="no-highlight">21</i>&nbsp;import com.jd.spi.sql.ConnectInfo;
+<i class="no-highlight">22</i>&nbsp;import lombok.extern.slf4j.Slf4j;
+<i class="no-highlight">23</i>&nbsp;import org.springframework.beans.factory.annotation.Autowired;
+<i class="no-highlight">24</i>&nbsp;import org.springframework.beans.factory.annotation.Value;
+<i class="no-highlight">25</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">26</i>&nbsp;import java.io.File;
+<i class="no-highlight">27</i>&nbsp;import java.io.UnsupportedEncodingException;
+<i class="no-highlight">28</i>&nbsp;import java.net.URLEncoder;
+<i class="no-highlight">29</i>&nbsp;import java.nio.charset.StandardCharsets;
+<i class="no-highlight">30</i>&nbsp;import java.time.LocalDateTime;
+<i class="no-highlight">31</i>&nbsp;import java.util.Arrays;
+<i class="no-highlight">32</i>&nbsp;import java.util.List;
+<i class="no-highlight">33</i>&nbsp;import java.util.UUID;
+<i class="no-highlight">34</i>&nbsp;import java.util.concurrent.CompletableFuture;
+<i class="no-highlight">35</i>&nbsp;import java.util.concurrent.atomic.AtomicReference;
+<i class="no-highlight">36</i>&nbsp;
+<b class="fc"><i class="no-highlight">37</i>&nbsp;@Slf4j</b>
+<i class="no-highlight">38</i>&nbsp;@Service
+<b class="fc"><i class="no-highlight">39</i>&nbsp;public class TestServiceTWOImpl {</b>
+<i class="no-highlight">40</i>&nbsp;
+<i class="no-highlight">41</i>&nbsp;    /**
+<i class="no-highlight">42</i>&nbsp;     * Format insert statement
+<i class="no-highlight">43</i>&nbsp;     */
+<b class="fc"><i class="no-highlight">44</i>&nbsp;    private static final SQLUtils.FormatOption INSERT_FORMAT_OPTION = new SQLUtils.FormatOption(true, false);</b>
+<i class="no-highlight">45</i>&nbsp;
+<i class="no-highlight">46</i>&nbsp;    static {
+<b class="fc"><i class="no-highlight">47</i>&nbsp;        INSERT_FORMAT_OPTION.config(VisitorFeature.OutputNameQuote, true);</b>
+<i class="no-highlight">48</i>&nbsp;    }
+<i class="no-highlight">49</i>&nbsp;
+<i class="no-highlight">50</i>&nbsp;    @Autowired
+<i class="no-highlight">51</i>&nbsp;    private RedisCache redisCache;
+<i class="no-highlight">52</i>&nbsp;
+<i class="no-highlight">53</i>&nbsp;    @Value(&quot;${exportDmp.dm}&quot;)
+<i class="no-highlight">54</i>&nbsp;    private String dmDmpExport;
+<i class="no-highlight">55</i>&nbsp;
+<i class="no-highlight">56</i>&nbsp;    @Value(&quot;${importDmp.dm}&quot;)
+<i class="no-highlight">57</i>&nbsp;    private String dmDmpImport;
+<i class="no-highlight">58</i>&nbsp;
+<i class="no-highlight">59</i>&nbsp;    @Value(&quot;${exportDmp.oracle}&quot;)
+<i class="no-highlight">60</i>&nbsp;    private String oraDmpExport;
+<i class="no-highlight">61</i>&nbsp;
+<i class="no-highlight">62</i>&nbsp;    @Value(&quot;${importDmp.oracle}&quot;)
+<i class="no-highlight">63</i>&nbsp;    private String oraDmpImport;
+<i class="no-highlight">64</i>&nbsp;
+<i class="no-highlight">65</i>&nbsp;
+<i class="no-highlight">66</i>&nbsp;    public DmpImportVo importDmp(DmpImportRequest dmpImportRequest) {
+<b class="fc"><i class="no-highlight">67</i>&nbsp;        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();</b>
+<b class="fc"><i class="no-highlight">68</i>&nbsp;        LoginUser loginUser = null;</b>
+<b class="fc"><i class="no-highlight">69</i>&nbsp;        Long userId = null;</b>
+<i class="no-highlight">70</i>&nbsp;        try {
+<b class="fc"><i class="no-highlight">71</i>&nbsp;            loginUser = ContextUtils.getLoginUser();</b>
+<b class="nc"><i class="no-highlight">72</i>&nbsp;            userId = loginUser.getId();</b>
+<b class="fc"><i class="no-highlight">73</i>&nbsp;        } catch (Exception e) {</b>
+<b class="fc"><i class="no-highlight">74</i>&nbsp;            loginUser = new LoginUser();</b>
+<b class="nc"><i class="no-highlight">75</i>&nbsp;        }</b>
+<b class="fc"><i class="no-highlight">76</i>&nbsp;        MetaData metaData = Chat2DBContext.getMetaData();</b>
+<b class="fc"><i class="no-highlight">77</i>&nbsp;        String key = CacheConstants.IMPORT_DMP_KEY + userId + &quot;:&quot; + dmpImportRequest.getDataSourceId()</b>
+<b class="fc"><i class="no-highlight">78</i>&nbsp;                + &quot;:&quot; + StrUtil.nullToEmpty(dmpImportRequest.getFromName());</b>
+<b class="fc"><i class="no-highlight">79</i>&nbsp;        log.debug(&quot;KRY_NAME==&gt;{}&quot;, key);</b>
+<b class="fc"><i class="no-highlight">80</i>&nbsp;        String filePath = dmpImportRequest.getFilePath();</b>
+<b class="fc"><i class="no-highlight">81</i>&nbsp;        final File file = new File(filePath);</b>
+<b class="fc"><i class="no-highlight">82</i>&nbsp;        String dmpImport = &quot;&quot;;</b>
+<b class="fc"><i class="no-highlight">83</i>&nbsp;        if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {</b>
+<b class="fc"><i class="no-highlight">84</i>&nbsp;            dmpImport = dmDmpImport;</b>
+<i class="no-highlight">85</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">86</i>&nbsp;        String logFileName = &quot;&quot;;</b>
+<b class="fc"><i class="no-highlight">87</i>&nbsp;        DmpImportVo dmpImportVo = new DmpImportVo();</b>
+<b class="fc"><i class="no-highlight">88</i>&nbsp;        dmpImportVo.setDataSourceId(connectInfo.getDataSourceId());</b>
+<b class="fc"><i class="no-highlight">89</i>&nbsp;        dmpImportVo.setDatabaseName(dmpImportRequest.getDatabaseName());</b>
+<b class="fc"><i class="no-highlight">90</i>&nbsp;        dmpImportVo.setUserId(loginUser.getId());</b>
+<b class="fc"><i class="no-highlight">91</i>&nbsp;        dmpImportVo.setStatus(TaskStatusEnum.INIT.name());</b>
+<i class="no-highlight">92</i>&nbsp;        try {
+<b class="fc"><i class="no-highlight">93</i>&nbsp;            logFileName = URLEncoder.encode(&quot;DmpImport_&quot; + UUID.randomUUID() +</b>
+<b class="fc"><i class="no-highlight">94</i>&nbsp;                                    StrUtil.nullToEmpty(dmpImportRequest.getDatabaseName()) + &quot;_&quot;</b>
+<b class="fc"><i class="no-highlight">95</i>&nbsp;                                    + StrUtil.nullToEmpty(dmpImportRequest.getToName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">96</i>&nbsp;                                    + &quot;.log&quot;,
+<b class="fc"><i class="no-highlight">97</i>&nbsp;                            StandardCharsets.UTF_8.toString())</b>
+<b class="fc"><i class="no-highlight">98</i>&nbsp;                    .replaceAll(&quot;\\+&quot;, &quot;%20&quot;);</b>
+<b class="nc"><i class="no-highlight">99</i>&nbsp;        } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i class="no-highlight">100</i>&nbsp;            dmpImportVo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">101</i>&nbsp;            return dmpImportVo;</b>
+<b class="fc"><i class="no-highlight">102</i>&nbsp;        }</b>
+<b class="fc"><i class="no-highlight">103</i>&nbsp;        dmpImportVo.setLogUrl(file.getParent() + &quot;/&quot; + logFileName);</b>
+<b class="fc"><i class="no-highlight">104</i>&nbsp;        final File file1 = new File(HzbConfig.getProfile() + &quot;/&quot; + logFileName);</b>
+<i class="no-highlight">105</i>&nbsp;        // init状态
+<b class="fc"><i class="no-highlight">106</i>&nbsp;        redisCache.setCacheObject(key, dmpImportVo);</b>
+<b class="fc"><i class="no-highlight">107</i>&nbsp;        redisCache.expire(key, 300);</b>
+<b class="fc"><i class="no-highlight">108</i>&nbsp;        String finalDmpImport = dmpImport;</b>
+<b class="fc"><i class="no-highlight">109</i>&nbsp;        AtomicReference&lt;String&gt; msg = new AtomicReference&lt;&gt;(&quot;&quot;);</b>
+<b class="fc"><i class="no-highlight">110</i>&nbsp;        LoginUser finalLoginUser = loginUser;</b>
+<b class="fc"><i class="no-highlight">111</i>&nbsp;        CompletableFuture.supplyAsync(() -&gt; {</b>
+<b class="fc"><i class="no-highlight">112</i>&nbsp;            buildContext(finalLoginUser, connectInfo);</b>
+<b class="fc"><i class="no-highlight">113</i>&nbsp;            boolean isWin = false;</b>
+<b class="fc"><i class="no-highlight">114</i>&nbsp;            if (OSUtils.isWindows()) {</b>
+<b class="fc"><i class="no-highlight">115</i>&nbsp;            isWin = true;</b>
+<i class="no-highlight">116</i>&nbsp;            }
+<b class="fc"><i class="no-highlight">117</i>&nbsp;        String cmd = metaData.importDmp(connectInfo, dmpImportRequest.getTableList(), dmpImportRequest.getFromName(), dmpImportRequest.getToName(), dmpImportRequest.getSchemaName(), file, file1, finalDmpImport, dmpImportRequest.getToUser(), isWin);</b>
+<b class="fc"><i class="no-highlight">118</i>&nbsp;            ProcessBuilder processBuilder = null;</b>
+<b class="fc"><i class="no-highlight">119</i>&nbsp;        Process start = null;</b>
+<b class="fc"><i class="no-highlight">120</i>&nbsp;            log.info(&quot;执行命令========&gt;{}&quot;, cmd);</b>
+<b class="fc"><i class="no-highlight">121</i>&nbsp;            processBuilder = new ProcessBuilder(&quot;cmd.exe&quot;, &quot;/c&quot;, cmd).inheritIO();</b>
+<i class="no-highlight">122</i>&nbsp;//        }
+<b class="fc"><i class="no-highlight">123</i>&nbsp;        processBuilder.redirectErrorStream();</b>
+<i class="no-highlight">124</i>&nbsp;        try {
+<b class="fc"><i class="no-highlight">125</i>&nbsp;            start = processBuilder.start();</b>
+<b class="fc"><i class="no-highlight">126</i>&nbsp;            start.waitFor();</b>
+<b class="nc"><i class="no-highlight">127</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">128</i>&nbsp;            msg.set(&quot;导入失败：&quot; + e.getMessage());</b>
+<b class="nc"><i class="no-highlight">129</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">130</i>&nbsp;        return Boolean.TRUE;</b>
+<b class="fc"><i class="no-highlight">131</i>&nbsp;        }).thenAccept(result -&gt; {</b>
+<i class="no-highlight">132</i>&nbsp;        });
+<b class="fc"><i class="no-highlight">133</i>&nbsp;        return dmpImportVo;</b>
+<i class="no-highlight">134</i>&nbsp;    }
+<i class="no-highlight">135</i>&nbsp;    private void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
+<b class="fc"><i class="no-highlight">136</i>&nbsp;        ContextUtils.setContext(Context.builder()</b>
+<b class="fc"><i class="no-highlight">137</i>&nbsp;                .loginUser(loginUser)</b>
+<b class="fc"><i class="no-highlight">138</i>&nbsp;                .build());</b>
+<b class="fc"><i class="no-highlight">139</i>&nbsp;        Chat2DBContext.putContext(connectInfo);</b>
+<i class="no-highlight">140</i>&nbsp;    }
+<i class="no-highlight">141</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

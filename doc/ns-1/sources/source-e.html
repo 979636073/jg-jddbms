@@ -1,0 +1,219 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > JdbcDriverServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: JdbcDriverServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">JdbcDriverServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    33.3%
+  </span>
+  <span class="absValue">
+    (2/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    3.8%
+  </span>
+  <span class="absValue">
+    (2/52)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<i class="no-highlight">4</i>&nbsp;import com.google.common.collect.Lists;
+<i class="no-highlight">5</i>&nbsp;import com.jd.biz.domain.api.service.JdbcDriverService;
+<i class="no-highlight">6</i>&nbsp;import com.jd.biz.domain.core.converter.DriverConfigConverter;
+<i class="no-highlight">7</i>&nbsp;import com.jd.biz.domain.repository.entity.JdbcDriverDO;
+<i class="no-highlight">8</i>&nbsp;import com.jd.biz.domain.repository.mapper.JdbcDriverMapper;
+<i class="no-highlight">9</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ActionResult;
+<i class="no-highlight">10</i>&nbsp;import com.jd.common.tools.base.wrapper.result.DataResult;
+<i class="no-highlight">11</i>&nbsp;import com.jd.spi.config.DBConfig;
+<i class="no-highlight">12</i>&nbsp;import com.jd.spi.config.DriverConfig;
+<i class="no-highlight">13</i>&nbsp;import com.jd.spi.sql.Chat2DBContext;
+<i class="no-highlight">14</i>&nbsp;import com.jd.spi.sql.IDriverManager;
+<i class="no-highlight">15</i>&nbsp;import com.jd.spi.util.JdbcJarUtils;
+<i class="no-highlight">16</i>&nbsp;import lombok.extern.slf4j.Slf4j;
+<i class="no-highlight">17</i>&nbsp;import org.apache.commons.collections4.CollectionUtils;
+<i class="no-highlight">18</i>&nbsp;import org.springframework.beans.factory.annotation.Autowired;
+<i class="no-highlight">19</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">20</i>&nbsp;
+<i class="no-highlight">21</i>&nbsp;import javax.annotation.Resource;
+<i class="no-highlight">22</i>&nbsp;import java.io.File;
+<i class="no-highlight">23</i>&nbsp;import java.io.IOException;
+<i class="no-highlight">24</i>&nbsp;import java.util.LinkedHashMap;
+<i class="no-highlight">25</i>&nbsp;import java.util.List;
+<i class="no-highlight">26</i>&nbsp;import java.util.Map;
+<i class="no-highlight">27</i>&nbsp;import java.util.stream.Collectors;
+<i class="no-highlight">28</i>&nbsp;
+<i class="no-highlight">29</i>&nbsp;
+<b class="fc"><i class="no-highlight">30</i>&nbsp;@Slf4j</b>
+<i class="no-highlight">31</i>&nbsp;@Service
+<b class="fc"><i class="no-highlight">32</i>&nbsp;public class JdbcDriverServiceImpl implements JdbcDriverService {</b>
+<i class="no-highlight">33</i>&nbsp;
+<i class="no-highlight">34</i>&nbsp;    @Autowired
+<i class="no-highlight">35</i>&nbsp;    private DriverConfigConverter driverConfigConverter;
+<i class="no-highlight">36</i>&nbsp;    @Resource
+<i class="no-highlight">37</i>&nbsp;    private JdbcDriverMapper jdbcDriverMapper;
+<i class="no-highlight">38</i>&nbsp;
+<i class="no-highlight">39</i>&nbsp;    @Override
+<i class="no-highlight">40</i>&nbsp;    public DataResult&lt;DBConfig&gt; getDrivers(String dbType) {
+<b class="nc"><i class="no-highlight">41</i>&nbsp;        Map&lt;String, DriverConfig&gt; driverConfigMap = new LinkedHashMap&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">42</i>&nbsp;        LambdaQueryWrapper&lt;JdbcDriverDO&gt; query = new LambdaQueryWrapper&lt;JdbcDriverDO&gt;();</b>
+<b class="nc"><i class="no-highlight">43</i>&nbsp;        query.eq(JdbcDriverDO::getDbType, dbType);</b>
+<b class="nc"><i class="no-highlight">44</i>&nbsp;        List&lt;JdbcDriverDO&gt; driverDOS = jdbcDriverMapper.selectList(query);</b>
+<b class="nc"><i class="no-highlight">45</i>&nbsp;        List&lt;DriverConfig&gt; driverConfigs = Lists.newArrayList();</b>
+<b class="nc"><i class="no-highlight">46</i>&nbsp;        if (!CollectionUtils.isEmpty(driverDOS)) {</b>
+<b class="nc"><i class="no-highlight">47</i>&nbsp;            driverConfigs = driverDOS.stream().map(driverConfigConverter::do2Config).collect(Collectors.toList());</b>
+<i class="no-highlight">48</i>&nbsp;        }
+<i class="no-highlight">49</i>&nbsp;
+<b class="nc"><i class="no-highlight">50</i>&nbsp;        DBConfig dbConfig = Chat2DBContext.PLUGIN_MAP.get(dbType).getDBConfig();</b>
+<b class="nc"><i class="no-highlight">51</i>&nbsp;        List&lt;DriverConfig&gt; driverConfigList = dbConfig.getDriverConfigList();</b>
+<b class="nc"><i class="no-highlight">52</i>&nbsp;        if (CollectionUtils.isNotEmpty(driverConfigList)) {</b>
+<b class="nc"><i class="no-highlight">53</i>&nbsp;            driverConfigs.addAll(driverConfigList);</b>
+<i class="no-highlight">54</i>&nbsp;        }
+<i class="no-highlight">55</i>&nbsp;
+<b class="nc"><i class="no-highlight">56</i>&nbsp;        for (DriverConfig driverConfig : driverConfigs) {</b>
+<b class="nc"><i class="no-highlight">57</i>&nbsp;            boolean flag = driverExists(driverConfig);</b>
+<b class="nc"><i class="no-highlight">58</i>&nbsp;            if (flag &amp;&amp; driverConfigMap.get(driverConfig.getJdbcDriver()) == null) {</b>
+<b class="nc"><i class="no-highlight">59</i>&nbsp;                driverConfigMap.put(driverConfig.getJdbcDriver(), driverConfig);</b>
+<i class="no-highlight">60</i>&nbsp;            } else {
+<b class="nc"><i class="no-highlight">61</i>&nbsp;                log.warn(&quot;Driver file not found: {}&quot;, driverConfig.getJdbcDriver());</b>
+<i class="no-highlight">62</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">63</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">64</i>&nbsp;        dbConfig.setDriverConfigList(driverConfigMap.isEmpty() ? null : Lists.newArrayList(driverConfigMap.values()));</b>
+<b class="nc"><i class="no-highlight">65</i>&nbsp;        return DataResult.of(dbConfig);</b>
+<i class="no-highlight">66</i>&nbsp;    }
+<i class="no-highlight">67</i>&nbsp;
+<i class="no-highlight">68</i>&nbsp;
+<i class="no-highlight">69</i>&nbsp;    private boolean driverExists(DriverConfig driverConfig) {
+<b class="nc"><i class="no-highlight">70</i>&nbsp;        boolean flag = true;</b>
+<b class="nc"><i class="no-highlight">71</i>&nbsp;        String[] jarPaths = driverConfig.getJdbcDriver().split(&quot;,&quot;);</b>
+<b class="nc"><i class="no-highlight">72</i>&nbsp;        for (String jarPath : jarPaths) {</b>
+<b class="nc"><i class="no-highlight">73</i>&nbsp;            File file = new File(JdbcJarUtils.PATH + jarPath);</b>
+<b class="nc"><i class="no-highlight">74</i>&nbsp;            if (!file.exists()) {</b>
+<b class="nc"><i class="no-highlight">75</i>&nbsp;                flag = false;</b>
+<b class="nc"><i class="no-highlight">76</i>&nbsp;                break;</b>
+<i class="no-highlight">77</i>&nbsp;            }
+<i class="no-highlight">78</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">79</i>&nbsp;        return flag;</b>
+<i class="no-highlight">80</i>&nbsp;    }
+<i class="no-highlight">81</i>&nbsp;
+<i class="no-highlight">82</i>&nbsp;    @Override
+<i class="no-highlight">83</i>&nbsp;    public ActionResult upload(String dbType, String jdbcDriverClass, String localPath) {
+<b class="nc"><i class="no-highlight">84</i>&nbsp;        JdbcDriverDO driverDO = new JdbcDriverDO();</b>
+<b class="nc"><i class="no-highlight">85</i>&nbsp;        driverDO.setJdbcDriverClass(jdbcDriverClass);</b>
+<b class="nc"><i class="no-highlight">86</i>&nbsp;        driverDO.setDbType(dbType);</b>
+<b class="nc"><i class="no-highlight">87</i>&nbsp;        driverDO.setJdbcDriver(localPath);</b>
+<b class="nc"><i class="no-highlight">88</i>&nbsp;        DriverConfig driverConfig = driverConfigConverter.do2Config(driverDO);</b>
+<i class="no-highlight">89</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">90</i>&nbsp;            IDriverManager.getClassLoader(driverConfig);</b>
+<b class="nc"><i class="no-highlight">91</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">92</i>&nbsp;            throw new RuntimeException(&quot;Driver error,please check the driver file&quot;, e);</b>
+<b class="nc"><i class="no-highlight">93</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">94</i>&nbsp;        jdbcDriverMapper.insert(driverDO);</b>
+<b class="nc"><i class="no-highlight">95</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">96</i>&nbsp;    }
+<i class="no-highlight">97</i>&nbsp;
+<i class="no-highlight">98</i>&nbsp;    @Override
+<i class="no-highlight">99</i>&nbsp;    public ActionResult download(String dbType) {
+<b class="nc"><i class="no-highlight">100</i>&nbsp;        DBConfig dbConfig = Chat2DBContext.PLUGIN_MAP.get(dbType).getDBConfig();</b>
+<b class="nc"><i class="no-highlight">101</i>&nbsp;        List&lt;DriverConfig&gt; driverConfigList = dbConfig.getDriverConfigList();</b>
+<b class="nc"><i class="no-highlight">102</i>&nbsp;        for (DriverConfig driverConfig : driverConfigList) {</b>
+<b class="nc"><i class="no-highlight">103</i>&nbsp;            List&lt;String&gt; downloadJdbcDriverUrls = driverConfig.getDownloadJdbcDriverUrls();</b>
+<b class="nc"><i class="no-highlight">104</i>&nbsp;            for (String downloadJdbcDriverUrl : downloadJdbcDriverUrls) {</b>
+<i class="no-highlight">105</i>&nbsp;                try {
+<b class="nc"><i class="no-highlight">106</i>&nbsp;                    JdbcJarUtils.download(downloadJdbcDriverUrl);</b>
+<b class="nc"><i class="no-highlight">107</i>&nbsp;                } catch (IOException e) {</b>
+<b class="nc"><i class="no-highlight">108</i>&nbsp;                    throw new RuntimeException(e);</b>
+<b class="nc"><i class="no-highlight">109</i>&nbsp;                }</b>
+<b class="nc"><i class="no-highlight">110</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">111</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">112</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">113</i>&nbsp;    }
+<i class="no-highlight">114</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.biz.domain.repository.mapper.OperationSavedMapper">
+    <update id="updateOperationSavedDO" parameterType="com.jd.biz.domain.repository.entity.OperationSavedDO">
+        update
+            OPERATION_SAVED
+        <set>
+            <if test="gmtCreate != null">GMT_CREATE     = #{gmtCreate}, </if>
+            <if test="gmtModified != null">GMT_MODIFIED   = #{gmtModified},</if>
+            <if test="dataSourceId != null and dataSourceId != ''">DATA_SOURCE_ID = #{dataSourceId},</if>
+            <if test="databaseName != null and databaseName != ''">DATABASE_NAME  = #{databaseName},</if>
+            <if test="name != null and name != ''">"NAME"           = #{name},</if>
+            <if test="type != null and type != ''">"TYPE"          = #{type},</if>
+            <if test="status != null and status != ''">STATUS         = #{status},</if>
+            <if test="ddl != null and ddl != ''">"DDL"            = #{ddl},</if>
+            <if test="tabOpened != null and tabOpened != ''">TAB_OPENED     = #{tabOpened},</if>
+            <if test="userId != null and userId != ''">USER_ID        = #{userId},</if>
+            <if test="dbSchemaName != null and dbSchemaName != ''">DB_SCHEMA_NAME = #{dbSchemaName},</if>
+            <if test="operationType != null and operationType != ''">OPERATION_TYPE = #{operationType}</if>
+        </set>
+        WHERE ID = #{id}
+    </update>
+</mapper>

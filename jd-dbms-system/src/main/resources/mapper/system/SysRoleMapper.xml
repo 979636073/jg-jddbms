@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysRoleMapper">
+
+	<resultMap type="com.jd.common.core.domain.entity.SysRole" id="SysRoleResult">
+		<id     property="roleId"             column="ROLE_ID"               />
+		<result property="roleName"           column="ROLE_NAME"             />
+		<result property="roleKey"            column="ROLE_KEY"              />
+		<result property="roleSort"           column="ROLE_SORT"             />
+		<result property="dataScope"          column="DATA_SCOPE"            />
+		<result property="menuCheckStrictly"  column="MENU_CHECK_STRICTLY"   />
+		<result property="deptCheckStrictly"  column="DEPT_CHECK_STRICTLY"   />
+		<result property="status"             column="STATUS"                />
+		<result property="delFlag"            column="DEL_FLAG"              />
+		<result property="createBy"           column="CREATE_BY"             />
+		<result property="createTime"         column="CREATE_TIME"           />
+		<result property="updateBy"           column="UPDATE_BY"             />
+		<result property="updateTime"         column="UPDATE_TIME"           />
+		<result property="remark"             column="REMARK"                />
+	</resultMap>
+
+	<sql id="selectRoleVo">
+	    select distinct r.ROLE_ID, r.ROLE_NAME, r.ROLE_KEY, r.ROLE_SORT, r.DATA_SCOPE, r.MENU_CHECK_STRICTLY, r.DEPT_CHECK_STRICTLY,
+            r.STATUS, r.DEL_FLAG, r.CREATE_TIME, r.REMARK
+        from SYS_ROLE r
+	        left join SYS_USER_ROLE ur on ur.ROLE_ID = r.ROLE_ID
+	        left join SYS_USER u on u.USER_ID = ur.USER_ID
+	        left join SYS_DEPT d on u.DEPT_ID = d.DEPT_ID
+    </sql>
+
+    <select id="selectRoleList" parameterType="com.jd.common.core.domain.entity.SysRole" resultMap="SysRoleResult">
+		<include refid="selectRoleVo"/>
+		where r.DEL_FLAG = '0'
+		<if test="roleId != null and roleId != 0">
+			AND r.ROLE_ID = #{roleId}
+		</if>
+		<if test="roleName != null and roleName != ''">
+			AND r.ROLE_NAME like concat('%', #{roleName}, '%')
+		</if>
+		<if test="status != null and status != ''">
+			AND r.STATUS = #{status}
+		</if>
+		<if test="roleKey != null and roleKey != ''">
+			AND r.ROLE_KEY like concat('%', #{roleKey}, '%')
+		</if>
+		<if test="params.beginTime != null and params.beginTime != ''"><!-- 开始时间检索 -->
+			and r.CREATE_TIME &gt;= to_date(#{params.beginTime},'yyyy-MM-dd')
+		</if>
+		<if test="params.endTime != null and params.endTime != ''"><!-- 结束时间检索 -->
+			and r.CREATE_TIME &lt;= to_date(#{params.endTime},'yyyy-MM-dd')
+		</if>
+		<!-- 数据范围过滤 -->
+		${params.dataScope}
+		order by r.ROLE_SORT
+	</select>
+
+	<select id="selectRolePermissionByUserId" parameterType="Long" resultMap="SysRoleResult">
+		<include refid="selectRoleVo"/>
+		WHERE r.DEL_FLAG = '0' and ur.USER_ID = #{userId}
+	</select>
+
+	<select id="selectRoleAll" resultMap="SysRoleResult">
+		<include refid="selectRoleVo"/>
+	</select>
+
+	<select id="selectRoleListByUserId" parameterType="Long" resultType="Long">
+		select r.ROLE_ID
+        from SYS_ROLE r
+	        left join SYS_USER_ROLE ur on ur.ROLE_ID = r.ROLE_ID
+	        left join SYS_USER u on u.USER_ID = ur.USER_ID
+	    where u.USER_ID = #{userId}
+	</select>
+
+	<select id="selectRoleById" parameterType="Long" resultMap="SysRoleResult">
+		<include refid="selectRoleVo"/>
+		where r.ROLE_ID = #{roleId}
+	</select>
+
+	<select id="selectRolesByUserName" parameterType="String" resultMap="SysRoleResult">
+		<include refid="selectRoleVo"/>
+		WHERE r.DEL_FLAG = '0' and u.USER_NAME = #{userName}
+	</select>
+
+	<select id="checkRoleNameUnique" parameterType="String" resultMap="SysRoleResult">
+		<include refid="selectRoleVo"/>
+		 where r.ROLE_NAME=#{roleName} and r.DEL_FLAG = '0' limit 1
+	</select>
+
+	<select id="checkRoleKeyUnique" parameterType="String" resultMap="SysRoleResult">
+		<include refid="selectRoleVo"/>
+		 where r.ROLE_KEY=#{roleKey} and r.DEL_FLAG = '0' limit 1
+	</select>
+
+ 	<insert id="insertRole" parameterType="com.jd.common.core.domain.entity.SysRole" useGeneratedKeys="true" keyProperty="roleId">
+ 		insert into SYS_role(
+ 			<if test="roleName != null and roleName != ''">ROLE_NAME,</if>
+ 			<if test="roleKey != null and roleKey != ''">ROLE_KEY,</if>
+ 			<if test="roleSort != null">ROLE_SORT,</if>
+ 			<if test="dataScope != null and dataScope != ''">DATA_SCOPE,</if>
+ 			<if test="menuCheckStrictly != null">MENU_CHECK_STRICTLY,</if>
+ 			<if test="deptCheckStrictly != null">DEPT_CHECK_STRICTLY,</if>
+ 			<if test="status != null and status != ''">STATUS,</if>
+ 			<if test="remark != null and remark != ''">REMARK,</if>
+ 			<if test="createBy != null and createBy != ''">CREATE_BY,</if>
+ 			CREATE_TIME
+ 		)values(
+ 			<if test="roleName != null and roleName != ''">#{roleName},</if>
+ 			<if test="roleKey != null and roleKey != ''">#{roleKey},</if>
+ 			<if test="roleSort != null">#{roleSort},</if>
+ 			<if test="dataScope != null and dataScope != ''">#{dataScope},</if>
+ 			<if test="menuCheckStrictly != null">#{menuCheckStrictly},</if>
+ 			<if test="deptCheckStrictly != null">#{deptCheckStrictly},</if>
+ 			<if test="status != null and status != ''">#{status},</if>
+ 			<if test="remark != null and remark != ''">#{remark},</if>
+ 			<if test="createBy != null and createBy != ''">#{createBy},</if>
+ 			CURRENT_TIMESTAMP
+ 		)
+	</insert>
+
+	<update id="updateRole" parameterType="com.jd.common.core.domain.entity.SysRole">
+ 		update SYS_ROLE
+ 		<set>
+ 			<if test="roleName != null and roleName != ''">ROLE_NAME = #{roleName},</if>
+ 			<if test="roleKey != null and roleKey != ''">ROLE_KEY = #{roleKey},</if>
+ 			<if test="roleSort != null">ROLE_SORT = #{roleSort},</if>
+ 			<if test="dataScope != null and dataScope != ''">DATA_SCOPE = #{dataScope},</if>
+ 			<if test="menuCheckStrictly != null">MENU_CHECK_STRICTLY = #{menuCheckStrictly},</if>
+ 			<if test="deptCheckStrictly != null">DEPT_CHECK_STRICTLY = #{deptCheckStrictly},</if>
+ 			<if test="status != null and status != ''">STATUS = #{status},</if>
+ 			<if test="remark != null">REMARK = #{remark},</if>
+ 			<if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+ 			UPDATE_TIME = CURRENT_TIMESTAMP
+ 		</set>
+ 		where ROLE_ID = #{roleId}
+	</update>
+
+	<delete id="deleteRoleById" parameterType="Long">
+ 		update SYS_ROLE set DEL_FLAG = '2' where ROLE_ID = #{roleId}
+ 	</delete>
+
+ 	<delete id="deleteRoleByIds" parameterType="Long">
+ 	    update SYS_ROLE set DEL_FLAG = '2' where ROLE_ID in
+ 		<foreach collection="array" item="roleId" open="(" separator="," close=")">
+ 			#{roleId}
+        </foreach>
+ 	</delete>
+
+</mapper>

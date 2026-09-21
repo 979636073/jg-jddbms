@@ -1,0 +1,178 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > TaskServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: TaskServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">TaskServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    20%
+  </span>
+  <span class="absValue">
+    (1/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    4.5%
+  </span>
+  <span class="absValue">
+    (1/22)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import com.baomidou.mybatisplus.core.metadata.IPage;
+<i class="no-highlight">4</i>&nbsp;import com.baomidou.mybatisplus.core.metadata.OrderItem;
+<i class="no-highlight">5</i>&nbsp;import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<i class="no-highlight">6</i>&nbsp;import com.google.common.collect.Lists;
+<i class="no-highlight">7</i>&nbsp;import com.jd.biz.domain.api.enums.DeletedTypeEnum;
+<i class="no-highlight">8</i>&nbsp;import com.jd.biz.domain.api.enums.TaskStatusEnum;
+<i class="no-highlight">9</i>&nbsp;import com.jd.biz.domain.api.model.Task;
+<i class="no-highlight">10</i>&nbsp;import com.jd.biz.domain.api.param.TaskCreateParam;
+<i class="no-highlight">11</i>&nbsp;import com.jd.biz.domain.api.param.TaskPageParam;
+<i class="no-highlight">12</i>&nbsp;import com.jd.biz.domain.api.param.TaskUpdateParam;
+<i class="no-highlight">13</i>&nbsp;import com.jd.biz.domain.api.service.TaskService;
+<i class="no-highlight">14</i>&nbsp;import com.jd.biz.domain.core.converter.TaskConverter;
+<i class="no-highlight">15</i>&nbsp;import com.jd.biz.domain.repository.entity.TaskDO;
+<i class="no-highlight">16</i>&nbsp;import com.jd.biz.domain.repository.mapper.TaskMapper;
+<i class="no-highlight">17</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ActionResult;
+<i class="no-highlight">18</i>&nbsp;import com.jd.common.tools.base.wrapper.result.DataResult;
+<i class="no-highlight">19</i>&nbsp;import com.jd.common.tools.base.wrapper.result.PageResult;
+<i class="no-highlight">20</i>&nbsp;import org.springframework.beans.factory.annotation.Autowired;
+<i class="no-highlight">21</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">22</i>&nbsp;
+<i class="no-highlight">23</i>&nbsp;import javax.annotation.Resource;
+<i class="no-highlight">24</i>&nbsp;
+<i class="no-highlight">25</i>&nbsp;@Service
+<b class="fc"><i class="no-highlight">26</i>&nbsp;public class TaskServiceImpl implements TaskService {</b>
+<i class="no-highlight">27</i>&nbsp;
+<i class="no-highlight">28</i>&nbsp;    /**
+<i class="no-highlight">29</i>&nbsp;     * task converter
+<i class="no-highlight">30</i>&nbsp;     */
+<i class="no-highlight">31</i>&nbsp;    @Autowired
+<i class="no-highlight">32</i>&nbsp;    private TaskConverter taskConverter;
+<i class="no-highlight">33</i>&nbsp;    @Resource
+<i class="no-highlight">34</i>&nbsp;    private TaskMapper taskMapper;
+<i class="no-highlight">35</i>&nbsp;
+<i class="no-highlight">36</i>&nbsp;    @Override
+<i class="no-highlight">37</i>&nbsp;    public DataResult&lt;Long&gt; create(TaskCreateParam param) {
+<b class="nc"><i class="no-highlight">38</i>&nbsp;        TaskDO taskDO = taskConverter.todo(param);</b>
+<b class="nc"><i class="no-highlight">39</i>&nbsp;        taskDO.setDeleted(DeletedTypeEnum.N.name());</b>
+<b class="nc"><i class="no-highlight">40</i>&nbsp;        taskDO.setTaskStatus(TaskStatusEnum.INIT.name());</b>
+<b class="nc"><i class="no-highlight">41</i>&nbsp;        taskMapper.insert(taskDO);</b>
+<b class="nc"><i class="no-highlight">42</i>&nbsp;        return DataResult.of(taskDO.getId());</b>
+<i class="no-highlight">43</i>&nbsp;    }
+<i class="no-highlight">44</i>&nbsp;
+<i class="no-highlight">45</i>&nbsp;    @Override
+<i class="no-highlight">46</i>&nbsp;    public ActionResult updateStatus(TaskUpdateParam param) {
+<b class="nc"><i class="no-highlight">47</i>&nbsp;        TaskDO taskDO = new TaskDO();</b>
+<b class="nc"><i class="no-highlight">48</i>&nbsp;        taskDO.setId(param.getId());</b>
+<b class="nc"><i class="no-highlight">49</i>&nbsp;        taskDO.setTaskStatus(param.getTaskStatus());</b>
+<b class="nc"><i class="no-highlight">50</i>&nbsp;        taskDO.setContent(param.getContent());</b>
+<b class="nc"><i class="no-highlight">51</i>&nbsp;        taskMapper.updateById(taskDO);</b>
+<b class="nc"><i class="no-highlight">52</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">53</i>&nbsp;    }
+<i class="no-highlight">54</i>&nbsp;
+<i class="no-highlight">55</i>&nbsp;    @Override
+<i class="no-highlight">56</i>&nbsp;    public PageResult&lt;Task&gt; page(TaskPageParam param) {
+<b class="nc"><i class="no-highlight">57</i>&nbsp;        Page&lt;TaskDO&gt; page = new Page&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">58</i>&nbsp;        page.setCurrent(param.getPageNo());</b>
+<b class="nc"><i class="no-highlight">59</i>&nbsp;        page.setSize(param.getPageSize());</b>
+<b class="nc"><i class="no-highlight">60</i>&nbsp;        page.setOrders(Lists.newArrayList(OrderItem.desc(&quot;gmt_create&quot;)));</b>
+<b class="nc"><i class="no-highlight">61</i>&nbsp;        IPage&lt;TaskDO&gt; iPage = taskMapper.pageQuery(page, param.getUserId(), DeletedTypeEnum.N.name());</b>
+<b class="nc"><i class="no-highlight">62</i>&nbsp;        if (iPage != null) {</b>
+<b class="nc"><i class="no-highlight">63</i>&nbsp;            return PageResult.of(taskConverter.toModel(iPage.getRecords()), param);</b>
+<i class="no-highlight">64</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">65</i>&nbsp;        return PageResult.empty(param.getPageNo(), param.getPageSize());</b>
+<i class="no-highlight">66</i>&nbsp;    }
+<i class="no-highlight">67</i>&nbsp;
+<i class="no-highlight">68</i>&nbsp;    @Override
+<i class="no-highlight">69</i>&nbsp;    public DataResult&lt;Task&gt; get(Long id) {
+<b class="nc"><i class="no-highlight">70</i>&nbsp;        TaskDO task = taskMapper.selectById(id);</b>
+<b class="nc"><i class="no-highlight">71</i>&nbsp;        return DataResult.of(taskConverter.toModel(task));</b>
+<i class="no-highlight">72</i>&nbsp;    }
+<i class="no-highlight">73</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

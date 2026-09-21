@@ -1,0 +1,38 @@
+package com.jd.biz.domain.api.param;
+
+import lombok.Data;
+
+import javax.validation.constraints.NotNull;
+
+/**
+ * 统计数量
+ *
+ * @author 是仪
+ */
+@Data
+public class DlCountParam {
+
+    /**
+     * sql语句
+     */
+    @NotNull
+    private String sql;
+
+    /**
+     * 控制台id
+     */
+    @NotNull
+    private Long consoleId;
+
+    /**
+     * 数据源id
+     */
+    @NotNull
+    private Long dataSourceId;
+
+    /**
+     * DB名称
+     */
+    @NotNull
+    private String databaseName;
+}

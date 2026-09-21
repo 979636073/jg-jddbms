@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysUserMapper">
+
+    <resultMap type="com.jd.common.core.domain.entity.SysUser" id="SysUserResult">
+        <id     property="userId"       column="USER_ID"      />
+        <result property="deptId"       column="DEPT_ID"      />
+        <result property="userName"     column="USER_NAME"    />
+        <result property="nickName"     column="NICK_NAME"    />
+        <result property="email"        column="EMAIL"        />
+        <result property="phonenumber"  column="PHONENUMBER"  />
+        <result property="sex"          column="SEX"          />
+        <result property="avatar"       column="AVATAR"       />
+        <result property="password"     column="PASSWORD"     />
+        <result property="status"       column="STATUS"       />
+        <result property="delFlag"      column="DEL_FLAG"     />
+        <result property="loginIp"      column="LOGIN_IP"     />
+        <result property="loginDate"    column="LOGIN_DATE"   />
+        <result property="createBy"     column="CREATE_BY"    />
+        <result property="createTime"   column="CREATE_TIME"  />
+        <result property="updateBy"     column="UPDATE_BY"    />
+        <result property="updateTime"   column="UPDATE_TIME"  />
+        <result property="remark"       column="REMARK"       />
+        <association property="dept"    javaType="com.jd.common.core.domain.entity.SysDept"         resultMap="deptResult" />
+        <collection  property="roles"   javaType="java.util.List"  resultMap="RoleResult" />
+    </resultMap>
+
+    <resultMap id="deptResult" type="com.jd.common.core.domain.entity.SysDept">
+        <id     property="deptId"    column="DEPT_ID"     />
+        <result property="parentId"  column="PARENT_ID"   />
+        <result property="deptName"  column="DEPT_NAME"   />
+        <result property="ancestors" column="ANCESTORS"   />
+        <result property="orderNum"  column="ORDER_NUM"   />
+        <result property="leader"    column="LEADER"      />
+        <result property="status"    column="DEPT_STATUS" />
+    </resultMap>
+
+    <resultMap id="RoleResult" type="com.jd.common.core.domain.entity.SysRole">
+        <id     property="roleId"       column="ROLE_ID"        />
+        <result property="roleName"     column="ROLE_NAME"      />
+        <result property="roleKey"      column="ROLE_KEY"       />
+        <result property="roleSort"     column="ROLE_SORT"      />
+        <result property="dataScope"    column="DATA_SCOPE"     />
+        <result property="status"       column="ROLE_STATUS"    />
+    </resultMap>
+
+	<sql id="selectUserVo">
+        select u.USER_ID, u.DEPT_ID, u.USER_NAME, u.NICK_NAME, u.EMAIL, u.AVATAR, u.PHONENUMBER, u.PASSWORD, u.SEX, u.STATUS, u.DEL_FLAG, u.LOGIN_IP, u.LOGIN_DATE, u.CREATE_BY, u.CREATE_TIME, u.REMARK,
+        d.DEPT_ID, d.PARENT_ID, d.ANCESTORS, d.DEPT_NAME, d.ORDER_NUM, d.LEADER, d.STATUS as DEPT_STATUS,
+        r.ROLE_ID, r.ROLE_NAME, r.ROLE_KEY, r.ROLE_SORT, r.DATA_SCOPE, r.STATUS as ROLE_STATUS
+        from SYS_USER u
+		    left join SYS_DEPT d on u.DEPT_ID = d.DEPT_ID
+		    left join SYS_USER_ROLE ur on u.USER_ID = ur.USER_ID
+		    left join SYS_ROLE r on r.ROLE_ID = ur.ROLE_ID
+    </sql>
+
+    <select id="selectUserList" parameterType="com.jd.common.core.domain.entity.SysUser" resultMap="SysUserResult">
+		select u.USER_ID, u.DEPT_ID, u.NICK_NAME, u.USER_NAME, u.EMAIL, u.AVATAR, u.PHONENUMBER, u.SEX, u.STATUS, u.DEL_FLAG, u.LOGIN_IP, u.LOGIN_DATE, u.CREATE_BY, u.CREATE_TIME, u.REMARK, d.DEPT_NAME, d.LEADER from SYS_USER u
+		left join SYS_DEPT d on u.DEPT_ID = d.DEPT_ID
+		where u.DEL_FLAG = '0'
+		<if test="userId != null and userId != 0">
+			AND u.USER_ID = #{userId}
+		</if>
+		<if test="userName != null and userName != ''">
+			AND u.USER_NAME like concat('%', #{userName}, '%')
+		</if>
+		<if test="status != null and status != ''">
+			AND u.STATUS = #{status}
+		</if>
+		<if test="phonenumber != null and phonenumber != ''">
+			AND u.PHONENUMBER like concat('%', #{phonenumber}, '%')
+		</if>
+		<if test="params.beginTime != null and params.beginTime != ''"><!-- 开始时间检索 -->
+			AND u.CREATE_TIME &gt;= to_date(#{params.beginTime},'yyyy-MM-dd')
+		</if>
+		<if test="params.endTime != null and params.endTime != ''"><!-- 结束时间检索 -->
+			AND u.CREATE_TIME &lt;= to_date(#{params.endTime},'yyyy-MM-dd')
+		</if>
+		<if test="deptId != null and deptId != 0">
+			AND (u.DEPT_ID in (SELECT DEPT_ID
+			FROM SYS_DEPT
+			START WITH PARENT_ID = #{deptId}
+			OR DEPT_ID = #{deptId}
+			CONNECT BY PARENT_ID = PRIOR DEPT_ID) )
+		</if>
+		<!-- 数据范围过滤 -->
+		${params.dataScope}
+	</select>
+
+	<select id="selectAllocatedList" parameterType="com.jd.common.core.domain.entity.SysUser" resultMap="SysUserResult">
+	    select distinct u.USER_ID, u.DEPT_ID, u.USER_NAME, u.NICK_NAME, u.EMAIL, u.PHONENUMBER, u.STATUS, u.CREATE_TIME
+	    from SYS_USER u
+			 left join SYS_DEPT d on u.DEPT_ID = d.DEPT_ID
+			 left join SYS_USER_ROLE ur on u.USER_ID = ur.USER_ID
+			 left join SYS_ROLE r on r.ROLE_ID = ur.ROLE_ID
+	    where u.DEL_FLAG = '0' and r.ROLE_ID = #{roleId}
+	    <if test="userName != null and userName != ''">
+			AND u.USER_NAME like concat('%', #{userName}, '%')
+		</if>
+		<if test="phonenumber != null and phonenumber != ''">
+			AND u.PHONENUMBER like concat('%', #{phonenumber}, '%')
+		</if>
+		<!-- 数据范围过滤 -->
+		${params.dataScope}
+	</select>
+
+	<select id="selectUnallocatedList" parameterType="com.jd.common.core.domain.entity.SysUser" resultMap="SysUserResult">
+	    select distinct u.USER_ID, u.DEPT_ID, u.USER_NAME, u.NICK_NAME, u.EMAIL, u.PHONENUMBER, u.STATUS, u.CREATE_TIME
+	    from SYS_USER u
+			 left join SYS_DEPT d on u.DEPT_ID = d.DEPT_ID
+			 left join SYS_USER_ROLE ur on u.USER_ID = ur.USER_ID
+			 left join SYS_ROLE r on r.ROLE_ID = ur.ROLE_ID
+	    where u.DEL_FLAG = '0' and (r.ROLE_ID != #{roleId} or r.ROLE_ID IS NULL)
+	    and u.USER_ID not in (select u.USER_ID from SYS_USER u inner join SYS_USER_ROLE ur on u.USER_ID = ur.USER_ID and ur.ROLE_ID = #{roleId})
+	    <if test="userName != null and userName != ''">
+			AND u.USER_NAME like concat('%', #{userName}, '%')
+		</if>
+		<if test="phonenumber != null and phonenumber != ''">
+			AND u.PHONENUMBER like concat('%', #{phonenumber}, '%')
+		</if>
+		<!-- 数据范围过滤 -->
+		${params.dataScope}
+	</select>
+
+	<select id="selectUserByUserName" parameterType="String" resultMap="SysUserResult">
+	    <include refid="selectUserVo"/>
+		where u.USER_NAME = #{userName} and u.DEL_FLAG = '0'
+	</select>
+
+	<select id="selectUserByUserAndPhone" parameterType="String" resultMap="SysUserResult">
+		<include refid="selectUserVo"/>
+		where u.USER_NAME = #{userName} and u.PHONENUMBER = #{phone} and u.DEL_FLAG = '0'
+	</select>
+
+	<select id="selectUserById" parameterType="Long" resultMap="SysUserResult">
+		<include refid="selectUserVo"/>
+		where u.USER_ID = #{userId}
+	</select>
+
+	<select id="checkUserNameUnique" parameterType="String" resultMap="SysUserResult">
+		select USER_ID, USER_NAME from SYS_USER where USER_NAME = #{userName} and DEL_FLAG = '0' limit 1
+	</select>
+
+	<select id="checkPhoneUnique" parameterType="String" resultMap="SysUserResult">
+		select USER_ID, PHONENUMBER from SYS_USER where PHONENUMBER = #{phonenumber} and DEL_FLAG = '0' limit 1
+	</select>
+
+	<select id="checkEmailUnique" parameterType="String" resultMap="SysUserResult">
+		select USER_ID, EMAIL from SYS_USER where EMAIL = #{email} and DEL_FLAG = '0' limit 1
+	</select>
+
+	<insert id="insertUser" parameterType="com.jd.common.core.domain.entity.SysUser" useGeneratedKeys="true" keyProperty="userId">
+ 		insert into SYS_USER(
+ 			<if test="userId != null and userId != 0">USER_ID,</if>
+ 			<if test="deptId != null and deptId != 0">DEPT_ID,</if>
+ 			<if test="userName != null and userName != ''">USER_NAME,</if>
+ 			<if test="nickName != null and nickName != ''">NICK_NAME,</if>
+ 			<if test="email != null and email != ''">EMAIL,</if>
+ 			<if test="avatar != null and avatar != ''">AVATAR,</if>
+ 			<if test="phonenumber != null and phonenumber != ''">PHONENUMBER,</if>
+ 			<if test="sex != null and sex != ''">SEX,</if>
+ 			<if test="password != null and password != ''">PASSWORD,</if>
+ 			<if test="status != null and status != ''">STATUS,</if>
+ 			<if test="createBy != null and createBy != ''">CREATE_BY,</if>
+ 			<if test="remark != null and remark != ''">REMARK,</if>
+ 			CREATE_TIME
+ 		)values(
+ 			<if test="userId != null and userId != ''">#{userId},</if>
+ 			<if test="deptId != null and deptId != ''">#{deptId},</if>
+ 			<if test="userName != null and userName != ''">#{userName},</if>
+ 			<if test="nickName != null and nickName != ''">#{nickName},</if>
+ 			<if test="email != null and email != ''">#{email},</if>
+ 			<if test="avatar != null and avatar != ''">#{avatar},</if>
+ 			<if test="phonenumber != null and phonenumber != ''">#{phonenumber},</if>
+ 			<if test="sex != null and sex != ''">#{sex},</if>
+ 			<if test="password != null and password != ''">#{password},</if>
+ 			<if test="status != null and status != ''">#{status},</if>
+ 			<if test="createBy != null and createBy != ''">#{createBy},</if>
+ 			<if test="remark != null and remark != ''">#{remark},</if>
+ 			CURRENT_TIMESTAMP
+ 		)
+	</insert>
+
+	<update id="updateUser" parameterType="com.jd.common.core.domain.entity.SysUser">
+ 		update SYS_USER
+ 		<set>
+ 			<if test="deptId != null and deptId != 0">DEPT_ID = #{deptId},</if>
+ 			<if test="userName != null and userName != ''">USER_NAME = #{userName},</if>
+ 			<if test="nickName != null and nickName != ''">NICK_NAME = #{nickName},</if>
+ 			<if test="email != null ">EMAIL = #{email},</if>
+ 			<if test="phonenumber != null ">PHONENUMBER = #{phonenumber},</if>
+ 			<if test="sex != null and sex != ''">SEX = #{sex},</if>
+ 			<if test="avatar != null and avatar != ''">AVATAR = #{avatar},</if>
+ 			<if test="password != null and password != ''">PASSWORD = #{password},</if>
+ 			<if test="status != null and status != ''">STATUS = #{status},</if>
+ 			<if test="loginIp != null and loginIp != ''">LOGIN_IP = #{loginIp},</if>
+ 			<if test="loginDate != null">LOGIN_DATE = #{loginDate},</if>
+ 			<if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+ 			<if test="remark != null">REMARK = #{remark},</if>
+ 			UPDATE_TIME = CURRENT_TIMESTAMP
+ 		</set>
+ 		where USER_ID = #{userId}
+	</update>
+
+	<update id="updateUserStatus" parameterType="com.jd.common.core.domain.entity.SysUser">
+ 		update SYS_USER set STATUS = #{status} where USER_ID = #{userId}
+	</update>
+
+	<update id="updateUserAvatar" parameterType="com.jd.common.core.domain.entity.SysUser">
+ 		update SYS_USER set AVATAR = #{avatar} where USER_NAME = #{userName}
+	</update>
+
+	<update id="resetUserPwd" parameterType="com.jd.common.core.domain.entity.SysUser">
+ 		update SYS_USER set PASSWORD = #{password} where USER_NAME = #{userName}
+	</update>
+
+	<delete id="deleteUserById" parameterType="Long">
+ 		update SYS_USER set DEL_FLAG = '2' where USER_ID = #{userId}
+ 	</delete>
+
+ 	<delete id="deleteUserByIds" parameterType="Long">
+ 		update SYS_USER set DEL_FLAG = '2' where USER_ID in
+ 		<foreach collection="array" item="userId" open="(" separator="," close=")">
+ 			#{userId}
+        </foreach>
+ 	</delete>
+
+</mapper>

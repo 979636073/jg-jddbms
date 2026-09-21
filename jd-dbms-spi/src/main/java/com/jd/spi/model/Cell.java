@@ -1,0 +1,50 @@
+package com.jd.spi.model;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
+
+/**
+ * 单元格类型
+ *
+ * @author Jiaju Zhuang
+ */
+@Data
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Cell  implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 单元格类型
+     *
+     * @see com.jd.spi.enums.CellTypeEnum
+     */
+    private String type;
+
+    /**
+     * 字符串数据
+     */
+    private String stringValue;
+
+    /**
+     * 数字
+     */
+    private BigDecimal bigDecimalValue;
+
+    /**
+     * 日期数据
+     */
+    private Long dateValue;
+
+    /**
+     * 二进制流
+     */
+    private byte[] byteValue;
+}

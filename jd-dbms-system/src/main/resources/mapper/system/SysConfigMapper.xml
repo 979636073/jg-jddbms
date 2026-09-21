@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysConfigMapper">
+    
+    <resultMap type="com.jd.system.domain.SysConfig" id="SysConfigResult">
+    	<id     property="configId"      column="CONFIG_ID"      />
+        <result property="configName"    column="CONFIG_NAME"    />
+        <result property="configKey"     column="CONFIG_KEY"     />
+        <result property="configValue"   column="CONFIG_VALUE"   />
+        <result property="configType"    column="CONFIG_TYPE"    />
+        <result property="createBy"      column="CREATE_BY"      />
+        <result property="createTime"    column="CREATE_TIME"    />
+        <result property="updateBy"      column="UPDATE_BY"      />
+        <result property="updateTime"    column="UPDATE_TIME"    />
+    </resultMap>
+    
+    <sql id="selectConfigVo">
+        SELECT CONFIG_ID, CONFIG_NAME, CONFIG_KEY, CONFIG_VALUE, CONFIG_TYPE, CREATE_BY, CREATE_TIME, UPDATE_BY, UPDATE_TIME, REMARK
+		FROM SYS_CONFIG
+    </sql>
+    
+    <!-- 查询条件 -->
+	<sql id="sqlwhereSearch">
+		<where>
+			<if test="configId !=null">
+				and CONFIG_ID = #{configId}
+			</if>
+			<if test="configKey !=null and configKey != ''">
+				and CONFIG_KEY = #{configKey}
+			</if>
+		</where>
+	</sql>
+    
+    <select id="selectConfig" parameterType="com.jd.system.domain.SysConfig" resultMap="SysConfigResult">
+        <include refid="selectConfigVo"/>
+        <include refid="sqlwhereSearch"/>
+    </select>
+    
+    <select id="selectConfigList" parameterType="com.jd.system.domain.SysConfig" resultMap="SysConfigResult">
+        <include refid="selectConfigVo"/>
+        <where>
+			<if test="configName != null and configName != ''">
+				AND CONFIG_NAME like concat('%', #{configName}, '%')
+			</if>
+			<if test="configType != null and configType != ''">
+				AND CONFIG_TYPE = #{configType}
+			</if>
+			<if test="configKey != null and configKey != ''">
+				AND CONFIG_KEY like concat('%', #{configKey}, '%')
+			</if>
+			<if test="params.beginTime != null and params.beginTime != ''"><!-- 开始时间检索 -->
+				and CREATE_TIME &gt;= to_date(#{params.beginTime},'yyyy-MM-dd')
+			</if>
+			<if test="params.endTime != null and params.endTime != ''"><!-- 结束时间检索 -->
+				and CREATE_TIME &lt;= to_date(#{params.endTime},'yyyy-MM-dd')
+			</if>
+		</where>
+    </select>
+    
+    <select id="selectConfigById" parameterType="Long" resultMap="SysConfigResult">
+        <include refid="selectConfigVo"/>
+        where CONFIG_ID = #{configId}
+    </select>
+	
+    <select id="checkConfigKeyUnique" parameterType="String" resultMap="SysConfigResult">
+        <include refid="selectConfigVo"/>
+        where CONFIG_KEY = #{configKey} limit 1
+    </select>
+    
+    <insert id="insertConfig" parameterType="com.jd.system.domain.SysConfig">
+        insert into SYS_CONFIG (
+			<if test="configName != null and configName != '' ">CONFIG_NAME,</if>
+			<if test="configKey != null and configKey != '' ">CONFIG_KEY,</if>
+			<if test="configValue != null and configValue != '' ">CONFIG_VALUE,</if>
+			<if test="configType != null and configType != '' ">CONFIG_TYPE,</if>
+			<if test="createBy != null and createBy != ''">CREATE_BY,</if>
+			<if test="remark != null and remark != ''">REMARK,</if>
+ 			create_time
+        )values(
+			<if test="configName != null and configName != ''">#{configName},</if>
+			<if test="configKey != null and configKey != ''">#{configKey},</if>
+			<if test="configValue != null and configValue != ''">#{configValue},</if>
+			<if test="configType != null and configType != ''">#{configType},</if>
+			<if test="createBy != null and createBy != ''">#{createBy},</if>
+			<if test="remark != null and remark != ''">#{remark},</if>
+ 			CURRENT_TIMESTAMP
+		)
+    </insert>
+	 
+    <update id="updateConfig" parameterType="com.jd.system.domain.SysConfig">
+        update SYS_CONFIG
+        <set>
+            <if test="configName != null and configName != ''">CONFIG_NAME = #{configName},</if>
+            <if test="configKey != null and configKey != ''">CONFIG_KEY = #{configKey},</if>
+            <if test="configValue != null and configValue != ''">CONFIG_VALUE = #{configValue},</if>
+            <if test="configType != null and configType != ''">CONFIG_TYPE = #{configType},</if>
+            <if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+            <if test="remark != null">REMARK = #{remark},</if>
+ 			UPDATE_TIME = CURRENT_TIMESTAMP
+        </set>
+        where CONFIG_ID = #{configId}
+    </update>
+	
+    <delete id="deleteConfigById" parameterType="Long">
+        delete from SYS_CONFIG where CONFIG_ID = #{configId}
+    </delete>
+    
+    <delete id="deleteConfigByIds" parameterType="Long">
+        delete from SYS_CONFIG where CONFIG_ID in
+        <foreach item="configId" collection="array" open="(" separator="," close=")">
+        	#{configId}
+        </foreach>
+    </delete>
+    
+</mapper>

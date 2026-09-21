@@ -1,0 +1,17 @@
+.jdTable_small{
+    .el-table__header-wrapper{
+        th.el-table__cell{
+            height: 25px;
+            padding: 0px !important;
+            .caret-wrapper{
+                height: 25px;
+                .sort-caret.ascending{
+                    top: 0px;
+                }
+                .sort-caret.descending{
+                    bottom: 0px;
+                }
+            }
+        }
+    }
+}

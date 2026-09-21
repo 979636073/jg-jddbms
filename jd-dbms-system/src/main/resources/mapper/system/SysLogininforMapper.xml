@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysLogininforMapper">
+
+	<resultMap type="com.jd.system.domain.SysLogininfor" id="SysLogininforResult">
+		<id     property="infoId"        column="INFO_ID"           />
+		<result property="userName"      column="USER_NAME"         />
+		<result property="status"        column="STATUS"            />
+		<result property="ipaddr"        column="IPADDR"            />
+		<result property="loginLocation" column="LOGIN_LOCATION"    />
+		<result property="browser"       column="BROWSER"           />
+		<result property="os"            column="OS"                />
+		<result property="msg"           column="MSG"               />
+		<result property="loginTime"     column="LOGIN_TIME"        />
+	</resultMap>
+
+	<insert id="insertLogininfor" parameterType="com.jd.system.domain.SysLogininfor">
+		insert into SYS_LOGINLOG (USER_NAME, STATUS, IPADDR, LOGIN_LOCATION, BROWSER, OS, MSG, LOGIN_TIME)
+		values (#{userName}, #{status}, #{ipaddr}, #{loginLocation}, #{browser}, #{os}, #{msg}, CURRENT_TIMESTAMP)
+	</insert>
+	
+	<select id="selectLogininforList" parameterType="com.jd.system.domain.SysLogininfor" resultMap="SysLogininforResult">
+		select INFO_ID, USER_NAME, IPADDR, LOGIN_LOCATION, BROWSER, OS, STATUS, MSG, LOGIN_TIME from SYS_LOGINLOG
+		<where>
+			<if test="ipaddr != null and ipaddr != ''">
+				AND IPADDR like concat('%', #{ipaddr}, '%')
+			</if>
+			<if test="status != null and status != ''">
+				AND STATUS = #{status}
+			</if>
+			<if test="userName != null and userName != ''">
+				AND USER_NAME like concat('%', #{userName}, '%')
+			</if>
+			<if test="params.beginTime != null and params.beginTime != ''"><!-- 开始时间检索 -->
+				AND LOGIN_TIME &gt;= #{params.beginTime}
+			</if>
+			<if test="params.endTime != null and params.endTime != ''"><!-- 结束时间检索 -->
+				AND LOGIN_TIME &lt;= #{params.endTime}
+			</if>
+		</where>
+		order by INFO_ID desc
+	</select>
+	
+	<delete id="deleteLogininforByIds" parameterType="Long">
+ 		delete from SYS_LOGINLOG where INFO_ID in
+ 		<foreach collection="array" item="infoId" open="(" separator="," close=")">
+ 			#{infoId}
+        </foreach> 
+ 	</delete>
+    
+    <update id="cleanLogininfor">
+        truncate table SYS_LOGINLOG
+    </update>
+    
+</mapper> 

@@ -1,0 +1,172 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > JdTableService</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: JdTableService (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">JdTableService</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    33.3%
+  </span>
+  <span class="absValue">
+    (1/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    3.2%
+  </span>
+  <span class="absValue">
+    (1/31)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import com.jd.biz.domain.api.param.TableQueryParam;
+<i class="no-highlight">4</i>&nbsp;import com.jd.biz.domain.api.param.TableSelector;
+<i class="no-highlight">5</i>&nbsp;import com.jd.common.tools.base.constant.EasyToolsConstant;
+<i class="no-highlight">6</i>&nbsp;import com.jd.common.tools.base.wrapper.result.DataResult;
+<i class="no-highlight">7</i>&nbsp;import com.jd.spi.MetaData;
+<i class="no-highlight">8</i>&nbsp;import com.jd.spi.model.Table;
+<i class="no-highlight">9</i>&nbsp;import com.jd.spi.model.TableColumn;
+<i class="no-highlight">10</i>&nbsp;import com.jd.spi.model.TableIndex;
+<i class="no-highlight">11</i>&nbsp;import com.jd.spi.sql.Chat2DBContext;
+<i class="no-highlight">12</i>&nbsp;import org.apache.commons.collections4.CollectionUtils;
+<i class="no-highlight">13</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">14</i>&nbsp;
+<i class="no-highlight">15</i>&nbsp;import java.util.List;
+<i class="no-highlight">16</i>&nbsp;import java.util.Set;
+<i class="no-highlight">17</i>&nbsp;import java.util.stream.Collectors;
+<i class="no-highlight">18</i>&nbsp;
+<i class="no-highlight">19</i>&nbsp;/**
+<i class="no-highlight">20</i>&nbsp; * 数据库表元数据管理
+<i class="no-highlight">21</i>&nbsp; */
+<i class="no-highlight">22</i>&nbsp;@Service(&quot;jdTableService&quot;)
+<b class="fc"><i class="no-highlight">23</i>&nbsp;public class JdTableService {</b>
+<i class="no-highlight">24</i>&nbsp;
+<i class="no-highlight">25</i>&nbsp;    public DataResult&lt;Table&gt; query(TableQueryParam param, TableSelector selector) {
+<i class="no-highlight">26</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">27</i>&nbsp;            MetaData metaSchema = Chat2DBContext.getMetaData();</b>
+<b class="nc"><i class="no-highlight">28</i>&nbsp;            List&lt;Table&gt; tables = metaSchema.tables(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());</b>
+<b class="nc"><i class="no-highlight">29</i>&nbsp;            Table table = null;</b>
+<b class="nc"><i class="no-highlight">30</i>&nbsp;            if (!CollectionUtils.isEmpty(tables)) {</b>
+<b class="nc"><i class="no-highlight">31</i>&nbsp;                table = tables.get(0);</b>
+<b class="nc"><i class="no-highlight">32</i>&nbsp;                List&lt;TableIndex&gt; indexes = metaSchema.indexes(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());</b>
+<b class="nc"><i class="no-highlight">33</i>&nbsp;                if(indexes.size() &gt; 0){</b>
+<b class="nc"><i class="no-highlight">34</i>&nbsp;                    indexes = indexes.stream().filter(t -&gt; !&quot;Normal&quot;.equals(t.getType())).collect(Collectors.toList());</b>
+<i class="no-highlight">35</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">36</i>&nbsp;                table.setIndexList(indexes);</b>
+<b class="nc"><i class="no-highlight">37</i>&nbsp;                table.setColumnList(</b>
+<b class="nc"><i class="no-highlight">38</i>&nbsp;                        metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName()));</b>
+<b class="nc"><i class="no-highlight">39</i>&nbsp;                List&lt;String&gt; collect = table.getColumnList().stream().filter(c -&gt; c.getPrimaryKey()).map(TableColumn::getName).collect(Collectors.toList());</b>
+<i class="no-highlight">40</i>&nbsp;                // 非空约束
+<b class="nc"><i class="no-highlight">41</i>&nbsp;                table.getColumnList().forEach(c -&gt; {</b>
+<b class="nc"><i class="no-highlight">42</i>&nbsp;                    if (c.getNullable() == 0 &amp;&amp; !collect.contains(c.getName())) {</b>
+<b class="nc"><i class="no-highlight">43</i>&nbsp;                        TableIndex tableIndex = new TableIndex();</b>
+<b class="nc"><i class="no-highlight">44</i>&nbsp;                        tableIndex.setName(c.getName());</b>
+<b class="nc"><i class="no-highlight">45</i>&nbsp;                        tableIndex.setSchemaName(param.getSchemaName());</b>
+<b class="nc"><i class="no-highlight">46</i>&nbsp;                        tableIndex.setTableName(param.getTableName());</b>
+<b class="nc"><i class="no-highlight">47</i>&nbsp;                        tableIndex.setStatus(&quot;VALID&quot;);</b>
+<b class="nc"><i class="no-highlight">48</i>&nbsp;                        tableIndex.setType(&quot;IS NOT NULL&quot;);</b>
+<b class="nc"><i class="no-highlight">49</i>&nbsp;                        tableIndex.setConstraintsDesc(c.getName().toUpperCase() + &quot;\n IS NOT NULL&quot;);</b>
+<b class="nc"><i class="no-highlight">50</i>&nbsp;                        tableIndex.setColumn(c.getName());</b>
+<b class="nc"><i class="no-highlight">51</i>&nbsp;                        tableIndex.setIsN(Boolean.TRUE);</b>
+<i class="no-highlight">52</i>&nbsp;
+<i class="no-highlight">53</i>&nbsp;                    }
+<i class="no-highlight">54</i>&nbsp;                });
+<b class="nc"><i class="no-highlight">55</i>&nbsp;                Set&lt;TableIndex&gt; checkSQL = metaSchema.getCheckSQl(Chat2DBContext.getConnection(), param.getSchemaName(), param.getTableName());</b>
+<i class="no-highlight">56</i>&nbsp;                // ddl 建表语句
+<b class="nc"><i class="no-highlight">57</i>&nbsp;                String dropSql = Chat2DBContext.getSqlBuilder().dropTableSql(param.getSchemaName(), param.getTableName());</b>
+<b class="nc"><i class="no-highlight">58</i>&nbsp;                String ddl = metaSchema.tableDDL(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());</b>
+<b class="nc"><i class="no-highlight">59</i>&nbsp;                table.setQuerySql(dropSql + &quot;\n&quot; +ddl);</b>
+<i class="no-highlight">60</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">61</i>&nbsp;            return DataResult.of(table);</b>
+<b class="nc"><i class="no-highlight">62</i>&nbsp;        }catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">63</i>&nbsp;            return DataResult.error(EasyToolsConstant.ERROR_CODE,e.getMessage());</b>
+<i class="no-highlight">64</i>&nbsp;        }
+<i class="no-highlight">65</i>&nbsp;    }
+<i class="no-highlight">66</i>&nbsp;
+<i class="no-highlight">67</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "id": "4472583",
+  "name": "数据库",
+  "font_family": "iconfont",
+  "css_prefix_text": "icon-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "37092237",
+      "name": "gbase",
+      "font_class": "gbase",
+      "unicode": "e616",
+      "unicode_decimal": 58902
+    },
+    {
+      "icon_id": "37764866",
+      "name": "神通数据库",
+      "font_class": "shentongshujuku",
+      "unicode": "e6a7",
+      "unicode_decimal": 59047
+    }
+  ]
+}

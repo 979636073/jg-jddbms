@@ -1,0 +1,23 @@
+package com.jd.spi.util;
+
+import com.jd.spi.config.DBConfig;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+
+public class FileUtils {
+
+    public static <T> T readJsonValue(Class<?> loaderClass, String path, Class<T> clazz) {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        T value = null;
+        try {
+            value = mapper.readValue(loaderClass.getResourceAsStream(path), clazz);
+            // 使用obj中的数据
+        } catch (IOException e) {
+            return null;
+        }
+        return value;
+    }
+}

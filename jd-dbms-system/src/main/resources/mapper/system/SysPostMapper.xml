@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysPostMapper">
+
+	<resultMap type="com.jd.system.domain.SysPost" id="SysPostResult">
+		<id     property="postId"        column="POST_ID"       />
+		<result property="postCode"      column="POST_CODE"     />
+		<result property="postName"      column="POST_NAME"     />
+		<result property="postSort"      column="POST_SORT"     />
+		<result property="status"        column="STATUS"        />
+		<result property="createBy"      column="CREATE_BY"     />
+		<result property="createTime"    column="CREATE_TIME"   />
+		<result property="updateBy"      column="UPDATE_BY"     />
+		<result property="updateTime"    column="UPDATE_TIME"   />
+		<result property="remark"        column="REMARK"        />
+	</resultMap>
+
+	<sql id="selectPostVo">
+        select POST_ID, POST_CODE, POST_NAME, POST_SORT, STATUS, CREATE_BY, CREATE_TIME, REMARK
+		from SYS_POST
+    </sql>
+
+	<select id="selectPostList" parameterType="com.jd.system.domain.SysPost" resultMap="SysPostResult">
+	    <include refid="selectPostVo"/>
+		<where>
+			<if test="postCode != null and postCode != ''">
+				AND POST_CODE like concat('%', #{postCode}, '%')
+			</if>
+			<if test="status != null and status != ''">
+				AND STATUS = #{status}
+			</if>
+			<if test="postName != null and postName != ''">
+				AND POST_NAME like concat('%', #{postName}, '%')
+			</if>
+		</where>
+	</select>
+
+	<select id="selectPostAll" resultMap="SysPostResult">
+		<include refid="selectPostVo"/>
+	</select>
+
+	<select id="selectPostById" parameterType="Long" resultMap="SysPostResult">
+		<include refid="selectPostVo"/>
+		where POST_ID = #{postId}
+	</select>
+
+	<select id="selectPostListByUserId" parameterType="Long" resultType="Long">
+		select p.POST_ID
+        from SYS_POST p
+	        left join SYS_USER_POST up on up.POST_ID = p.POST_ID
+	        left join SYS_USER u on u.USER_ID = up.USER_ID
+	    where u.USER_ID = #{userId}
+	</select>
+
+	<select id="selectPostsByUserName" parameterType="String" resultMap="SysPostResult">
+		select p.POST_ID, p.POST_NAME, p.POST_CODE
+		from SYS_POST p
+			 left join SYS_USER_POST up on up.POST_ID = p.POST_ID
+			 left join SYS_USER u on u.USER_ID = up.USER_ID
+		where u.USER_NAME = #{userName}
+	</select>
+
+	<select id="checkPostNameUnique" parameterType="String" resultMap="SysPostResult">
+		<include refid="selectPostVo"/>
+		 where POST_NAME=#{postName} limit 1
+	</select>
+
+	<select id="checkPostCodeUnique" parameterType="String" resultMap="SysPostResult">
+		<include refid="selectPostVo"/>
+		 where POST_CODE=#{postCode} limit 1
+	</select>
+
+	<update id="updatePost" parameterType="com.jd.system.domain.SysPost">
+ 		update SYS_POST
+ 		<set>
+ 			<if test="postCode != null and postCode != ''">POST_CODE = #{postCode},</if>
+ 			<if test="postName != null and postName != ''">POST_NAME = #{postName},</if>
+ 			<if test="postSort != null">POST_SORT = #{postSort},</if>
+ 			<if test="status != null and status != ''">STATUS = #{status},</if>
+ 			<if test="remark != null">REMARK = #{remark},</if>
+ 			<if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+ 			UPDATE_TIME = CURRENT_TIMESTAMP
+ 		</set>
+ 		where POST_ID = #{postId}
+	</update>
+
+ 	<insert id="insertPost" parameterType="com.jd.system.domain.SysPost" useGeneratedKeys="true" keyProperty="postId">
+ 		insert into SYS_POST(
+ 			<if test="postCode != null and postCode != ''">POST_CODE,</if>
+ 			<if test="postName != null and postName != ''">POST_NAME,</if>
+ 			<if test="postSort != null">POST_SORT,</if>
+ 			<if test="status != null and status != ''">STATUS,</if>
+ 			<if test="remark != null and remark != ''">REMARK,</if>
+ 			<if test="createBy != null and createBy != ''">CREATE_BY,</if>
+ 			CREATE_TIME
+ 		)values(
+ 			<if test="postCode != null and postCode != ''">#{postCode},</if>
+ 			<if test="postName != null and postName != ''">#{postName},</if>
+ 			<if test="postSort != null">#{postSort},</if>
+ 			<if test="status != null and status != ''">#{status},</if>
+ 			<if test="remark != null and remark != ''">#{remark},</if>
+ 			<if test="createBy != null and createBy != ''">#{createBy},</if>
+ 			CURRENT_TIMESTAMP
+ 		)
+	</insert>
+
+	<delete id="deletePostById" parameterType="Long">
+		delete from SYS_POST where POST_ID = #{postId}
+	</delete>
+
+	<delete id="deletePostByIds" parameterType="Long">
+ 		delete from SYS_POST where POST_ID in
+ 		<foreach collection="array" item="postId" open="(" separator="," close=")">
+ 			#{postId}
+        </foreach>
+ 	</delete>
+
+</mapper>

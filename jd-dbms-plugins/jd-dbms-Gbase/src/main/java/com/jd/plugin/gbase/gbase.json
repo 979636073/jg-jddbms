@@ -1,0 +1,18 @@
+{
+  "dbType": "GBASE",
+  "supportDatabase": true,
+  "supportSchema": false,
+  "driverConfigList": [
+    {
+      "url": "jdbc:gbase://192.168.0.228:5258/",
+      "defaultDriver": true,
+      "custom": false,
+      "downloadJdbcDriverUrls": [
+        "http://192.168.0.40:9000/jundu/lib/gbase-connector-java-8.3.81.53-build55.2.1-bin.jar"
+      ],
+      "jdbcDriver": "gbase-connector-java-8.3.81.53-build55.2.1-bin.jar",
+      "jdbcDriverClass": "com.gbase.jdbc.Driver"
+    }
+  ],
+  "name": "GBASE"
+}

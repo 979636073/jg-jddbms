@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+		PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysMenuMapper">
+
+	<resultMap type="com.jd.common.core.domain.entity.SysMenu" id="SysMenuResult">
+		<id     property="menuId"         column="MENU_ID"        />
+		<result property="menuName"       column="MENU_NAME"      />
+		<result property="parentName"     column="PARENT_NAME"    />
+		<result property="parentId"       column="PARENT_ID"      />
+		<result property="orderNum"       column="ORDER_NUM"      />
+		<result property="path"           column="PATH"           />
+		<result property="component"      column="COMPONENT"      />
+		<result property="query"          column="QUERY"          />
+		<result property="isFrame"        column="IS_FRAME"       />
+		<result property="isCache"        column="IS_CACHE"       />
+		<result property="menuType"       column="MENU_TYPE"      />
+		<result property="visible"        column="VISIBLE"        />
+		<result property="status"         column="STATUS"         />
+		<result property="perms"          column="PERMS"          />
+		<result property="icon"           column="ICON"           />
+		<result property="createBy"       column="CREATE_BY"      />
+		<result property="createTime"     column="CREATE_TIME"    />
+		<result property="updateTime"     column="UPDATE_TIME"    />
+		<result property="updateBy"       column="UPDATE_BY"      />
+		<result property="remark"         column="REMARK"         />
+	</resultMap>
+
+	<sql id="selectMenuVo">
+        SELECT MENU_ID, MENU_NAME, PARENT_ID, ORDER_NUM, PATH, COMPONENT, "QUERY", IS_FRAME, IS_CACHE, MENU_TYPE, VISIBLE, STATUS, COALESCE(PERMS,'') AS PERMS, ICON, CREATE_TIME
+		FROM SYS_MENU
+    </sql>
+    
+    <select id="selectMenuList" parameterType="com.jd.common.core.domain.entity.SysMenu" resultMap="SysMenuResult">
+		<include refid="selectMenuVo"/>
+		<where>
+			<if test="menuName != null and menuName != ''">
+				AND MENU_NAME like concat('%', #{menuName}, '%')
+			</if>
+			<if test="visible != null and visible != ''">
+				AND VISIBLE = #{visible}
+			</if>
+			<if test="status != null and status != ''">
+				AND STATUS = #{status}
+			</if>
+		</where>
+		order by PARENT_ID, ORDER_NUM
+	</select>
+	
+	<select id="selectMenuTreeAll" resultMap="SysMenuResult">
+		select distinct m.MENU_ID, m.PARENT_ID, m.MENU_NAME, m.PATH, m.COMPONENT, m."QUERY", m.VISIBLE, m.STATUS, COALESCE(m.PERMS,'') as perms, m.IS_FRAME, m.IS_CACHE, m.MENU_TYPE, m.ICON, m.ORDER_NUM, m.CREATE_TIME
+		from SYS_MENU m where m.MENU_TYPE in ('M', 'C') and m.STATUS = 0
+		order by m.PARENT_ID, m.ORDER_NUM
+	</select>
+	
+	<select id="selectMenuListByUserId" parameterType="com.jd.common.core.domain.entity.SysMenu" resultMap="SysMenuResult">
+		select distinct m.MENU_ID, m.PARENT_ID, m.MENU_NAME, m.PATH, m.COMPONENT, m."QUERY", m.VISIBLE, m.STATUS, COALESCE(m.PERMS,'') as perms, m.IS_FRAME, m.IS_CACHE, m.MENU_TYPE, m.ICON, m.ORDER_NUM, m.CREATE_TIME
+		from SYS_MENU m
+		left join SYS_ROLE_MENU rm on m.MENU_ID = rm.MENU_ID
+		left join SYS_USER_ROLE ur on rm.ROLE_ID = ur.ROLE_ID
+		left join SYS_ROLE ro on ur.ROLE_ID = ro.ROLE_ID
+		where ur.USER_ID = #{params.userId}
+		<if test="menuName != null and menuName != ''">
+            AND m.MENU_NAME like concat('%', #{menuName}, '%')
+		</if>
+		<if test="visible != null and visible != ''">
+            AND m.VISIBLE = #{visible}
+		</if>
+		<if test="status != null and status != ''">
+            AND m.STATUS = #{status}
+		</if>
+		order by m.PARENT_ID, m.ORDER_NUM
+	</select>
+    
+    <select id="selectMenuTreeByUserId" parameterType="Long" resultMap="SysMenuResult">
+		select distinct m.MENU_ID, m.PARENT_ID, m.MENU_NAME, m.PATH, m.COMPONENT, m."QUERY", m.VISIBLE, m.STATUS, COALESCE(m.PERMS,'') as perms, m.IS_FRAME, m.IS_CACHE, m.MENU_TYPE, m.ICON, m.ORDER_NUM, m.CREATE_TIME
+		from SYS_MENU m
+			 left join SYS_ROLE_MENU rm on m.MENU_ID = rm.MENU_ID
+			 left join SYS_USER_ROLE ur on rm.ROLE_ID = ur.ROLE_ID
+			 left join SYS_ROLE ro on ur.ROLE_ID = ro.ROLE_ID
+			 left join SYS_USER u on ur.USER_ID = u.USER_ID
+		where u.USER_ID = #{userId} and m.MENU_TYPE in ('M', 'C') and m.STATUS = 0  AND ro.STATUS = 0
+		order by m.PARENT_ID, m.ORDER_NUM
+	</select>
+	
+	<select id="selectMenuListByRoleId" resultType="Long">
+		select m.MENU_ID
+		from SYS_MENU m
+            left join SYS_ROLE_MENU rm on m.MENU_ID = rm.MENU_ID
+        where rm.ROLE_ID = #{roleId}
+            <if test="menuCheckStrictly">
+              and m.MENU_ID not in (select m.PARENT_ID from SYS_MENU m inner join SYS_ROLE_MENU rm on m.MENU_ID = rm.MENU_ID and rm.ROLE_ID = #{roleId})
+            </if>
+		order by m.PARENT_ID, m.ORDER_NUM
+	</select>
+	
+	<select id="selectMenuPerms" resultType="String">
+		select distinct m.PERMS
+		from SYS_MENU m
+			 left join SYS_ROLE_MENU rm on m.MENU_ID = rm.MENU_ID
+			 left join SYS_USER_ROLE ur on rm.ROLE_ID = ur.ROLE_ID
+	</select>
+
+	<select id="selectMenuPermsByUserId" parameterType="Long" resultType="String">
+		select distinct m.PERMS
+		from SYS_MENU m
+			 left join SYS_ROLE_MENU rm on m.MENU_ID = rm.MENU_ID
+			 left join SYS_USER_ROLE ur on rm.ROLE_ID = ur.ROLE_ID
+			 left join SYS_ROLE r on r.ROLE_ID = ur.ROLE_ID
+		where m.STATUS = '0' and r.STATUS = '0' and ur.USER_ID = #{userId}
+	</select>
+	
+	<select id="selectMenuPermsByRoleId" parameterType="Long" resultType="String">
+		select distinct m.PERMS
+		from SYS_MENU m
+			 left join SYS_ROLE_MENU rm on m.MENU_ID = rm.MENU_ID
+		where m.STATUS = '0' and rm.ROLE_ID = #{roleId}
+	</select>
+	
+	<select id="selectMenuById" parameterType="Long" resultMap="SysMenuResult">
+		<include refid="selectMenuVo"/>
+		where MENU_ID = #{menuId}
+	</select>
+	
+	<select id="hasChildByMenuId" resultType="Integer">
+	    select count(1) from SYS_MENU where PARENT_ID = #{menuId}
+	</select>
+	
+	<select id="checkMenuNameUnique" parameterType="com.jd.common.core.domain.entity.SysMenu" resultMap="SysMenuResult">
+		<include refid="selectMenuVo"/>
+		where MENU_NAME=#{menuName} and PARENT_ID = #{parentId} limit 1
+	</select>
+	
+	<update id="updateMenu" parameterType="com.jd.common.core.domain.entity.SysMenu">
+		update SYS_MENU
+		<set>
+			<if test="menuName != null and menuName != ''">MENU_NAME = #{menuName},</if>
+			<if test="parentId != null">PARENT_ID = #{parentId},</if>
+			<if test="orderNum != null">ORDER_NUM = #{orderNum},</if>
+			<if test="path != null and path != ''">PATH = #{path},</if>
+			<if test="component != null">COMPONENT = #{component},</if>
+			<if test="query != null">"QUERY" = #{query},</if>
+			<if test="isFrame != null and isFrame != ''">IS_FRAME = #{isFrame},</if>
+			<if test="isCache != null and isCache != ''">IS_CACHE = #{isCache},</if>
+			<if test="menuType != null and menuType != ''">MENU_TYPE = #{menuType},</if>
+			<if test="visible != null">VISIBLE = #{visible},</if>
+			<if test="status != null">STATUS = #{status},</if>
+			<if test="perms !=null">PERMS = #{perms},</if>
+			<if test="icon !=null and icon != ''">ICON = #{icon},</if>
+			<if test="remark != null and remark != ''">REMARK = #{remark},</if>
+			<if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+			UPDATE_TIME = CURRENT_TIMESTAMP
+		</set>
+		where MENU_ID = #{menuId}
+	</update>
+
+	<insert id="insertMenu" parameterType="com.jd.common.core.domain.entity.SysMenu">
+		insert into SYS_MENU(
+		<if test="parentId != null and parentId != 0">PARENT_ID,</if>
+		<if test="menuName != null and menuName != ''">MENU_NAME,</if>
+		<if test="orderNum != null">ORDER_NUM,</if>
+		<if test="path != null and path != ''">PATH,</if>
+		<if test="component != null and component != ''">COMPONENT,</if>
+		<if test="query != null and query != ''">"QUERY",</if>
+		<if test="isFrame != null and isFrame != ''">IS_FRAME,</if>
+		<if test="isCache != null and isCache != ''">IS_CACHE,</if>
+		<if test="menuType != null and menuType != ''">MENU_TYPE,</if>
+		<if test="visible != null">VISIBLE,</if>
+		<if test="status != null">STATUS,</if>
+		<if test="perms !=null and perms != ''">PERMS,</if>
+		<if test="icon != null and icon != ''">ICON,</if>
+		<if test="remark != null and remark != ''">REMARK,</if>
+		<if test="createBy != null and createBy != ''">CREATE_BY,</if>
+		CREATE_TIME
+		)values(
+		<if test="parentId != null and parentId != 0">#{parentId},</if>
+		<if test="menuName != null and menuName != ''">#{menuName},</if>
+		<if test="orderNum != null">#{orderNum},</if>
+		<if test="path != null and path != ''">#{path},</if>
+		<if test="component != null and component != ''">#{component},</if>
+		<if test="query != null and query != ''">#{query},</if>
+		<if test="isFrame != null and isFrame != ''">#{isFrame},</if>
+		<if test="isCache != null and isCache != ''">#{isCache},</if>
+		<if test="menuType != null and menuType != ''">#{menuType},</if>
+		<if test="visible != null">#{visible},</if>
+		<if test="status != null">#{status},</if>
+		<if test="perms !=null and perms != ''">#{perms},</if>
+		<if test="icon != null and icon != ''">#{icon},</if>
+		<if test="remark != null and remark != ''">#{remark},</if>
+		<if test="createBy != null and createBy != ''">#{createBy},</if>
+		CURRENT_TIMESTAMP
+		)
+	</insert>
+	
+	<delete id="deleteMenuById" parameterType="Long">
+	    delete from SYS_MENU where MENU_ID = #{menuId}
+	</delete>
+
+</mapper> 

@@ -1,0 +1,432 @@
+<script>
+import viewServer from "@/api/main/view";
+import tableServer from "@/api/main/table";
+import MonacoEditor from "@/components/MonacoEditor/index.vue";
+import MonacoSqlEditor from "@/components/MonacoSqlEditor/index.vue";
+import ColumnViewList from "../renderViewEditor/ColumnViewList.vue";
+import DataInfoView from "../renderViewEditor/DataInfoView.vue";
+import DespUses from "../renderViewEditor/DepsUsersView.vue";
+import DespUsedBy from "../renderViewEditor/DepsUsedByView.vue";
+import SqlPreview from "@/views/main/workspace/components/DataSource/SqlPreview.vue";
+import renderSearchResult from "../../components/renderSearchResult/index.vue";
+import { downloadFile } from "@/utils/file";
+export default {
+  props: {
+    queryResultData: {
+      type: Object,
+      default: () => {}
+    },
+    typeView: {
+      type: String,
+      default: ""
+    }
+  },
+  components: {
+    SqlPreview,
+    MonacoEditor,
+    MonacoSqlEditor,
+    ColumnViewList,
+    DataInfoView,
+    DespUses,
+    DespUsedBy,
+    renderSearchResult
+  },
+  data() {
+    return {
+      currentConfig: null,
+      activeName: "first",
+      activeTab: "third",
+      sql: "",
+      // 基本信息
+      basicForm: {
+        dataSourceId: "",
+        databaseName: "",
+        schemaName: "",
+        tableName: ""
+      },
+      viewName: "",
+      columnList: [],
+      dataTable: [],
+      viewDependentData: [],
+      viewDependentByData: [],
+      databaseSupportField: {
+        columnTypes: [],
+        charsets: [],
+        collations: [],
+        indexTypes: [],
+        defaultValues: []
+      },
+      dependentData: [],
+
+      clickRow: null, // 当前点击的行
+      clickCell: null // 当前点击的列
+    };
+  },
+  computed: {
+    openConfigList() {
+      return this.$store.state.workspace.workspaceTabList;
+    },
+    openConfigValue() {
+      return this.$store.state.workspace.activeConsoleId;
+    },
+    currentDataSource() {
+      return this.$store.state.workspace.currentConnectionDetails;
+    }
+  },
+  watch: {
+    openConfigValue: {
+      handler() {
+        this.configChange();
+        // this.initData();
+      },
+      deep: true,
+      immediate: true
+    },
+    queryResultData: {
+      handler(newVal) {
+        let tableData = newVal.dataList?.map(item => {
+          let array = {};
+          for (const dataKey in newVal.headerList) {
+            array[newVal.headerList[dataKey].name] = item[dataKey];
+          }
+          return array;
+        });
+        this.dataTable = tableData;
+        this.initData();
+      },
+      immediate: true,
+      deep: true
+    },
+    activeTab: {
+      handler(newVal) {
+        if (newVal == "fourth") {
+          this.viewDependentFn("deps");
+        } else if (newVal == "deps") {
+          this.viewDependentFn("depsBy");
+        } else if (newVal == "info") {
+          this.viewName = this.basicForm.tableName;
+        }
+      }
+    }
+  },
+  methods: {
+    initData() {
+      return new Promise(resolve => {
+        this.currentConfig = this.queryResultData;
+        this.basicForm = this.currentConfig?.uniqueData;
+        if (this.currentConfig?.columnList) {
+          this.columnList = this.currentConfig?.columnList;
+        } else {
+          if (this.currentConfig?.title !== "新建视图") {
+            let send = {
+              dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
+              databaseName: this.currentConfig?.uniqueData.databaseName,
+              schemaName: this.currentConfig?.uniqueData.schemaName,
+              tableName: this.currentConfig?.uniqueData.tableName
+            };
+            viewServer.getViewDetail(send).then(res => {
+              this.sql = res.data.ddl;
+              this.$refs.MonacoEditor.setValue(res.data.ddl);
+              this.formatSql();
+              this.columnList = res.data.columnList;
+            });
+            if (this.activeTab == "fourth") {
+              this.viewDependentFn("deps");
+            } else if (this.activeTab == "deps") {
+              this.viewDependentFn("depsBy");
+            } else if (this.activeTab == "info") {
+              this.viewName = this.basicForm.tableName;
+            }
+          } else {
+            this.basicForm = {
+              dataSourceId: "",
+              databaseName: "",
+              schemaName: "",
+              tableName: ""
+            };
+          }
+        }
+        resolve();
+      });
+    },
+    configChange() {
+      if (this.currentConfig) {
+        this.currentConfig.basicForm = JSON.parse(
+          JSON.stringify(this.basicForm)
+        );
+        this.currentConfig.columnList = JSON.parse(
+          JSON.stringify(this.columnList)
+        );
+        this.currentConfig.activeName = this.activeName;
+      }
+    },
+    viewDependentFn(type) {
+      const params = {
+        dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
+        tableName: this.currentConfig?.uniqueData.tableName,
+        schemaName: this.currentConfig?.uniqueData.schemaName,
+        check: type == "deps" ? "1" : "0"
+      };
+      tableServer.viewDependent(params).then(res => {
+        if (res.success) {
+          this.viewDependentData = [];
+          this.viewDependentByData = [];
+          if (type == "deps") {
+            this.viewDependentData.push(res.data);
+          } else {
+            this.viewDependentByData.push(res.data);
+          }
+        }
+      });
+    },
+    // 获取依赖关系
+    getExecuteSQL() {
+      let viewSql = this.$refs.MonacoEditor.getValue();
+      if (!viewSql) {
+        this.$message.error("请先输入SQL");
+        return;
+      }
+
+      let send = {
+        dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
+        databaseName: this.currentConfig?.uniqueData.databaseName,
+        schemaName: this.currentConfig?.uniqueData.schemaName,
+        tableName: this.basicForm.tableName,
+        viewSql: viewSql
+      };
+      viewServer.getExecuteSQL(send).then(res => {
+        if (res.success) {
+          this.$refs.MonacoSqlEditor.setValue(res.message);
+          this.$message.success("获取成功！");
+        } else {
+          this.$message.error(res.message);
+        }
+      });
+    },
+
+    // 运行
+    executeSQL() {
+      let viewSql = this.$refs.MonacoEditor.getValue();
+      if (!viewSql) {
+        this.$message.error("请先输入SQL");
+        return;
+      }
+      let send = {
+        dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
+        databaseName: this.currentConfig?.uniqueData.databaseName,
+        schemaName: this.currentConfig?.uniqueData.schemaName,
+        tableName: this.basicForm.tableName,
+        viewSql: viewSql
+      };
+      viewServer.getViewColumnList(send).then(res => {
+        if (res.success) {
+          this.columnList = res.data.map(item => {
+            return {
+              name: item.name,
+              comment: ""
+            };
+          });
+          this.$message.success("运行成功！");
+        } else {
+          this.$message.error(res.errorMessage);
+        }
+      });
+    },
+    // 清空
+    emptySql() {
+      this.$refs.MonacoEditor.setValue("");
+    },
+    // 格式化sql代码
+    formatSql() {
+      this.$refs.MonacoEditor.formatSql(this.$refs.MonacoEditor.getValue());
+    },
+    sqlPreview() {
+      let viewSql = this.$refs.MonacoEditor.getValue();
+      let send = {
+        dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
+        databaseName: this.currentConfig?.uniqueData.databaseName,
+        schemaName: this.currentConfig?.uniqueData.schemaName,
+        tableName: this.basicForm.tableName,
+        viewSql: viewSql,
+        columnList: this.columnList
+      };
+      viewServer.viewShowSql(send).then(res => {
+        if (res.success) {
+          this.$refs.sqlPreview.init(res.data.sql);
+        } else {
+          this.$message.error(res.errorMessage);
+        }
+      });
+    },
+    submit() {
+      let viewSql = this.$refs.MonacoEditor.getValue();
+      let send = {
+        dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
+        databaseName: this.currentConfig?.uniqueData.databaseName,
+        schemaName: this.currentConfig?.uniqueData.schemaName,
+        tableName: this.basicForm.tableName,
+        viewSql: viewSql,
+        columnList: this.columnList
+      };
+      viewServer.viewExecute(send).then(res => {
+        if (res.success) {
+          this.$message.success("保存成功！");
+          this.$emit("tableRefresh", this.currentConfig.uniqueData.node.parent);
+        } else {
+          this.$message.error(res.errorMessage);
+        }
+      });
+    },
+    handleClick(tab, event) {
+      console.log(tab, event);
+    },
+    // 双击单元格修改数据
+    celldblclick(row, column, cell, event) {
+      if (column.index !== 0) {
+        this.clickRow = row.index;
+        this.clickCell = column.index;
+        this.$nextTick(() => {
+          this.$refs.editInput.focus();
+        });
+      }
+    },
+    // 把每一行的索引放进row
+    tableRowClassName({ row, rowIndex }) {
+      row.index = rowIndex;
+      return "";
+    },
+    // 把每一列的索引放进column
+    tableCellClassName({ column, columnIndex }) {
+      column.index = columnIndex;
+    },
+    inputBlur() {
+      this.clickRow = null;
+      this.clickCell = null;
+    },
+    saveView() {
+      const params = {
+        newViewName: this.viewName,
+        oldViewName: this.basicForm.tableName,
+        dataSourceId: this.queryResultData.uniqueData?.dataSourceId,
+        schemaName: this.currentConfig?.uniqueData.schemaName
+      };
+      viewServer.updateViewName(params).then(res => {
+        if (res.data) {
+          this.$message.success("修改成功");
+          this.$emit(
+            "updateViewName",
+            this.currentConfig?.uniqueData.schemaName
+          );
+        }
+      });
+    },
+    // 纯前端做文件流导出
+    importScript() {
+      let viewSql = this.$refs.MonacoEditor.getValue();
+      let params={
+        dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
+        sql: viewSql,
+      }
+      downloadFile(
+        process.env.VUE_APP_BASE_API + "/api/rdb/table/exportViewDDL",
+        { ...params }
+      );
+      // const byteArray = new TextEncoder().encode(this.sql);
+      // const blob = new Blob([byteArray], { type: "text/sql;charset=utf-8" });
+      // const url = URL.createObjectURL(blob);
+      // const a = document.createElement('a');
+      // a.href = url;
+      // // 名称后面追加时间戳
+      // const currentTime = new Date().getTime()
+      // a.download = `${this.queryResultData.title}${currentTime}.sql`;
+      // document.body.appendChild(a);
+      // a.click();
+      // document.body.removeChild(a);
+      // URL.revokeObjectURL(url);
+
+    }
+  }
+};
+</script>
+
+<template>
+  <div class="view_editor">
+    <el-tabs v-model="activeTab">
+      <el-tab-pane label="数据" name="third">
+        <renderSearchResult :queryResultData="queryResultData" :typeView="typeView"></renderSearchResult>
+      </el-tab-pane>
+      <el-tab-pane label="列信息" name="second">
+        <ColumnViewList
+          :tableData="columnList"
+          :queryResultData="queryResultData"
+          :initData="initData"
+        />
+      </el-tab-pane>
+      <el-tab-pane label="基本信息" name="info">
+        <el-button type="primary" @click="saveView" size="small">保存</el-button>
+        <div style="font-size:14px;margin:10px">视图名称</div>
+        <el-input v-model="viewName" size="small" maxlength="50" show-word-limit></el-input>
+      </el-tab-pane>
+      <el-tab-pane label="Script" name="first">
+        <el-button type="primary" size="mini" style="margin-bottom:10px" @click="importScript">导出</el-button>
+        <MonacoEditor
+          ref="MonacoEditor"
+          dom="editor"
+          style="width: 100%; height: calc(100% - 40px)"
+        />
+      </el-tab-pane>
+      <el-tab-pane label="依赖" name="fourth">
+        <DespUses :viewDependentData="viewDependentData" />
+      </el-tab-pane>
+      <el-tab-pane label="被依赖" name="deps">
+        <DespUsedBy :viewDependentByData="viewDependentByData" />
+      </el-tab-pane>
+    </el-tabs>
+  </div>
+</template>
+
+<style scoped lang="scss">
+.view_editor {
+  height: calc(100% - 58px);
+  background: #fff;
+  padding: 10px 10px 0;
+  border-radius: 5px;
+  position: relative;
+  .btn_box {
+    display: flex;
+    justify-content: end;
+  }
+  .monaco_btn {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    ::v-deep .el-button {
+      & > span {
+        display: flex;
+        align-items: center;
+        img {
+          margin-right: 6px;
+        }
+      }
+    }
+    .el-button_before::before {
+      content: "";
+      position: absolute;
+      right: -15px;
+      top: 8px;
+      width: 1px;
+      height: 14px;
+      background: #68728c;
+    }
+  }
+}
+.el-tabs {
+  height: calc(100%);
+  ::v-deep .el-tabs__content {
+    height: calc(100% - 55px);
+    .el-tab-pane {
+      height: 100%;
+    }
+  }
+}
+</style>

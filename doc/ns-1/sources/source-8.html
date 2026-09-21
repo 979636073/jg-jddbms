@@ -1,0 +1,1036 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > DatabaseServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: DatabaseServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">DatabaseServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    4.7%
+  </span>
+  <span class="absValue">
+    (2/43)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0.7%
+  </span>
+  <span class="absValue">
+    (4/543)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import cn.hutool.core.collection.CollUtil;
+<i class="no-highlight">4</i>&nbsp;import cn.hutool.core.date.DatePattern;
+<i class="no-highlight">5</i>&nbsp;import cn.hutool.core.io.FileUtil;
+<i class="no-highlight">6</i>&nbsp;import cn.hutool.core.io.IORuntimeException;
+<i class="no-highlight">7</i>&nbsp;import cn.hutool.core.lang.Validator;
+<i class="no-highlight">8</i>&nbsp;import cn.hutool.core.thread.ThreadUtil;
+<i class="no-highlight">9</i>&nbsp;import cn.hutool.core.util.StrUtil;
+<i class="no-highlight">10</i>&nbsp;import com.alibaba.druid.DbType;
+<i class="no-highlight">11</i>&nbsp;import com.alibaba.druid.sql.SQLUtils;
+<i class="no-highlight">12</i>&nbsp;import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
+<i class="no-highlight">13</i>&nbsp;import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
+<i class="no-highlight">14</i>&nbsp;import com.alibaba.druid.sql.ast.statement.SQLInsertStatement;
+<i class="no-highlight">15</i>&nbsp;import com.alibaba.druid.sql.visitor.VisitorFeature;
+<i class="no-highlight">16</i>&nbsp;import com.google.common.collect.Lists;
+<i class="no-highlight">17</i>&nbsp;import com.jd.biz.controller.ncx.cipher.CommonCipher;
+<i class="no-highlight">18</i>&nbsp;import com.jd.biz.controller.rdb.RdbDmlExportController;
+<i class="no-highlight">19</i>&nbsp;import com.jd.common.enums.DBTypeEnum;
+<i class="no-highlight">20</i>&nbsp;import com.jd.biz.controller.rdb.request.DatabaseExportRequest;
+<i class="no-highlight">21</i>&nbsp;import com.jd.biz.controller.rdb.request.DatabaseImportRequest;
+<i class="no-highlight">22</i>&nbsp;import com.jd.biz.controller.rdb.request.DmpExportRequest;
+<i class="no-highlight">23</i>&nbsp;import com.jd.biz.controller.rdb.request.DmpImportRequest;
+<i class="no-highlight">24</i>&nbsp;import com.jd.biz.controller.rdb.vo.DatabaseExportVo;
+<i class="no-highlight">25</i>&nbsp;import com.jd.biz.controller.rdb.vo.DatabaseImportVo;
+<i class="no-highlight">26</i>&nbsp;import com.jd.biz.domain.api.enums.TaskStatusEnum;
+<i class="no-highlight">27</i>&nbsp;import com.jd.biz.domain.api.param.MetaDataQueryParam;
+<i class="no-highlight">28</i>&nbsp;import com.jd.biz.domain.api.param.SchemaOperationParam;
+<i class="no-highlight">29</i>&nbsp;import com.jd.biz.domain.api.param.SchemaQueryParam;
+<i class="no-highlight">30</i>&nbsp;import com.jd.biz.domain.api.param.datasource.DatabaseCreateParam;
+<i class="no-highlight">31</i>&nbsp;import com.jd.biz.domain.api.param.datasource.DatabaseExportParam;
+<i class="no-highlight">32</i>&nbsp;import com.jd.biz.domain.api.param.datasource.DatabaseQueryAllParam;
+<i class="no-highlight">33</i>&nbsp;import com.jd.biz.domain.api.service.DatabaseService;
+<i class="no-highlight">34</i>&nbsp;import com.jd.biz.domain.core.cache.CacheManage;
+<i class="no-highlight">35</i>&nbsp;import com.jd.biz.domain.repository.entity.DataSourceDO;
+<i class="no-highlight">36</i>&nbsp;import com.jd.biz.domain.repository.mapper.DataSourceMapper;
+<i class="no-highlight">37</i>&nbsp;import com.jd.biz.util.OSUtils;
+<i class="no-highlight">38</i>&nbsp;import com.jd.common.config.HzbConfig;
+<i class="no-highlight">39</i>&nbsp;import com.jd.common.constant.CacheConstants;
+<i class="no-highlight">40</i>&nbsp;import com.jd.common.constant.Constants;
+<i class="no-highlight">41</i>&nbsp;import com.jd.common.core.redis.RedisCache;
+<i class="no-highlight">42</i>&nbsp;import com.jd.common.tools.base.constant.EasyToolsConstant;
+<i class="no-highlight">43</i>&nbsp;import com.jd.common.tools.base.excption.BusinessException;
+<i class="no-highlight">44</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ActionResult;
+<i class="no-highlight">45</i>&nbsp;import com.jd.common.tools.base.wrapper.result.DataResult;
+<i class="no-highlight">46</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ListResult;
+<i class="no-highlight">47</i>&nbsp;import com.jd.common.tools.common.model.Context;
+<i class="no-highlight">48</i>&nbsp;import com.jd.common.tools.common.model.LoginUser;
+<i class="no-highlight">49</i>&nbsp;import com.jd.common.tools.common.util.ContextUtils;
+<i class="no-highlight">50</i>&nbsp;import com.jd.common.tools.common.util.EasyCollectionUtils;
+<i class="no-highlight">51</i>&nbsp;import com.jd.common.utils.file.FileUtils;
+<i class="no-highlight">52</i>&nbsp;import com.jd.spi.MetaData;
+<i class="no-highlight">53</i>&nbsp;import com.jd.spi.jdbc.DefaultValueHandler;
+<i class="no-highlight">54</i>&nbsp;import com.jd.spi.model.*;
+<i class="no-highlight">55</i>&nbsp;import com.jd.spi.sql.Chat2DBContext;
+<i class="no-highlight">56</i>&nbsp;import com.jd.spi.sql.ConnectInfo;
+<i class="no-highlight">57</i>&nbsp;import com.jd.spi.sql.SQLExecutor;
+<i class="no-highlight">58</i>&nbsp;import com.jd.spi.util.JdbcUtils;
+<i class="no-highlight">59</i>&nbsp;import com.jd.spi.util.SqlUtils;
+<i class="no-highlight">60</i>&nbsp;import lombok.extern.slf4j.Slf4j;
+<i class="no-highlight">61</i>&nbsp;import org.apache.commons.lang3.StringUtils;
+<i class="no-highlight">62</i>&nbsp;import org.springframework.beans.factory.annotation.Autowired;
+<i class="no-highlight">63</i>&nbsp;import org.springframework.beans.factory.annotation.Value;
+<i class="no-highlight">64</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">65</i>&nbsp;import org.springframework.util.CollectionUtils;
+<i class="no-highlight">66</i>&nbsp;
+<i class="no-highlight">67</i>&nbsp;import java.io.*;
+<i class="no-highlight">68</i>&nbsp;import java.net.URLEncoder;
+<i class="no-highlight">69</i>&nbsp;import java.nio.charset.StandardCharsets;
+<i class="no-highlight">70</i>&nbsp;import java.sql.Connection;
+<i class="no-highlight">71</i>&nbsp;import java.sql.SQLException;
+<i class="no-highlight">72</i>&nbsp;import java.sql.Statement;
+<i class="no-highlight">73</i>&nbsp;import java.time.LocalDateTime;
+<i class="no-highlight">74</i>&nbsp;import java.util.*;
+<i class="no-highlight">75</i>&nbsp;import java.util.concurrent.CompletableFuture;
+<i class="no-highlight">76</i>&nbsp;import java.util.concurrent.CopyOnWriteArrayList;
+<i class="no-highlight">77</i>&nbsp;import java.util.concurrent.CountDownLatch;
+<i class="no-highlight">78</i>&nbsp;import java.util.concurrent.atomic.AtomicReference;
+<i class="no-highlight">79</i>&nbsp;
+<i class="no-highlight">80</i>&nbsp;import static com.jd.biz.domain.core.cache.CacheKey.*;
+<i class="no-highlight">81</i>&nbsp;
+<i class="no-highlight">82</i>&nbsp;/**
+<i class="no-highlight">83</i>&nbsp; * @author moji
+<i class="no-highlight">84</i>&nbsp; * @version DataSourceCoreServiceImpl.java, v 0.1 2022年09月23日 15:51 moji Exp $
+<i class="no-highlight">85</i>&nbsp; * @date 2022/09/23
+<i class="no-highlight">86</i>&nbsp; */
+<b class="fc"><i class="no-highlight">87</i>&nbsp;@Slf4j</b>
+<i class="no-highlight">88</i>&nbsp;@Service
+<i class="no-highlight">89</i>&nbsp;@SuppressWarnings(&quot;ALL&quot;)
+<b class="fc"><i class="no-highlight">90</i>&nbsp;public class DatabaseServiceImpl implements DatabaseService {</b>
+<i class="no-highlight">91</i>&nbsp;
+<i class="no-highlight">92</i>&nbsp;
+<i class="no-highlight">93</i>&nbsp;    /**
+<i class="no-highlight">94</i>&nbsp;     * Format insert statement
+<i class="no-highlight">95</i>&nbsp;     */
+<b class="fc"><i class="no-highlight">96</i>&nbsp;    private static final SQLUtils.FormatOption INSERT_FORMAT_OPTION = new SQLUtils.FormatOption(true, false);</b>
+<i class="no-highlight">97</i>&nbsp;
+<i class="no-highlight">98</i>&nbsp;    static {
+<b class="fc"><i class="no-highlight">99</i>&nbsp;        INSERT_FORMAT_OPTION.config(VisitorFeature.OutputNameQuote, true);</b>
+<i class="no-highlight">100</i>&nbsp;    }
+<i class="no-highlight">101</i>&nbsp;
+<i class="no-highlight">102</i>&nbsp;    @Autowired
+<i class="no-highlight">103</i>&nbsp;    private TableServiceImpl tableServiceImpl;
+<i class="no-highlight">104</i>&nbsp;
+<i class="no-highlight">105</i>&nbsp;    @Autowired
+<i class="no-highlight">106</i>&nbsp;    private RedisCache redisCache;
+<i class="no-highlight">107</i>&nbsp;
+<i class="no-highlight">108</i>&nbsp;    @Value(&quot;${exportDmp.dm}&quot;)
+<i class="no-highlight">109</i>&nbsp;    private String dmDmpExport;
+<i class="no-highlight">110</i>&nbsp;
+<i class="no-highlight">111</i>&nbsp;    @Value(&quot;${importDmp.dm}&quot;)
+<i class="no-highlight">112</i>&nbsp;    private String dmDmpImport;
+<i class="no-highlight">113</i>&nbsp;
+<i class="no-highlight">114</i>&nbsp;    @Value(&quot;${exportDmp.oracle}&quot;)
+<i class="no-highlight">115</i>&nbsp;    private String oraDmpExport;
+<i class="no-highlight">116</i>&nbsp;
+<i class="no-highlight">117</i>&nbsp;    @Value(&quot;${importDmp.oracle}&quot;)
+<i class="no-highlight">118</i>&nbsp;    private String oraDmpImport;
+<i class="no-highlight">119</i>&nbsp;
+<i class="no-highlight">120</i>&nbsp;
+<i class="no-highlight">121</i>&nbsp;    @Autowired
+<i class="no-highlight">122</i>&nbsp;    private DataSourceMapper dataSourceMapper;
+<i class="no-highlight">123</i>&nbsp;
+<i class="no-highlight">124</i>&nbsp;
+<i class="no-highlight">125</i>&nbsp;    @Override
+<i class="no-highlight">126</i>&nbsp;    public ListResult&lt;Database&gt; queryAll(DatabaseQueryAllParam param) {
+<b class="nc"><i class="no-highlight">127</i>&nbsp;        List&lt;Database&gt; databases = CacheManage.getList(getDataBasesKey(param.getDataSourceId()), Database.class,</b>
+<b class="nc"><i class="no-highlight">128</i>&nbsp;                (key) -&gt; param.isRefresh(),</b>
+<b class="nc"><i class="no-highlight">129</i>&nbsp;                (key) -&gt; getDatabases(param.getDbType(), param.getConnection() == null ? Chat2DBContext.getConnection()</b>
+<b class="nc"><i class="no-highlight">130</i>&nbsp;                        : param.getConnection())</b>
+<i class="no-highlight">131</i>&nbsp;        );
+<b class="nc"><i class="no-highlight">132</i>&nbsp;        return ListResult.of(databases);</b>
+<i class="no-highlight">133</i>&nbsp;    }
+<i class="no-highlight">134</i>&nbsp;
+<i class="no-highlight">135</i>&nbsp;    private List&lt;Database&gt; getDatabases(String dbType, Connection connection) {
+<b class="nc"><i class="no-highlight">136</i>&nbsp;        return Chat2DBContext.getMetaData(dbType).databases(connection);</b>
+<i class="no-highlight">137</i>&nbsp;    }
+<i class="no-highlight">138</i>&nbsp;
+<i class="no-highlight">139</i>&nbsp;    @Override
+<i class="no-highlight">140</i>&nbsp;    public ListResult&lt;Schema&gt; querySchema(SchemaQueryParam param) {
+<b class="nc"><i class="no-highlight">141</i>&nbsp;        List&lt;Schema&gt; schemas = CacheManage.getList(getSchemasKey(param.getDataSourceId(), param.getDataBaseName()),</b>
+<i class="no-highlight">142</i>&nbsp;                Schema.class,
+<b class="nc"><i class="no-highlight">143</i>&nbsp;                (key) -&gt; param.getRefresh(), (key) -&gt; {</b>
+<b class="nc"><i class="no-highlight">144</i>&nbsp;                    Connection connection = param.getConnection() == null ? Chat2DBContext.getConnection()</b>
+<b class="nc"><i class="no-highlight">145</i>&nbsp;                            : param.getConnection();</b>
+<b class="nc"><i class="no-highlight">146</i>&nbsp;                    return getSchemaList(param.getDataBaseName(), connection);</b>
+<i class="no-highlight">147</i>&nbsp;                });
+<b class="nc"><i class="no-highlight">148</i>&nbsp;        return ListResult.of(schemas);</b>
+<i class="no-highlight">149</i>&nbsp;    }
+<i class="no-highlight">150</i>&nbsp;
+<i class="no-highlight">151</i>&nbsp;
+<i class="no-highlight">152</i>&nbsp;    private List&lt;Schema&gt; getSchemaList(String databaseName, Connection connection) {
+<b class="nc"><i class="no-highlight">153</i>&nbsp;        MetaData metaData = Chat2DBContext.getMetaData();</b>
+<b class="nc"><i class="no-highlight">154</i>&nbsp;        List&lt;Schema&gt; schemas = metaData.schemas(connection, databaseName);</b>
+<b class="nc"><i class="no-highlight">155</i>&nbsp;        sortSchema(schemas, connection);</b>
+<b class="nc"><i class="no-highlight">156</i>&nbsp;        return schemas;</b>
+<i class="no-highlight">157</i>&nbsp;    }
+<i class="no-highlight">158</i>&nbsp;
+<i class="no-highlight">159</i>&nbsp;    private void sortSchema(List&lt;Schema&gt; schemas, Connection connection) {
+<b class="nc"><i class="no-highlight">160</i>&nbsp;        if (CollectionUtils.isEmpty(schemas)) {</b>
+<i class="no-highlight">161</i>&nbsp;            return;
+<i class="no-highlight">162</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">163</i>&nbsp;        String ulr = null;</b>
+<i class="no-highlight">164</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">165</i>&nbsp;            ulr = connection.getMetaData().getURL();</b>
+<b class="nc"><i class="no-highlight">166</i>&nbsp;        } catch (SQLException e) {</b>
+<b class="nc"><i class="no-highlight">167</i>&nbsp;            log.error(&quot;get url error&quot;, e);</b>
+<b class="nc"><i class="no-highlight">168</i>&nbsp;        }</b>
+<i class="no-highlight">169</i>&nbsp;        // If the database name contains the name of the current database, the current database is placed in the first place
+<b class="nc"><i class="no-highlight">170</i>&nbsp;        int num = -1;</b>
+<b class="nc"><i class="no-highlight">171</i>&nbsp;        for (int i = 0; i &lt; schemas.size(); i++) {</b>
+<b class="nc"><i class="no-highlight">172</i>&nbsp;            String schema = schemas.get(i).getName();</b>
+<b class="nc"><i class="no-highlight">173</i>&nbsp;            if (StringUtils.isNotBlank(ulr) &amp;&amp; schema != null &amp;&amp; ulr.contains(schema)) {</b>
+<b class="nc"><i class="no-highlight">174</i>&nbsp;                num = i;</b>
+<b class="nc"><i class="no-highlight">175</i>&nbsp;                break;</b>
+<i class="no-highlight">176</i>&nbsp;            }
+<i class="no-highlight">177</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">178</i>&nbsp;        if (num != -1 &amp;&amp; num != 0) {</b>
+<b class="nc"><i class="no-highlight">179</i>&nbsp;            Collections.swap(schemas, num, 0);</b>
+<i class="no-highlight">180</i>&nbsp;        }
+<i class="no-highlight">181</i>&nbsp;    }
+<i class="no-highlight">182</i>&nbsp;
+<i class="no-highlight">183</i>&nbsp;    @Override
+<i class="no-highlight">184</i>&nbsp;    public DataResult&lt;MetaSchema&gt; queryDatabaseSchema(MetaDataQueryParam param) {
+<b class="nc"><i class="no-highlight">185</i>&nbsp;        MetaSchema metaSchema = new MetaSchema();</b>
+<b class="nc"><i class="no-highlight">186</i>&nbsp;        MetaData metaData = Chat2DBContext.getMetaData();</b>
+<b class="nc"><i class="no-highlight">187</i>&nbsp;        MetaSchema ms = CacheManage.get(getDataSourceKey(param.getDataSourceId()), MetaSchema.class,</b>
+<b class="nc"><i class="no-highlight">188</i>&nbsp;                (key) -&gt; param.isRefresh(), (key) -&gt; {</b>
+<b class="nc"><i class="no-highlight">189</i>&nbsp;                    Connection connection = Chat2DBContext.getConnection();</b>
+<b class="nc"><i class="no-highlight">190</i>&nbsp;                    List&lt;Database&gt; databases = metaData.databases(connection);</b>
+<b class="nc"><i class="no-highlight">191</i>&nbsp;                    if (!CollectionUtils.isEmpty(databases)) {</b>
+<b class="nc"><i class="no-highlight">192</i>&nbsp;                        CountDownLatch countDownLatch = ThreadUtil.newCountDownLatch(databases.size());</b>
+<b class="nc"><i class="no-highlight">193</i>&nbsp;                        for (Database database : databases) {</b>
+<b class="nc"><i class="no-highlight">194</i>&nbsp;                            ThreadUtil.execute(() -&gt; {</b>
+<i class="no-highlight">195</i>&nbsp;                                try {
+<b class="nc"><i class="no-highlight">196</i>&nbsp;                                    database.setSchemas(metaData.schemas(connection, database.getName()));</b>
+<b class="nc"><i class="no-highlight">197</i>&nbsp;                                    countDownLatch.countDown();</b>
+<b class="nc"><i class="no-highlight">198</i>&nbsp;                                } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">199</i>&nbsp;                                    log.error(&quot;queryDatabaseSchema error&quot;, e);</b>
+<b class="nc"><i class="no-highlight">200</i>&nbsp;                                }</b>
+<i class="no-highlight">201</i>&nbsp;                            });
+<b class="nc"><i class="no-highlight">202</i>&nbsp;                        }</b>
+<i class="no-highlight">203</i>&nbsp;                        try {
+<b class="nc"><i class="no-highlight">204</i>&nbsp;                            countDownLatch.await();</b>
+<b class="nc"><i class="no-highlight">205</i>&nbsp;                        } catch (InterruptedException e) {</b>
+<b class="nc"><i class="no-highlight">206</i>&nbsp;                            log.error(&quot;queryDatabaseSchema error&quot;, e);</b>
+<b class="nc"><i class="no-highlight">207</i>&nbsp;                        }</b>
+<b class="nc"><i class="no-highlight">208</i>&nbsp;                        metaSchema.setDatabases(databases);</b>
+<i class="no-highlight">209</i>&nbsp;
+<b class="nc"><i class="no-highlight">210</i>&nbsp;                    } else {</b>
+<b class="nc"><i class="no-highlight">211</i>&nbsp;                        List&lt;Schema&gt; schemas = metaData.schemas(connection, null);</b>
+<b class="nc"><i class="no-highlight">212</i>&nbsp;                        metaSchema.setSchemas(schemas);</b>
+<i class="no-highlight">213</i>&nbsp;                    }
+<b class="nc"><i class="no-highlight">214</i>&nbsp;                    return metaSchema;</b>
+<i class="no-highlight">215</i>&nbsp;                });
+<i class="no-highlight">216</i>&nbsp;
+<b class="nc"><i class="no-highlight">217</i>&nbsp;        return DataResult.of(ms);</b>
+<i class="no-highlight">218</i>&nbsp;    }
+<i class="no-highlight">219</i>&nbsp;
+<i class="no-highlight">220</i>&nbsp;    @Override
+<i class="no-highlight">221</i>&nbsp;    public ActionResult deleteDatabase(DatabaseCreateParam param) {
+<b class="nc"><i class="no-highlight">222</i>&nbsp;        Chat2DBContext.getDBManage().dropDatabase(Chat2DBContext.getConnection(), param.getName());</b>
+<b class="nc"><i class="no-highlight">223</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">224</i>&nbsp;    }
+<i class="no-highlight">225</i>&nbsp;
+<i class="no-highlight">226</i>&nbsp;    @Override
+<i class="no-highlight">227</i>&nbsp;    public DataResult&lt;Sql&gt; createDatabase(Database database) {
+<b class="nc"><i class="no-highlight">228</i>&nbsp;        String sql = Chat2DBContext.getSqlBuilder().buildCreateDatabaseSql(database);</b>
+<b class="nc"><i class="no-highlight">229</i>&nbsp;        return DataResult.of(Sql.builder().sql(sql).build());</b>
+<i class="no-highlight">230</i>&nbsp;    }
+<i class="no-highlight">231</i>&nbsp;
+<i class="no-highlight">232</i>&nbsp;    @Override
+<i class="no-highlight">233</i>&nbsp;    public ActionResult modifyDatabase(DatabaseCreateParam param) {
+<b class="nc"><i class="no-highlight">234</i>&nbsp;        Chat2DBContext.getDBManage().modifyDatabase(Chat2DBContext.getConnection(), param.getName(),</b>
+<b class="nc"><i class="no-highlight">235</i>&nbsp;                param.getName());</b>
+<b class="nc"><i class="no-highlight">236</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">237</i>&nbsp;    }
+<i class="no-highlight">238</i>&nbsp;
+<i class="no-highlight">239</i>&nbsp;    @Override
+<i class="no-highlight">240</i>&nbsp;    public ActionResult deleteSchema(SchemaOperationParam param) {
+<b class="nc"><i class="no-highlight">241</i>&nbsp;        Chat2DBContext.getDBManage().dropSchema(Chat2DBContext.getConnection(), param.getDatabaseName(),</b>
+<b class="nc"><i class="no-highlight">242</i>&nbsp;                param.getSchemaName());</b>
+<b class="nc"><i class="no-highlight">243</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">244</i>&nbsp;    }
+<i class="no-highlight">245</i>&nbsp;
+<i class="no-highlight">246</i>&nbsp;    @Override
+<i class="no-highlight">247</i>&nbsp;    public DataResult&lt;Sql&gt; createSchema(Schema schema) {
+<b class="nc"><i class="no-highlight">248</i>&nbsp;        String sql = Chat2DBContext.getSqlBuilder().buildCreateSchemaSql(schema);</b>
+<b class="nc"><i class="no-highlight">249</i>&nbsp;        return DataResult.of(Sql.builder().sql(sql).build());</b>
+<i class="no-highlight">250</i>&nbsp;    }
+<i class="no-highlight">251</i>&nbsp;
+<i class="no-highlight">252</i>&nbsp;    @Override
+<i class="no-highlight">253</i>&nbsp;    public ActionResult modifySchema(SchemaOperationParam param) {
+<b class="nc"><i class="no-highlight">254</i>&nbsp;        Chat2DBContext.getDBManage().modifySchema(Chat2DBContext.getConnection(), param.getDatabaseName(),</b>
+<b class="nc"><i class="no-highlight">255</i>&nbsp;                param.getSchemaName(),</b>
+<b class="nc"><i class="no-highlight">256</i>&nbsp;                param.getNewSchemaName());</b>
+<b class="nc"><i class="no-highlight">257</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">258</i>&nbsp;    }
+<i class="no-highlight">259</i>&nbsp;
+<i class="no-highlight">260</i>&nbsp;    @Override
+<i class="no-highlight">261</i>&nbsp;    public String exportDatabase(DatabaseExportParam param) throws SQLException {
+<b class="nc"><i class="no-highlight">262</i>&nbsp;        return Chat2DBContext.getDBManage().exportDatabase(Chat2DBContext.getConnection(),</b>
+<b class="nc"><i class="no-highlight">263</i>&nbsp;                param.getDatabaseName(),</b>
+<b class="nc"><i class="no-highlight">264</i>&nbsp;                param.getSchemaName(),</b>
+<b class="nc"><i class="no-highlight">265</i>&nbsp;                param.getContainData());</b>
+<i class="no-highlight">266</i>&nbsp;    }
+<i class="no-highlight">267</i>&nbsp;
+<i class="no-highlight">268</i>&nbsp;    @Override
+<i class="no-highlight">269</i>&nbsp;    public DatabaseExportVo export2(DatabaseExportRequest request) throws SQLException {
+<b class="nc"><i class="no-highlight">270</i>&nbsp;        LoginUser loginUser = ContextUtils.getLoginUser();</b>
+<b class="nc"><i class="no-highlight">271</i>&nbsp;        String key = CacheConstants.EXPORT_KEY + loginUser.getId() + &quot;:&quot; + request.getDataSourceId()</b>
+<b class="nc"><i class="no-highlight">272</i>&nbsp;                + &quot;:&quot; + StrUtil.nullToEmpty(request.getSchemaName());</b>
+<b class="nc"><i class="no-highlight">273</i>&nbsp;        if (redisCache.hasKey(key)) {</b>
+<b class="nc"><i class="no-highlight">274</i>&nbsp;            return redisCache.getCacheObject(key);</b>
+<i class="no-highlight">275</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">276</i>&nbsp;        if (CollUtil.isEmpty(request.getTableList())) {</b>
+<b class="nc"><i class="no-highlight">277</i>&nbsp;            MetaData metaSchema = Chat2DBContext.getMetaData();</b>
+<b class="nc"><i class="no-highlight">278</i>&nbsp;            List&lt;Table&gt; tables = metaSchema.tables(Chat2DBContext.getConnection(), request.getDatabaseName(), request.getSchemaName(), null);</b>
+<b class="nc"><i class="no-highlight">279</i>&nbsp;            List&lt;String&gt; tableList = Lists.newArrayList();</b>
+<b class="nc"><i class="no-highlight">280</i>&nbsp;            for (Table table : tables) {</b>
+<b class="nc"><i class="no-highlight">281</i>&nbsp;                tableList.add(table.getName());</b>
+<b class="nc"><i class="no-highlight">282</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">283</i>&nbsp;            request.setTableList(tableList);</b>
+<i class="no-highlight">284</i>&nbsp;        }
+<i class="no-highlight">285</i>&nbsp;
+<b class="nc"><i class="no-highlight">286</i>&nbsp;        DatabaseExportVo vo = new DatabaseExportVo();</b>
+<b class="nc"><i class="no-highlight">287</i>&nbsp;        vo.setTotal(request.getTableList().size());</b>
+<b class="nc"><i class="no-highlight">288</i>&nbsp;        vo.setExported(0);</b>
+<b class="nc"><i class="no-highlight">289</i>&nbsp;        vo.setDataSourceId(request.getDataSourceId());</b>
+<b class="nc"><i class="no-highlight">290</i>&nbsp;        vo.setDatabaseName(request.getDatabaseName());</b>
+<b class="nc"><i class="no-highlight">291</i>&nbsp;        vo.setSchemaName(request.getSchemaName());</b>
+<b class="nc"><i class="no-highlight">292</i>&nbsp;        vo.setUserId(loginUser.getId());</b>
+<b class="nc"><i class="no-highlight">293</i>&nbsp;        vo.setStatus(TaskStatusEnum.INIT.name());</b>
+<b class="nc"><i class="no-highlight">294</i>&nbsp;        String filePath = HzbConfig.getUploadPath();</b>
+<b class="nc"><i class="no-highlight">295</i>&nbsp;        String fileName = &quot;&quot;;</b>
+<i class="no-highlight">296</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">297</i>&nbsp;            fileName = URLEncoder.encode(&quot;Export_&quot; +</b>
+<b class="nc"><i class="no-highlight">298</i>&nbsp;                                    StrUtil.nullToEmpty(request.getDatabaseName()) + &quot;_&quot;</b>
+<b class="nc"><i class="no-highlight">299</i>&nbsp;                                    + StrUtil.nullToEmpty(request.getSchemaName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">300</i>&nbsp;                                    + &quot;.sql&quot;,
+<b class="nc"><i class="no-highlight">301</i>&nbsp;                            StandardCharsets.UTF_8.toString())</b>
+<b class="nc"><i class="no-highlight">302</i>&nbsp;                    .replaceAll(&quot;\\+&quot;, &quot;%20&quot;);</b>
+<b class="nc"><i class="no-highlight">303</i>&nbsp;        } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i class="no-highlight">304</i>&nbsp;            vo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">305</i>&nbsp;            return vo;</b>
+<b class="nc"><i class="no-highlight">306</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">307</i>&nbsp;        File file = FileUtil.newFile(filePath + &quot;/&quot; + fileName);</b>
+<b class="nc"><i class="no-highlight">308</i>&nbsp;        vo.setDownloadUrl(file.getAbsolutePath());</b>
+<b class="nc"><i class="no-highlight">309</i>&nbsp;        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();</b>
+<b class="nc"><i class="no-highlight">310</i>&nbsp;        CompletableFuture.runAsync(() -&gt; {</b>
+<i class="no-highlight">311</i>&nbsp;            try {
+<b class="nc"><i class="no-highlight">312</i>&nbsp;                buildContext(loginUser, connectInfo);</b>
+<b class="nc"><i class="no-highlight">313</i>&nbsp;                doExport(request, file, vo, key);</b>
+<b class="nc"><i class="no-highlight">314</i>&nbsp;            } catch (SQLException e) {</b>
+<b class="nc"><i class="no-highlight">315</i>&nbsp;                e.printStackTrace();</b>
+<b class="nc"><i class="no-highlight">316</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">317</i>&nbsp;        }).whenComplete((aVoid, throwable) -&gt; {</b>
+<b class="nc"><i class="no-highlight">318</i>&nbsp;            vo.setStatus(TaskStatusEnum.FINISH.name());</b>
+<b class="nc"><i class="no-highlight">319</i>&nbsp;            removeContext();</b>
+<b class="nc"><i class="no-highlight">320</i>&nbsp;            redisCache.setCacheObject(key, vo);</b>
+<i class="no-highlight">321</i>&nbsp;        });
+<b class="nc"><i class="no-highlight">322</i>&nbsp;        return vo;</b>
+<i class="no-highlight">323</i>&nbsp;    }
+<i class="no-highlight">324</i>&nbsp;
+<i class="no-highlight">325</i>&nbsp;    @Override
+<i class="no-highlight">326</i>&nbsp;    public DatabaseImportVo importDatabase(DatabaseImportRequest request) throws Exception {
+<b class="nc"><i class="no-highlight">327</i>&nbsp;        LoginUser loginUser = ContextUtils.getLoginUser();</b>
+<b class="nc"><i class="no-highlight">328</i>&nbsp;        String key = CacheConstants.IMPORT_KEY + loginUser.getId() + &quot;:&quot; + request.getDataSourceId()</b>
+<b class="nc"><i class="no-highlight">329</i>&nbsp;                + &quot;:&quot; + StrUtil.nullToEmpty(request.getSchemaName());</b>
+<b class="nc"><i class="no-highlight">330</i>&nbsp;        if (redisCache.hasKey(key)) {</b>
+<b class="nc"><i class="no-highlight">331</i>&nbsp;            return redisCache.getCacheObject(key);</b>
+<i class="no-highlight">332</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">333</i>&nbsp;        if (StrUtil.isEmpty(request.getImportUrl())) {</b>
+<b class="nc"><i class="no-highlight">334</i>&nbsp;            throw new RuntimeException(&quot;文件不存在&quot;);</b>
+<i class="no-highlight">335</i>&nbsp;        }
+<i class="no-highlight">336</i>&nbsp;        // 本地资源路径
+<b class="nc"><i class="no-highlight">337</i>&nbsp;        String localPath = HzbConfig.getProfile();</b>
+<i class="no-highlight">338</i>&nbsp;        // 数据库资源地址
+<b class="nc"><i class="no-highlight">339</i>&nbsp;        String importUrl = localPath + com.jd.common.utils.StringUtils.substringAfter(request.getImportUrl(), Constants.RESOURCE_PREFIX);</b>
+<b class="nc"><i class="no-highlight">340</i>&nbsp;        final File file = FileUtil.newFile(importUrl);</b>
+<b class="nc"><i class="no-highlight">341</i>&nbsp;        if (!file.exists()) {</b>
+<b class="nc"><i class="no-highlight">342</i>&nbsp;            throw new RuntimeException(&quot;文件不存在&quot;);</b>
+<i class="no-highlight">343</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">344</i>&nbsp;        final int totalLines = FileUtil.getTotalLines(file);</b>
+<b class="nc"><i class="no-highlight">345</i>&nbsp;        DatabaseImportVo vo = new DatabaseImportVo();</b>
+<b class="nc"><i class="no-highlight">346</i>&nbsp;        vo.setTotal(totalLines);</b>
+<b class="nc"><i class="no-highlight">347</i>&nbsp;        vo.setExported(0);</b>
+<b class="nc"><i class="no-highlight">348</i>&nbsp;        vo.setErrorNum(0);</b>
+<b class="nc"><i class="no-highlight">349</i>&nbsp;        vo.setMessage(Lists.newLinkedList());</b>
+<b class="nc"><i class="no-highlight">350</i>&nbsp;        vo.setDataSourceId(request.getDataSourceId());</b>
+<b class="nc"><i class="no-highlight">351</i>&nbsp;        vo.setDatabaseName(request.getDatabaseName());</b>
+<b class="nc"><i class="no-highlight">352</i>&nbsp;        vo.setSchemaName(request.getSchemaName());</b>
+<b class="nc"><i class="no-highlight">353</i>&nbsp;        vo.setUserId(loginUser.getId());</b>
+<b class="nc"><i class="no-highlight">354</i>&nbsp;        vo.setStatus(TaskStatusEnum.INIT.name());</b>
+<b class="nc"><i class="no-highlight">355</i>&nbsp;        String fileName = &quot;&quot;;</b>
+<i class="no-highlight">356</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">357</i>&nbsp;            fileName = URLEncoder.encode(&quot;Import_&quot; +</b>
+<b class="nc"><i class="no-highlight">358</i>&nbsp;                                    StrUtil.nullToEmpty(request.getDatabaseName()) + &quot;_&quot;</b>
+<b class="nc"><i class="no-highlight">359</i>&nbsp;                                    + StrUtil.nullToEmpty(request.getSchemaName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">360</i>&nbsp;                                    + &quot;.log&quot;,
+<b class="nc"><i class="no-highlight">361</i>&nbsp;                            StandardCharsets.UTF_8.toString())</b>
+<b class="nc"><i class="no-highlight">362</i>&nbsp;                    .replaceAll(&quot;\\+&quot;, &quot;%20&quot;);</b>
+<b class="nc"><i class="no-highlight">363</i>&nbsp;        } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i class="no-highlight">364</i>&nbsp;            vo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">365</i>&nbsp;            return vo;</b>
+<b class="nc"><i class="no-highlight">366</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">367</i>&nbsp;        String filePath = HzbConfig.getUploadPath();</b>
+<b class="nc"><i class="no-highlight">368</i>&nbsp;        File logFile = FileUtil.newFile(filePath + &quot;/&quot; + fileName);</b>
+<b class="nc"><i class="no-highlight">369</i>&nbsp;        vo.setLogFile(logFile.getAbsolutePath());</b>
+<b class="nc"><i class="no-highlight">370</i>&nbsp;        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();</b>
+<b class="nc"><i class="no-highlight">371</i>&nbsp;        CompletableFuture.runAsync(() -&gt; {</b>
+<i class="no-highlight">372</i>&nbsp;            try {
+<b class="nc"><i class="no-highlight">373</i>&nbsp;                buildContext(loginUser, connectInfo);</b>
+<b class="nc"><i class="no-highlight">374</i>&nbsp;                doImport(request, file, logFile, vo, key);</b>
+<b class="nc"><i class="no-highlight">375</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">376</i>&nbsp;                e.printStackTrace();</b>
+<b class="nc"><i class="no-highlight">377</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">378</i>&nbsp;        }).whenComplete((aVoid, throwable) -&gt; {</b>
+<b class="nc"><i class="no-highlight">379</i>&nbsp;            DatabaseImportVo vo1 = redisCache.getCacheObject(key);</b>
+<b class="nc"><i class="no-highlight">380</i>&nbsp;            if (Validator.isEmpty(vo1)) {</b>
+<b class="nc"><i class="no-highlight">381</i>&nbsp;                vo.setStatus(TaskStatusEnum.FINISH.name());</b>
+<b class="nc"><i class="no-highlight">382</i>&nbsp;                redisCache.setCacheObject(key, vo);</b>
+<i class="no-highlight">383</i>&nbsp;            } else {
+<b class="nc"><i class="no-highlight">384</i>&nbsp;                if (StrUtil.equals(TaskStatusEnum.ERROR.name(), vo1.getStatus())) {</b>
+<b class="nc"><i class="no-highlight">385</i>&nbsp;                    redisCache.deleteObject(key);</b>
+<i class="no-highlight">386</i>&nbsp;                } else {
+<b class="nc"><i class="no-highlight">387</i>&nbsp;                    vo1.setStatus(TaskStatusEnum.FINISH.name());</b>
+<b class="nc"><i class="no-highlight">388</i>&nbsp;                    redisCache.setCacheObject(key, vo1);</b>
+<i class="no-highlight">389</i>&nbsp;                }
+<i class="no-highlight">390</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">391</i>&nbsp;            removeContext();</b>
+<b class="nc"><i class="no-highlight">392</i>&nbsp;            FileUtils.deleteFile(importUrl);</b>
+<i class="no-highlight">393</i>&nbsp;        });
+<b class="nc"><i class="no-highlight">394</i>&nbsp;        return vo;</b>
+<i class="no-highlight">395</i>&nbsp;    }
+<i class="no-highlight">396</i>&nbsp;
+<i class="no-highlight">397</i>&nbsp;    @Override
+<i class="no-highlight">398</i>&nbsp;    public DmpExportVo exportDmp(DmpExportRequest dmpExportRequest) {
+<b class="nc"><i class="no-highlight">399</i>&nbsp;        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();</b>
+<b class="nc"><i class="no-highlight">400</i>&nbsp;        MetaData metaData = Chat2DBContext.getMetaData();</b>
+<i class="no-highlight">401</i>&nbsp;
+<i class="no-highlight">402</i>&nbsp;        //导出路径是否存在
+<i class="no-highlight">403</i>&nbsp;//        final File file = FileUtil.newFile(dmpExportRequest.getFilePath());
+<b class="nc"><i class="no-highlight">404</i>&nbsp;        final File file = FileUtil.newFile(HzbConfig.getProfile());</b>
+<b class="nc"><i class="no-highlight">405</i>&nbsp;        dmpExportRequest.setFilePath(HzbConfig.getProfile());</b>
+<b class="nc"><i class="no-highlight">406</i>&nbsp;        if (!file.exists()) {</b>
+<b class="nc"><i class="no-highlight">407</i>&nbsp;            boolean mkdirs = file.mkdirs();</b>
+<b class="nc"><i class="no-highlight">408</i>&nbsp;            if (!mkdirs) {</b>
+<b class="nc"><i class="no-highlight">409</i>&nbsp;                log.error(&quot;创建文件夹失败,创建文件路径：{}&quot;, HzbConfig.getProfile());</b>
+<b class="nc"><i class="no-highlight">410</i>&nbsp;                throw new RuntimeException(&quot;创建文件夹失败&quot;);</b>
+<i class="no-highlight">411</i>&nbsp;            }
+<i class="no-highlight">412</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">413</i>&nbsp;        LoginUser loginUser = null;</b>
+<b class="nc"><i class="no-highlight">414</i>&nbsp;        Long userId = null;</b>
+<i class="no-highlight">415</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">416</i>&nbsp;            loginUser = ContextUtils.getLoginUser();</b>
+<b class="nc"><i class="no-highlight">417</i>&nbsp;            userId = loginUser.getId();</b>
+<b class="nc"><i class="no-highlight">418</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">419</i>&nbsp;            loginUser = new LoginUser();</b>
+<b class="nc"><i class="no-highlight">420</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">421</i>&nbsp;        String key = CacheConstants.EXPORT_DMP_KEY + userId + &quot;:&quot; + dmpExportRequest.getDataSourceId()</b>
+<b class="nc"><i class="no-highlight">422</i>&nbsp;                + &quot;:&quot; + StrUtil.nullToEmpty(dmpExportRequest.getSchemaName());</b>
+<b class="nc"><i class="no-highlight">423</i>&nbsp;        log.debug(&quot;KRY_NAME==&gt;{}&quot;, key);</b>
+<b class="nc"><i class="no-highlight">424</i>&nbsp;        if (redisCache.hasKey(key)) {</b>
+<b class="nc"><i class="no-highlight">425</i>&nbsp;            DmpExportVo vo = redisCache.getCacheObject(key);</b>
+<b class="nc"><i class="no-highlight">426</i>&nbsp;            return redisCache.getCacheObject(key);</b>
+<i class="no-highlight">427</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">428</i>&nbsp;        DataSourceDO dataSourceDO = dataSourceMapper.selectById(dmpExportRequest.getDataSourceId());</b>
+<b class="nc"><i class="no-highlight">429</i>&nbsp;        if (DBTypeEnum.ORACLE.equals(dataSourceDO.getType()) &amp;&amp; StrUtil.isBlank(dataSourceDO.getServiceName())) {</b>
+<b class="nc"><i class="no-highlight">430</i>&nbsp;            throw new BusinessException(&quot;SID不支持请切换serverName执行导出&quot;);</b>
+<i class="no-highlight">431</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">432</i>&nbsp;        String dmpExport = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">433</i>&nbsp;        if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {</b>
+<b class="nc"><i class="no-highlight">434</i>&nbsp;            dmpExport = dmDmpExport;</b>
+<i class="no-highlight">435</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">436</i>&nbsp;        if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.ORACLE.name())) {</b>
+<b class="nc"><i class="no-highlight">437</i>&nbsp;            dmpExport = oraDmpExport;</b>
+<i class="no-highlight">438</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">439</i>&nbsp;        String logFileName = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">440</i>&nbsp;        String dmpFileName = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">441</i>&nbsp;        DmpExportVo dmpExportVo = new DmpExportVo();</b>
+<b class="nc"><i class="no-highlight">442</i>&nbsp;        dmpExportVo.setDataSourceId(connectInfo.getDataSourceId());</b>
+<b class="nc"><i class="no-highlight">443</i>&nbsp;        dmpExportVo.setDatabaseName(dmpExportRequest.getDatabaseName());</b>
+<b class="nc"><i class="no-highlight">444</i>&nbsp;        dmpExportVo.setUserId(loginUser.getId());</b>
+<b class="nc"><i class="no-highlight">445</i>&nbsp;        dmpExportVo.setStatus(TaskStatusEnum.INIT.name());</b>
+<b class="nc"><i class="no-highlight">446</i>&nbsp;        dmpExportVo.setSchemaName(StringUtils.isNotBlank(dmpExportRequest.getSchemaName()) ? dmpExportRequest.getSchemaName() : &quot;&quot;);</b>
+<i class="no-highlight">447</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">448</i>&nbsp;            logFileName = URLEncoder.encode(&quot;dmp_&quot; +</b>
+<b class="nc"><i class="no-highlight">449</i>&nbsp;                            connectInfo.getDataSourceId() + &quot;_&quot;</b>
+<b class="nc"><i class="no-highlight">450</i>&nbsp;                            + StrUtil.nullToEmpty(connectInfo.getSchemaName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">451</i>&nbsp;                            + &quot;.log&quot;,
+<b class="nc"><i class="no-highlight">452</i>&nbsp;                    StandardCharsets.UTF_8.toString());</b>
+<b class="nc"><i class="no-highlight">453</i>&nbsp;            dmpFileName = URLEncoder.encode(&quot;dmp_&quot; +</b>
+<b class="nc"><i class="no-highlight">454</i>&nbsp;                            connectInfo.getDataSourceId() + &quot;_&quot;</b>
+<b class="nc"><i class="no-highlight">455</i>&nbsp;                            + StrUtil.nullToEmpty(connectInfo.getSchemaName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">456</i>&nbsp;                            + &quot;.dmp&quot;,
+<b class="nc"><i class="no-highlight">457</i>&nbsp;                    StandardCharsets.UTF_8.toString());</b>
+<b class="nc"><i class="no-highlight">458</i>&nbsp;        } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i class="no-highlight">459</i>&nbsp;            dmpExportVo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">460</i>&nbsp;            return dmpExportVo;</b>
+<b class="nc"><i class="no-highlight">461</i>&nbsp;        }</b>
+<i class="no-highlight">462</i>&nbsp;
+<b class="nc"><i class="no-highlight">463</i>&nbsp;        dmpExportVo.setDmpUrl(HzbConfig.getProfile() + &quot;/&quot; + dmpFileName);</b>
+<b class="nc"><i class="no-highlight">464</i>&nbsp;        dmpExportVo.setLogUrl(HzbConfig.getProfile() + &quot;/&quot; + logFileName);</b>
+<i class="no-highlight">465</i>&nbsp;        // init状态
+<b class="nc"><i class="no-highlight">466</i>&nbsp;        redisCache.setCacheObject(key, dmpExportVo);</b>
+<b class="nc"><i class="no-highlight">467</i>&nbsp;        redisCache.expire(key, 300);</b>
+<b class="nc"><i class="no-highlight">468</i>&nbsp;        final File finalLogFile = new File(HzbConfig.getProfile() + &quot;/&quot; + logFileName);</b>
+<b class="nc"><i class="no-highlight">469</i>&nbsp;        final File finalDmpFile = new File(HzbConfig.getProfile() + &quot;/&quot; + dmpFileName);</b>
+<b class="nc"><i class="no-highlight">470</i>&nbsp;        String schemas = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">471</i>&nbsp;        if (CollUtil.isEmpty(dmpExportRequest.getSchemaList())) {</b>
+<b class="nc"><i class="no-highlight">472</i>&nbsp;            schemas = dmpExportRequest.getSchemaName();</b>
+<i class="no-highlight">473</i>&nbsp;        } else {
+<b class="nc"><i class="no-highlight">474</i>&nbsp;            schemas = String.join(&quot;,&quot;, dmpExportRequest.getSchemaList());</b>
+<i class="no-highlight">475</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">476</i>&nbsp;        String finalDmpExport = dmpExport;</b>
+<b class="nc"><i class="no-highlight">477</i>&nbsp;        String finalSchemas = schemas;</b>
+<i class="no-highlight">478</i>&nbsp;
+<b class="nc"><i class="no-highlight">479</i>&nbsp;        LoginUser finalLoginUser = loginUser;</b>
+<b class="nc"><i class="no-highlight">480</i>&nbsp;        CompletableFuture.supplyAsync(() -&gt; {</b>
+<i class="no-highlight">481</i>&nbsp;
+<b class="nc"><i class="no-highlight">482</i>&nbsp;            buildContext(finalLoginUser, connectInfo);</b>
+<b class="nc"><i class="no-highlight">483</i>&nbsp;            Boolean isWin = false;</b>
+<b class="nc"><i class="no-highlight">484</i>&nbsp;            if (OSUtils.isWindows()) {</b>
+<b class="nc"><i class="no-highlight">485</i>&nbsp;                isWin = true;</b>
+<i class="no-highlight">486</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">487</i>&nbsp;            String cmd = metaData.exportDmp(connectInfo, dmpExportRequest.getTableList(), finalSchemas, finalLogFile, finalDmpFile, finalDmpExport, isWin);</b>
+<b class="nc"><i class="no-highlight">488</i>&nbsp;            ProcessBuilder processBuilder = null;</b>
+<b class="nc"><i class="no-highlight">489</i>&nbsp;            boolean shouldClose = false;</b>
+<i class="no-highlight">490</i>&nbsp;            try {
+<b class="nc"><i class="no-highlight">491</i>&nbsp;                if (OSUtils.isKylin() || OSUtils.isLinux()) {</b>
+<b class="nc"><i class="no-highlight">492</i>&nbsp;                    List&lt;String&gt; cmds = Arrays.asList(cmd.split(&quot; &quot;));</b>
+<b class="nc"><i class="no-highlight">493</i>&nbsp;                    log.info(&quot;执行命令========&gt;{}&quot;, cmds);</b>
+<b class="nc"><i class="no-highlight">494</i>&nbsp;                    processBuilder = new ProcessBuilder(cmds).inheritIO();</b>
+<b class="nc"><i class="no-highlight">495</i>&nbsp;                    processBuilder = processBuilder.directory(new File(&quot;/root&quot;));</b>
+<b class="nc"><i class="no-highlight">496</i>&nbsp;                } else {</b>
+<b class="nc"><i class="no-highlight">497</i>&nbsp;                    log.info(&quot;执行命令========&gt;{}&quot;, cmd);</b>
+<b class="nc"><i class="no-highlight">498</i>&nbsp;                    processBuilder = new ProcessBuilder(&quot;cmd.exe&quot;, &quot;/c&quot;, cmd).inheritIO();</b>
+<i class="no-highlight">499</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">500</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">501</i>&nbsp;                shouldClose = true;</b>
+<b class="nc"><i class="no-highlight">502</i>&nbsp;                throw new BusinessException(&quot;导出失败：&quot; + e.getMessage());</b>
+<b class="nc"><i class="no-highlight">503</i>&nbsp;            }</b>
+<i class="no-highlight">504</i>&nbsp;
+<b class="nc"><i class="no-highlight">505</i>&nbsp;            dmpExportVo.setCmdCommand(cmd);</b>
+<b class="nc"><i class="no-highlight">506</i>&nbsp;            processBuilder.redirectErrorStream();</b>
+<b class="nc"><i class="no-highlight">507</i>&nbsp;            StringBuilder stringBuilder = new StringBuilder();</b>
+<b class="nc"><i class="no-highlight">508</i>&nbsp;            Process start = null;</b>
+<i class="no-highlight">509</i>&nbsp;            try {
+<b class="nc"><i class="no-highlight">510</i>&nbsp;                start = processBuilder.start();</b>
+<b class="nc"><i class="no-highlight">511</i>&nbsp;                InputStream inputStream = start.getInputStream();</b>
+<b class="nc"><i class="no-highlight">512</i>&nbsp;                BufferedReader gbk = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));</b>
+<i class="no-highlight">513</i>&nbsp;                String line;
+<i class="no-highlight">514</i>&nbsp;
+<b class="nc"><i class="no-highlight">515</i>&nbsp;                while ((line = gbk.readLine()) != null) {</b>
+<b class="nc"><i class="no-highlight">516</i>&nbsp;                    stringBuilder.append(line).append(&quot;/n&quot;);</b>
+<i class="no-highlight">517</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">518</i>&nbsp;                gbk.close();</b>
+<b class="nc"><i class="no-highlight">519</i>&nbsp;                start.waitFor();</b>
+<b class="nc"><i class="no-highlight">520</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">521</i>&nbsp;                shouldClose = true;</b>
+<b class="nc"><i class="no-highlight">522</i>&nbsp;                throw new BusinessException(&quot;导出失败：&quot; + e.getMessage());</b>
+<b class="nc"><i class="no-highlight">523</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">524</i>&nbsp;            if (shouldClose) {</b>
+<b class="nc"><i class="no-highlight">525</i>&nbsp;                start.destroy();</b>
+<i class="no-highlight">526</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">527</i>&nbsp;            return Boolean.TRUE;</b>
+<b class="nc"><i class="no-highlight">528</i>&nbsp;        }).thenAccept(result -&gt; {</b>
+<b class="nc"><i class="no-highlight">529</i>&nbsp;            if (Boolean.TRUE.equals(result)) {</b>
+<i class="no-highlight">530</i>&nbsp;                try {
+<b class="nc"><i class="no-highlight">531</i>&nbsp;                    List&lt;String&gt; resultmsg = new ArrayList&lt;&gt;();</b>
+<i class="no-highlight">532</i>&nbsp;                    try {
+<b class="nc"><i class="no-highlight">533</i>&nbsp;                        if (OSUtils.isWindows()) {</b>
+<b class="nc"><i class="no-highlight">534</i>&nbsp;                            resultmsg = FileUtil.readLines(finalLogFile, &quot;GBK&quot;);</b>
+<i class="no-highlight">535</i>&nbsp;                        } else {
+<b class="nc"><i class="no-highlight">536</i>&nbsp;                            resultmsg = FileUtil.readLines(finalLogFile, StandardCharsets.UTF_8);</b>
+<i class="no-highlight">537</i>&nbsp;                        }
+<b class="nc"><i class="no-highlight">538</i>&nbsp;                    } catch (IORuntimeException e) {</b>
+<b class="nc"><i class="no-highlight">539</i>&nbsp;                        resultmsg.add(&quot;日志文件生成失败,程序结束&quot;);</b>
+<b class="nc"><i class="no-highlight">540</i>&nbsp;                        resultmsg.add(&quot;但出现警告&quot;);</b>
+<b class="nc"><i class="no-highlight">541</i>&nbsp;                    }</b>
+<b class="nc"><i class="no-highlight">542</i>&nbsp;                    log.info(resultmsg.toString());</b>
+<b class="nc"><i class="no-highlight">543</i>&nbsp;                    if (resultmsg.size() &gt; 0 &amp;&amp; resultmsg.toString().contains(&quot;但出现警告&quot;)) {</b>
+<b class="nc"><i class="no-highlight">544</i>&nbsp;                        dmpExportVo.setMsg(resultmsg.toString());</b>
+<i class="no-highlight">545</i>&nbsp;                    }
+<b class="nc"><i class="no-highlight">546</i>&nbsp;                } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">547</i>&nbsp;                    dmpExportVo.setMsg(e.getMessage());</b>
+<b class="nc"><i class="no-highlight">548</i>&nbsp;                }</b>
+<b class="nc"><i class="no-highlight">549</i>&nbsp;                dmpExportVo.setStatus(TaskStatusEnum.FINISH.name());</b>
+<b class="nc"><i class="no-highlight">550</i>&nbsp;                removeContext();</b>
+<b class="nc"><i class="no-highlight">551</i>&nbsp;                redisCache.setCacheObject(key, dmpExportVo);</b>
+<i class="no-highlight">552</i>&nbsp;            } else {
+<b class="nc"><i class="no-highlight">553</i>&nbsp;                redisCache.deleteObject(key);</b>
+<i class="no-highlight">554</i>&nbsp;            }
+<i class="no-highlight">555</i>&nbsp;        });
+<b class="nc"><i class="no-highlight">556</i>&nbsp;        return dmpExportVo;</b>
+<i class="no-highlight">557</i>&nbsp;    }
+<i class="no-highlight">558</i>&nbsp;
+<i class="no-highlight">559</i>&nbsp;//
+<i class="no-highlight">560</i>&nbsp;//    /**
+<i class="no-highlight">561</i>&nbsp;//     * 数据读取操作
+<i class="no-highlight">562</i>&nbsp;//     * @param inputStream
+<i class="no-highlight">563</i>&nbsp;//     * @return
+<i class="no-highlight">564</i>&nbsp;//     */
+<i class="no-highlight">565</i>&nbsp;//    private String reder(InputStream inputStream) {
+<i class="no-highlight">566</i>&nbsp;//        StringBuilder stringBuilder = new StringBuilder();
+<i class="no-highlight">567</i>&nbsp;//        try (InputStreamReader inputStreamReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8;
+<i class="no-highlight">568</i>&nbsp;//             BufferedReader bufferedReader = new BufferedReader(inputStreamReader)){
+<i class="no-highlight">569</i>&nbsp;//            String line;
+<i class="no-highlight">570</i>&nbsp;//        } catch (IOException e) {
+<i class="no-highlight">571</i>&nbsp;//            log.error(&quot;cmd命令读取输入流失败,{}&quot;, e);
+<i class="no-highlight">572</i>&nbsp;//        }
+<i class="no-highlight">573</i>&nbsp;//        return stringBuilder.toString();
+<i class="no-highlight">574</i>&nbsp;//    }
+<i class="no-highlight">575</i>&nbsp;
+<i class="no-highlight">576</i>&nbsp;
+<i class="no-highlight">577</i>&nbsp;    private static final double NAVICAT11 = 1.1D;
+<i class="no-highlight">578</i>&nbsp;
+<i class="no-highlight">579</i>&nbsp;    private static CommonCipher cipher;
+<i class="no-highlight">580</i>&nbsp;
+<i class="no-highlight">581</i>&nbsp;    @Override
+<i class="no-highlight">582</i>&nbsp;    public DmpImportVo importDmp(DmpImportRequest dmpImportRequest) {
+<b class="nc"><i class="no-highlight">583</i>&nbsp;        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();</b>
+<b class="nc"><i class="no-highlight">584</i>&nbsp;        LoginUser loginUser = null;</b>
+<b class="nc"><i class="no-highlight">585</i>&nbsp;        Long userId = null;</b>
+<i class="no-highlight">586</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">587</i>&nbsp;            loginUser = ContextUtils.getLoginUser();</b>
+<b class="nc"><i class="no-highlight">588</i>&nbsp;            userId = loginUser.getId();</b>
+<b class="nc"><i class="no-highlight">589</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">590</i>&nbsp;            loginUser = new LoginUser();</b>
+<b class="nc"><i class="no-highlight">591</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">592</i>&nbsp;        MetaData metaData = Chat2DBContext.getMetaData();</b>
+<b class="nc"><i class="no-highlight">593</i>&nbsp;        String key = CacheConstants.IMPORT_DMP_KEY + userId + &quot;:&quot; + dmpImportRequest.getDataSourceId()</b>
+<b class="nc"><i class="no-highlight">594</i>&nbsp;                + &quot;:&quot; + StrUtil.nullToEmpty(dmpImportRequest.getFromName());</b>
+<b class="nc"><i class="no-highlight">595</i>&nbsp;        log.debug(&quot;KRY_NAME==&gt;{}&quot;, key);</b>
+<b class="nc"><i class="no-highlight">596</i>&nbsp;        if (redisCache.hasKey(key)) {</b>
+<b class="nc"><i class="no-highlight">597</i>&nbsp;            DmpImportVo dmpImportVo = redisCache.getCacheObject(key);</b>
+<b class="nc"><i class="no-highlight">598</i>&nbsp;            if (TaskStatusEnum.FINISH.name().equals(dmpImportVo.getStatus())) {</b>
+<b class="nc"><i class="no-highlight">599</i>&nbsp;                redisCache.deleteObject(key);</b>
+<i class="no-highlight">600</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">601</i>&nbsp;            return dmpImportVo;</b>
+<i class="no-highlight">602</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">603</i>&nbsp;        String filePath = dmpImportRequest.getFilePath();</b>
+<b class="nc"><i class="no-highlight">604</i>&nbsp;        int i = filePath.indexOf(&quot;/upload&quot;);</b>
+<b class="nc"><i class="no-highlight">605</i>&nbsp;        String substring = filePath.substring(i);</b>
+<b class="nc"><i class="no-highlight">606</i>&nbsp;        final File file = new File(HzbConfig.getProfile() + &quot;/&quot; + substring);</b>
+<b class="nc"><i class="no-highlight">607</i>&nbsp;        if (!file.exists()) {</b>
+<b class="nc"><i class="no-highlight">608</i>&nbsp;            if (!file.mkdir()) {</b>
+<b class="nc"><i class="no-highlight">609</i>&nbsp;                throw new RuntimeException(&quot;创建文件夹失败&quot;);</b>
+<i class="no-highlight">610</i>&nbsp;            }
+<i class="no-highlight">611</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">612</i>&nbsp;        String dmpImport = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">613</i>&nbsp;        if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {</b>
+<b class="nc"><i class="no-highlight">614</i>&nbsp;            dmpImport = dmDmpImport;</b>
+<i class="no-highlight">615</i>&nbsp;        } else {
+<b class="nc"><i class="no-highlight">616</i>&nbsp;            dmpImport = oraDmpImport;</b>
+<i class="no-highlight">617</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">618</i>&nbsp;        String logFileName = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">619</i>&nbsp;        DmpImportVo dmpImportVo = new DmpImportVo();</b>
+<b class="nc"><i class="no-highlight">620</i>&nbsp;        dmpImportVo.setDataSourceId(connectInfo.getDataSourceId());</b>
+<b class="nc"><i class="no-highlight">621</i>&nbsp;        dmpImportVo.setDatabaseName(dmpImportRequest.getDatabaseName());</b>
+<b class="nc"><i class="no-highlight">622</i>&nbsp;        dmpImportVo.setUserId(loginUser.getId());</b>
+<b class="nc"><i class="no-highlight">623</i>&nbsp;        dmpImportVo.setStatus(TaskStatusEnum.INIT.name());</b>
+<i class="no-highlight">624</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">625</i>&nbsp;            logFileName = URLEncoder.encode(&quot;DmpImport_&quot; + UUID.randomUUID() +</b>
+<b class="nc"><i class="no-highlight">626</i>&nbsp;                                    StrUtil.nullToEmpty(dmpImportRequest.getDatabaseName()) + &quot;_&quot;</b>
+<b class="nc"><i class="no-highlight">627</i>&nbsp;                                    + StrUtil.nullToEmpty(dmpImportRequest.getToName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">628</i>&nbsp;                                    + &quot;.log&quot;,
+<b class="nc"><i class="no-highlight">629</i>&nbsp;                            StandardCharsets.UTF_8.toString())</b>
+<b class="nc"><i class="no-highlight">630</i>&nbsp;                    .replaceAll(&quot;\\+&quot;, &quot;%20&quot;);</b>
+<b class="nc"><i class="no-highlight">631</i>&nbsp;        } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i class="no-highlight">632</i>&nbsp;            dmpImportVo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">633</i>&nbsp;            return dmpImportVo;</b>
+<b class="nc"><i class="no-highlight">634</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">635</i>&nbsp;        dmpImportVo.setLogUrl(file.getParent() + &quot;/&quot; + logFileName);</b>
+<b class="nc"><i class="no-highlight">636</i>&nbsp;        final File file1 = new File(HzbConfig.getProfile() + &quot;/&quot; + logFileName);</b>
+<i class="no-highlight">637</i>&nbsp;
+<i class="no-highlight">638</i>&nbsp;        // init状态
+<b class="nc"><i class="no-highlight">639</i>&nbsp;        redisCache.setCacheObject(key, dmpImportVo);</b>
+<b class="nc"><i class="no-highlight">640</i>&nbsp;        redisCache.expire(key, 300);</b>
+<b class="nc"><i class="no-highlight">641</i>&nbsp;        String finalDmpImport = dmpImport;</b>
+<b class="nc"><i class="no-highlight">642</i>&nbsp;        AtomicReference&lt;String&gt; msg = new AtomicReference&lt;&gt;(&quot;&quot;);</b>
+<b class="nc"><i class="no-highlight">643</i>&nbsp;        LoginUser finalLoginUser = loginUser;</b>
+<b class="nc"><i class="no-highlight">644</i>&nbsp;        CompletableFuture.supplyAsync(() -&gt; {</b>
+<b class="nc"><i class="no-highlight">645</i>&nbsp;            buildContext(finalLoginUser, connectInfo);</b>
+<b class="nc"><i class="no-highlight">646</i>&nbsp;            Boolean isWin = false;</b>
+<b class="nc"><i class="no-highlight">647</i>&nbsp;            if (OSUtils.isWindows()) {</b>
+<b class="nc"><i class="no-highlight">648</i>&nbsp;                isWin = true;</b>
+<i class="no-highlight">649</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">650</i>&nbsp;            String cmd = metaData.importDmp(connectInfo, dmpImportRequest.getTableList(), dmpImportRequest.getFromName(), dmpImportRequest.getToName(), dmpImportRequest.getSchemaName(), file, file1, finalDmpImport, dmpImportRequest.getToUser(), isWin);</b>
+<b class="nc"><i class="no-highlight">651</i>&nbsp;            ProcessBuilder processBuilder = null;</b>
+<b class="nc"><i class="no-highlight">652</i>&nbsp;            Process start = null;</b>
+<i class="no-highlight">653</i>&nbsp;            try {
+<b class="nc"><i class="no-highlight">654</i>&nbsp;                if (OSUtils.isKylin() || OSUtils.isLinux()) {</b>
+<b class="nc"><i class="no-highlight">655</i>&nbsp;                    List&lt;String&gt; cmds = Arrays.asList(cmd.split(&quot; &quot;));</b>
+<b class="nc"><i class="no-highlight">656</i>&nbsp;                    log.info(&quot;执行命令========&gt;{}&quot;, cmds);</b>
+<b class="nc"><i class="no-highlight">657</i>&nbsp;                    processBuilder = new ProcessBuilder(cmds).inheritIO();</b>
+<b class="nc"><i class="no-highlight">658</i>&nbsp;                    processBuilder = processBuilder.directory(new File(&quot;/root&quot;));</b>
+<b class="nc"><i class="no-highlight">659</i>&nbsp;                } else {</b>
+<b class="nc"><i class="no-highlight">660</i>&nbsp;                    log.info(&quot;执行命令========&gt;{}&quot;, cmd);</b>
+<b class="nc"><i class="no-highlight">661</i>&nbsp;                    processBuilder = new ProcessBuilder(&quot;cmd.exe&quot;, &quot;/c&quot;, cmd).inheritIO();</b>
+<i class="no-highlight">662</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">663</i>&nbsp;                processBuilder.redirectErrorStream();</b>
+<i class="no-highlight">664</i>&nbsp;
+<b class="nc"><i class="no-highlight">665</i>&nbsp;                start = processBuilder.start();</b>
+<i class="no-highlight">666</i>&nbsp;
+<b class="nc"><i class="no-highlight">667</i>&nbsp;                start.waitFor();</b>
+<b class="nc"><i class="no-highlight">668</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">669</i>&nbsp;                msg.set(&quot;导入失败：&quot; + e.getMessage());</b>
+<b class="nc"><i class="no-highlight">670</i>&nbsp;                if (start != null) {</b>
+<b class="nc"><i class="no-highlight">671</i>&nbsp;                    start.destroy();</b>
+<i class="no-highlight">672</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">673</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">674</i>&nbsp;            return Boolean.TRUE;</b>
+<b class="nc"><i class="no-highlight">675</i>&nbsp;        }).thenAccept(result -&gt; {</b>
+<b class="nc"><i class="no-highlight">676</i>&nbsp;            if (Boolean.TRUE.equals(result)) {</b>
+<i class="no-highlight">677</i>&nbsp;//                if(StringUtils.isNotBlank(msg.get())){
+<i class="no-highlight">678</i>&nbsp;//                    dmpImportVo.setMsg(msg.get());
+<i class="no-highlight">679</i>&nbsp;//                }
+<b class="nc"><i class="no-highlight">680</i>&nbsp;                List&lt;String&gt; resultmsg = null;</b>
+<i class="no-highlight">681</i>&nbsp;                try {
+<b class="nc"><i class="no-highlight">682</i>&nbsp;                    resultmsg = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">683</i>&nbsp;                    if (OSUtils.isWindows()) {</b>
+<b class="nc"><i class="no-highlight">684</i>&nbsp;                        resultmsg = FileUtil.readLines(file1, &quot;GBK&quot;);</b>
+<i class="no-highlight">685</i>&nbsp;                    } else {
+<b class="nc"><i class="no-highlight">686</i>&nbsp;                        resultmsg = FileUtil.readLines(file1, StandardCharsets.UTF_8);</b>
+<i class="no-highlight">687</i>&nbsp;                    }
+<b class="nc"><i class="no-highlight">688</i>&nbsp;                } catch (IORuntimeException e) {</b>
+<b class="nc"><i class="no-highlight">689</i>&nbsp;                    resultmsg.add(&quot;日志文件生成失败,程序结束&quot;);</b>
+<b class="nc"><i class="no-highlight">690</i>&nbsp;                    resultmsg.add(&quot;但出现警告&quot;);</b>
+<b class="nc"><i class="no-highlight">691</i>&nbsp;                }</b>
+<b class="nc"><i class="no-highlight">692</i>&nbsp;                log.info(resultmsg.toString());</b>
+<b class="nc"><i class="no-highlight">693</i>&nbsp;                if (resultmsg.size() &gt; 0 &amp;&amp; resultmsg.toString().contains(&quot;但出现警告&quot;)) {</b>
+<b class="nc"><i class="no-highlight">694</i>&nbsp;                    dmpImportVo.setMsg(resultmsg.toString());</b>
+<i class="no-highlight">695</i>&nbsp;                }
+<i class="no-highlight">696</i>&nbsp;                // test 使用
+<b class="nc"><i class="no-highlight">697</i>&nbsp;                dmpImportVo.setMsg(null);</b>
+<i class="no-highlight">698</i>&nbsp;
+<b class="nc"><i class="no-highlight">699</i>&nbsp;                dmpImportVo.setStatus(TaskStatusEnum.FINISH.name());</b>
+<i class="no-highlight">700</i>&nbsp;//                FileUtils.deleteFile(file1.getPath());
+<b class="nc"><i class="no-highlight">701</i>&nbsp;                removeContext();</b>
+<i class="no-highlight">702</i>&nbsp;                try {
+<i class="no-highlight">703</i>&nbsp;                    // redis比导入流快,因此设置
+<b class="nc"><i class="no-highlight">704</i>&nbsp;                    Thread.sleep(1000);</b>
+<b class="nc"><i class="no-highlight">705</i>&nbsp;                } catch (InterruptedException e) {</b>
+<b class="nc"><i class="no-highlight">706</i>&nbsp;                    log.error(&quot;导入延迟睡眠失败：{}&quot;, e.getMessage());</b>
+<b class="nc"><i class="no-highlight">707</i>&nbsp;                }</b>
+<b class="nc"><i class="no-highlight">708</i>&nbsp;                redisCache.setCacheObject(key, dmpImportVo);</b>
+<b class="nc"><i class="no-highlight">709</i>&nbsp;                redisCache.expire(key, 300);</b>
+<b class="nc"><i class="no-highlight">710</i>&nbsp;            } else {</b>
+<b class="nc"><i class="no-highlight">711</i>&nbsp;                redisCache.deleteObject(key);</b>
+<i class="no-highlight">712</i>&nbsp;            }
+<i class="no-highlight">713</i>&nbsp;
+<i class="no-highlight">714</i>&nbsp;        });
+<i class="no-highlight">715</i>&nbsp;
+<b class="nc"><i class="no-highlight">716</i>&nbsp;        return dmpImportVo;</b>
+<i class="no-highlight">717</i>&nbsp;    }
+<i class="no-highlight">718</i>&nbsp;
+<i class="no-highlight">719</i>&nbsp;    @Override
+<i class="no-highlight">720</i>&nbsp;    public DmpImportVo importDmpList(DmpImportRequest dmpImportRequest) throws InterruptedException {
+<b class="nc"><i class="no-highlight">721</i>&nbsp;        List&lt;String&gt; fromUser = new CopyOnWriteArrayList&lt;&gt;(dmpImportRequest.getFromUser());</b>
+<b class="nc"><i class="no-highlight">722</i>&nbsp;        List&lt;String&gt; toUser = new CopyOnWriteArrayList&lt;&gt;(dmpImportRequest.getToUser());</b>
+<b class="nc"><i class="no-highlight">723</i>&nbsp;        DmpImportVo dmpImportVo = new DmpImportVo();</b>
+<b class="nc"><i class="no-highlight">724</i>&nbsp;        for (int i = 0; i &lt; fromUser.size(); i++) {</b>
+<b class="nc"><i class="no-highlight">725</i>&nbsp;            dmpImportRequest.setFromName(fromUser.get(i));</b>
+<b class="nc"><i class="no-highlight">726</i>&nbsp;            dmpImportRequest.setToName(toUser.get(i));</b>
+<b class="nc"><i class="no-highlight">727</i>&nbsp;            dmpImportVo = this.importDmp(dmpImportRequest);</b>
+<i class="no-highlight">728</i>&nbsp;//            do {
+<i class="no-highlight">729</i>&nbsp;//                dmpImportVo = this.importDmp(dmpImportRequest);
+<i class="no-highlight">730</i>&nbsp;//                Thread.sleep(5000);
+<i class="no-highlight">731</i>&nbsp;//            } while (!TaskStatusEnum.FINISH.name().equals(dmpImportVo.getStatus()));
+<i class="no-highlight">732</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">733</i>&nbsp;        return dmpImportVo;</b>
+<i class="no-highlight">734</i>&nbsp;    }
+<i class="no-highlight">735</i>&nbsp;
+<i class="no-highlight">736</i>&nbsp;
+<i class="no-highlight">737</i>&nbsp;    private void doImport(DatabaseImportRequest request, File importFile, File logFile, DatabaseImportVo vo, String key) {
+<b class="nc"><i class="no-highlight">738</i>&nbsp;        vo.setStatus(TaskStatusEnum.PROCESSING.name());</b>
+<b class="nc"><i class="no-highlight">739</i>&nbsp;        final Connection connection = Chat2DBContext.getConnection();</b>
+<b class="nc"><i class="no-highlight">740</i>&nbsp;        Statement statement = null;</b>
+<i class="no-highlight">741</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">742</i>&nbsp;            statement = connection.createStatement();</b>
+<b class="nc"><i class="no-highlight">743</i>&nbsp;            String logFormat = &quot;%s|%s|%s&quot;;</b>
+<b class="nc"><i class="no-highlight">744</i>&nbsp;            int exported = 1;</b>
+<b class="nc"><i class="no-highlight">745</i>&nbsp;            int errorNum = 0;</b>
+<b class="nc"><i class="no-highlight">746</i>&nbsp;            int validLine = 0;</b>
+<b class="nc"><i class="no-highlight">747</i>&nbsp;            try (PrintWriter printWriter = new PrintWriter(logFile, StandardCharsets.UTF_8.name());</b>
+<b class="nc"><i class="no-highlight">748</i>&nbsp;                 BufferedReader reader = new BufferedReader(new FileReader(importFile))) {</b>
+<i class="no-highlight">749</i>&nbsp;                String line;
+<b class="nc"><i class="no-highlight">750</i>&nbsp;                StringBuilder sql = new StringBuilder();</b>
+<b class="nc"><i class="no-highlight">751</i>&nbsp;                boolean insideBlockComment = false;</b>
+<b class="nc"><i class="no-highlight">752</i>&nbsp;                while ((line = reader.readLine()) != null) {</b>
+<b class="nc"><i class="no-highlight">753</i>&nbsp;                    exported++;</b>
+<b class="nc"><i class="no-highlight">754</i>&nbsp;                    vo.setExported(exported);</b>
+<b class="nc"><i class="no-highlight">755</i>&nbsp;                    line = line.trim();</b>
+<i class="no-highlight">756</i>&nbsp;                    // 忽略空行
+<b class="nc"><i class="no-highlight">757</i>&nbsp;                    if (line.isEmpty()) {</b>
+<b class="nc"><i class="no-highlight">758</i>&nbsp;                        continue;</b>
+<i class="no-highlight">759</i>&nbsp;                    }
+<i class="no-highlight">760</i>&nbsp;
+<i class="no-highlight">761</i>&nbsp;                    // 处理块注释
+<b class="nc"><i class="no-highlight">762</i>&nbsp;                    if (line.startsWith(&quot;/*&quot;)) {</b>
+<b class="nc"><i class="no-highlight">763</i>&nbsp;                        insideBlockComment = true;</b>
+<b class="nc"><i class="no-highlight">764</i>&nbsp;                        continue;</b>
+<i class="no-highlight">765</i>&nbsp;                    }
+<b class="nc"><i class="no-highlight">766</i>&nbsp;                    if (insideBlockComment &amp;&amp; line.endsWith(&quot;*/&quot;)) {</b>
+<b class="nc"><i class="no-highlight">767</i>&nbsp;                        insideBlockComment = false;</b>
+<b class="nc"><i class="no-highlight">768</i>&nbsp;                        continue;</b>
+<i class="no-highlight">769</i>&nbsp;                    }
+<b class="nc"><i class="no-highlight">770</i>&nbsp;                    if (insideBlockComment) {</b>
+<b class="nc"><i class="no-highlight">771</i>&nbsp;                        continue;</b>
+<i class="no-highlight">772</i>&nbsp;                    }
+<i class="no-highlight">773</i>&nbsp;
+<i class="no-highlight">774</i>&nbsp;                    // 处理单行注释
+<b class="nc"><i class="no-highlight">775</i>&nbsp;                    if (line.startsWith(&quot;--&quot;)) {</b>
+<b class="nc"><i class="no-highlight">776</i>&nbsp;                        continue;</b>
+<i class="no-highlight">777</i>&nbsp;                    }
+<i class="no-highlight">778</i>&nbsp;                    // 如果不在注释或字符串中，则追加到SQL语句
+<b class="nc"><i class="no-highlight">779</i>&nbsp;                    sql.append(line);</b>
+<b class="nc"><i class="no-highlight">780</i>&nbsp;                    sql.append(&quot;\n&quot;);</b>
+<i class="no-highlight">781</i>&nbsp;                    // 检查是否结束了一个完整的SQL语句（以分号结尾）
+<b class="nc"><i class="no-highlight">782</i>&nbsp;                    if (line.endsWith(&quot;;&quot;)) {</b>
+<b class="nc"><i class="no-highlight">783</i>&nbsp;                        String sqlStatement = sql.toString().trim();</b>
+<i class="no-highlight">784</i>&nbsp;                        //校验SQL是否正确，若不正确则继续读下一行，若连续1000（这个数据按实际情况改）行都不正确，则往后走，不继续校验。
+<b class="nc"><i class="no-highlight">785</i>&nbsp;                        final boolean sqlValid = SqlUtils.isSQLValid(sqlStatement);</b>
+<b class="nc"><i class="no-highlight">786</i>&nbsp;                        if (!sqlValid &amp;&amp; validLine &lt; 1000) {</b>
+<b class="nc"><i class="no-highlight">787</i>&nbsp;                            validLine++;</b>
+<b class="nc"><i class="no-highlight">788</i>&nbsp;                            continue;</b>
+<i class="no-highlight">789</i>&nbsp;                        }
+<b class="nc"><i class="no-highlight">790</i>&nbsp;                        validLine = 0;</b>
+<i class="no-highlight">791</i>&nbsp;                        // 执行SQL语句
+<b class="nc"><i class="no-highlight">792</i>&nbsp;                        if (StrUtil.startWithIgnoreCase(sqlStatement, &quot;SELECT&quot;)) {</b>
+<i class="no-highlight">793</i>&nbsp;                            // 处理查询结果
+<i class="no-highlight">794</i>&nbsp;                        } else {
+<b class="nc"><i class="no-highlight">795</i>&nbsp;                            if (vo.getMessage().size() &gt; 50) {</b>
+<b class="nc"><i class="no-highlight">796</i>&nbsp;                                vo.getMessage().remove(0);</b>
+<i class="no-highlight">797</i>&nbsp;                            }
+<b class="nc"><i class="no-highlight">798</i>&nbsp;                            errorNum = executeUpdate(vo, statement, logFormat, errorNum, printWriter, sqlStatement);</b>
+<b class="nc"><i class="no-highlight">799</i>&nbsp;                            redisCache.setCacheObject(key, vo);</b>
+<i class="no-highlight">800</i>&nbsp;                        }
+<i class="no-highlight">801</i>&nbsp;
+<b class="nc"><i class="no-highlight">802</i>&nbsp;                        sql.setLength(0); // 清空StringBuilder以便存储下一个SQL语句</b>
+<i class="no-highlight">803</i>&nbsp;                    }
+<b class="nc"><i class="no-highlight">804</i>&nbsp;                    if (sql.length() &gt; 0) {</b>
+<b class="nc"><i class="no-highlight">805</i>&nbsp;                        String sqlStatement = sql.toString().trim();</b>
+<b class="nc"><i class="no-highlight">806</i>&nbsp;                        errorNum = executeUpdate(vo, statement, logFormat, errorNum, printWriter, sqlStatement);</b>
+<b class="nc"><i class="no-highlight">807</i>&nbsp;                    }</b>
+<i class="no-highlight">808</i>&nbsp;
+<i class="no-highlight">809</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">810</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">811</i>&nbsp;                vo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">812</i>&nbsp;                vo.setMessage(Arrays.asList(e.getMessage()));</b>
+<b class="nc"><i class="no-highlight">813</i>&nbsp;                redisCache.setCacheObject(key, vo);</b>
+<i class="no-highlight">814</i>&nbsp;                return;
+<b class="nc"><i class="no-highlight">815</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">816</i>&nbsp;        } catch (SQLException e) {</b>
+<b class="nc"><i class="no-highlight">817</i>&nbsp;            vo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">818</i>&nbsp;            vo.setMessage(Arrays.asList(e.getMessage()));</b>
+<b class="nc"><i class="no-highlight">819</i>&nbsp;            redisCache.setCacheObject(key, vo);</b>
+<i class="no-highlight">820</i>&nbsp;            return;
+<i class="no-highlight">821</i>&nbsp;        } finally {
+<b class="nc"><i class="no-highlight">822</i>&nbsp;            try {</b>
+<b class="nc"><i class="no-highlight">823</i>&nbsp;                if (statement != null) {</b>
+<b class="nc"><i class="no-highlight">824</i>&nbsp;                    statement.close();</b>
+<i class="no-highlight">825</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">826</i>&nbsp;                if (connection != null) {</b>
+<b class="nc"><i class="no-highlight">827</i>&nbsp;                    connection.close();</b>
+<i class="no-highlight">828</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">829</i>&nbsp;            } catch (SQLException e) {</b>
+<b class="nc"><i class="no-highlight">830</i>&nbsp;                log.error(&quot;close connection error:{}&quot;, e);</b>
+<b class="nc"><i class="no-highlight">831</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">832</i>&nbsp;        }</b>
+<i class="no-highlight">833</i>&nbsp;    }
+<i class="no-highlight">834</i>&nbsp;
+<i class="no-highlight">835</i>&nbsp;    private int executeUpdate(DatabaseImportVo vo, Statement statement, String logFormat, int errorNum, PrintWriter
+<i class="no-highlight">836</i>&nbsp;            printWriter, String sqlStatement) {
+<i class="no-highlight">837</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">838</i>&nbsp;            statement.executeUpdate(sqlStatement);</b>
+<b class="nc"><i class="no-highlight">839</i>&nbsp;            final String format = String.format(logFormat,</b>
+<b class="nc"><i class="no-highlight">840</i>&nbsp;                    LocalDateTime.now().format(DatePattern.NORM_DATETIME_MS_FORMATTER)</b>
+<i class="no-highlight">841</i>&nbsp;                    , sqlStatement, &quot;执行成功&quot;);
+<b class="nc"><i class="no-highlight">842</i>&nbsp;            vo.getMessage().add(format);</b>
+<b class="nc"><i class="no-highlight">843</i>&nbsp;            printWriter.println(format);</b>
+<b class="nc"><i class="no-highlight">844</i>&nbsp;        } catch (SQLException e) {</b>
+<b class="nc"><i class="no-highlight">845</i>&nbsp;            errorNum++;</b>
+<b class="nc"><i class="no-highlight">846</i>&nbsp;            final String format = String.format(logFormat,</b>
+<b class="nc"><i class="no-highlight">847</i>&nbsp;                    LocalDateTime.now().format(DatePattern.NORM_DATETIME_MS_FORMATTER)</b>
+<b class="nc"><i class="no-highlight">848</i>&nbsp;                    , sqlStatement, &quot;执行失败：&quot; + e.getMessage());</b>
+<b class="nc"><i class="no-highlight">849</i>&nbsp;            vo.getMessage().add(format);</b>
+<b class="nc"><i class="no-highlight">850</i>&nbsp;            vo.setErrorNum(errorNum);</b>
+<b class="nc"><i class="no-highlight">851</i>&nbsp;            printWriter.println(format);</b>
+<b class="nc"><i class="no-highlight">852</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">853</i>&nbsp;        return errorNum;</b>
+<i class="no-highlight">854</i>&nbsp;    }
+<i class="no-highlight">855</i>&nbsp;
+<i class="no-highlight">856</i>&nbsp;    private void doExport(DatabaseExportRequest request, File file, DatabaseExportVo vo, String key) throws
+<i class="no-highlight">857</i>&nbsp;            SQLException {
+<b class="nc"><i class="no-highlight">858</i>&nbsp;        int i = 0;</b>
+<b class="nc"><i class="no-highlight">859</i>&nbsp;        vo.setStatus(TaskStatusEnum.PROCESSING.name());</b>
+<b class="nc"><i class="no-highlight">860</i>&nbsp;        try (PrintWriter printWriter = new PrintWriter(file, StandardCharsets.UTF_8.name())) {</b>
+<b class="nc"><i class="no-highlight">861</i>&nbsp;            for (String table : request.getTableList()) {</b>
+<i class="no-highlight">862</i>&nbsp;                //导出表结构
+<b class="nc"><i class="no-highlight">863</i>&nbsp;                final String s = Chat2DBContext.getDBManage().exportTable(Chat2DBContext.getConnection(), request.getDatabaseName(), request.getSchemaName(), table);</b>
+<b class="nc"><i class="no-highlight">864</i>&nbsp;                i++;</b>
+<b class="nc"><i class="no-highlight">865</i>&nbsp;                vo.setExported(i);</b>
+<b class="nc"><i class="no-highlight">866</i>&nbsp;                printWriter.println(s);</b>
+<i class="no-highlight">867</i>&nbsp;                //导出数据
+<b class="nc"><i class="no-highlight">868</i>&nbsp;                if (request.getContainData()) {</b>
+<b class="nc"><i class="no-highlight">869</i>&nbsp;                    doExportTableData(request, printWriter, table);</b>
+<i class="no-highlight">870</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">871</i>&nbsp;                redisCache.setCacheObject(key, vo);</b>
+<b class="nc"><i class="no-highlight">872</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">873</i>&nbsp;        } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">874</i>&nbsp;            e.printStackTrace();</b>
+<b class="nc"><i class="no-highlight">875</i>&nbsp;            vo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">876</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">877</i>&nbsp;        redisCache.setCacheObject(key, vo);</b>
+<i class="no-highlight">878</i>&nbsp;    }
+<i class="no-highlight">879</i>&nbsp;
+<i class="no-highlight">880</i>&nbsp;    private void doExportTableData(DatabaseExportRequest request, PrintWriter printWriter, String table) {
+<b class="nc"><i class="no-highlight">881</i>&nbsp;        int pageNo = 1;</b>
+<b class="nc"><i class="no-highlight">882</i>&nbsp;        int pageSize = EasyToolsConstant.MAX_EXPORT_SIZE;</b>
+<b class="nc"><i class="no-highlight">883</i>&nbsp;        int offset = (pageNo - 1) * pageSize;</b>
+<b class="nc"><i class="no-highlight">884</i>&nbsp;        MetaData metaData = Chat2DBContext.getMetaData();</b>
+<b class="nc"><i class="no-highlight">885</i>&nbsp;        String tableName = metaData.getMetaDataName(request.getDatabaseName(), request.getSchemaName(),</b>
+<i class="no-highlight">886</i>&nbsp;                table);
+<b class="nc"><i class="no-highlight">887</i>&nbsp;        String originalSql = &quot;select * from &quot; + tableName;</b>
+<b class="nc"><i class="no-highlight">888</i>&nbsp;        String pageLimit = Chat2DBContext.getSqlBuilder().pageLimit(originalSql, offset, pageNo, pageSize);</b>
+<b class="nc"><i class="no-highlight">889</i>&nbsp;        DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());</b>
+<b class="nc"><i class="no-highlight">890</i>&nbsp;        boolean hasNext = true;</b>
+<i class="no-highlight">891</i>&nbsp;        while (true) {
+<b class="nc"><i class="no-highlight">892</i>&nbsp;            if (hasNext) {</b>
+<b class="nc"><i class="no-highlight">893</i>&nbsp;                RdbDmlExportController.InsertWrapper insertWrapper = new RdbDmlExportController.InsertWrapper();</b>
+<b class="nc"><i class="no-highlight">894</i>&nbsp;                hasNext = SQLExecutor.getInstance().executeTable(Chat2DBContext.getConnection(), pageLimit,</b>
+<b class="nc"><i class="no-highlight">895</i>&nbsp;                        headerList -&gt; insertWrapper.setHeaderList(</b>
+<b class="nc"><i class="no-highlight">896</i>&nbsp;                                EasyCollectionUtils.toList(headerList, header -&gt; new SQLIdentifierExpr(header.getName())))</b>
+<i class="no-highlight">897</i>&nbsp;                        , dataList -&gt; {
+<b class="nc"><i class="no-highlight">898</i>&nbsp;                            SQLInsertStatement sqlInsertStatement = new SQLInsertStatement();</b>
+<b class="nc"><i class="no-highlight">899</i>&nbsp;                            sqlInsertStatement.setDbType(dbType);</b>
+<b class="nc"><i class="no-highlight">900</i>&nbsp;                            sqlInsertStatement.setTableSource(new SQLExprTableSource(tableName));</b>
+<b class="nc"><i class="no-highlight">901</i>&nbsp;                            sqlInsertStatement.getColumns().addAll(insertWrapper.getHeaderList());</b>
+<b class="nc"><i class="no-highlight">902</i>&nbsp;                            SQLInsertStatement.ValuesClause valuesClause = new SQLInsertStatement.ValuesClause();</b>
+<b class="nc"><i class="no-highlight">903</i>&nbsp;                            for (String s : dataList) {</b>
+<b class="nc"><i class="no-highlight">904</i>&nbsp;                                valuesClause.addValue(s);</b>
+<b class="nc"><i class="no-highlight">905</i>&nbsp;                            }</b>
+<b class="nc"><i class="no-highlight">906</i>&nbsp;                            sqlInsertStatement.setValues(valuesClause);</b>
+<i class="no-highlight">907</i>&nbsp;
+<b class="nc"><i class="no-highlight">908</i>&nbsp;                            printWriter.println(SQLUtils.toSQLString(sqlInsertStatement, dbType, INSERT_FORMAT_OPTION) + &quot;;&quot;);</b>
+<i class="no-highlight">909</i>&nbsp;                        }, false, new DefaultValueHandler());
+<b class="nc"><i class="no-highlight">910</i>&nbsp;                pageNo++;</b>
+<b class="nc"><i class="no-highlight">911</i>&nbsp;                offset = (pageNo - 1) * pageSize;</b>
+<b class="nc"><i class="no-highlight">912</i>&nbsp;                pageLimit = Chat2DBContext.getSqlBuilder().pageLimit(originalSql, offset, pageNo, pageSize);</b>
+<b class="nc"><i class="no-highlight">913</i>&nbsp;            } else {</b>
+<i class="no-highlight">914</i>&nbsp;                break;
+<i class="no-highlight">915</i>&nbsp;            }
+<i class="no-highlight">916</i>&nbsp;        }
+<i class="no-highlight">917</i>&nbsp;    }
+<i class="no-highlight">918</i>&nbsp;
+<i class="no-highlight">919</i>&nbsp;    private void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
+<b class="nc"><i class="no-highlight">920</i>&nbsp;        ContextUtils.setContext(Context.builder()</b>
+<b class="nc"><i class="no-highlight">921</i>&nbsp;                .loginUser(loginUser)</b>
+<b class="nc"><i class="no-highlight">922</i>&nbsp;                .build());</b>
+<b class="nc"><i class="no-highlight">923</i>&nbsp;        Chat2DBContext.putContext(connectInfo);</b>
+<i class="no-highlight">924</i>&nbsp;    }
+<i class="no-highlight">925</i>&nbsp;
+<i class="no-highlight">926</i>&nbsp;    private void removeContext() {
+<b class="nc"><i class="no-highlight">927</i>&nbsp;        ContextUtils.removeContext();</b>
+<b class="nc"><i class="no-highlight">928</i>&nbsp;        Chat2DBContext.removeContext();</b>
+<i class="no-highlight">929</i>&nbsp;    }
+<i class="no-highlight">930</i>&nbsp;
+<i class="no-highlight">931</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

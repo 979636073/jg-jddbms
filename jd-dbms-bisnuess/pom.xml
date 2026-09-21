@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>jddbms</artifactId>
+        <groupId>com.jd</groupId>
+        <version>3.8.7</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>jd-dbms-bisnuess</artifactId>
+
+    <description>
+        业务模块
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- 通用工具-->
+        <dependency>
+            <groupId>com.jd</groupId>
+            <artifactId>jd-dbms-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jd</groupId>
+            <artifactId>jd-dbms-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jd</groupId>
+            <artifactId>jd-dbms-system</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.ehcache</groupId>
+            <artifactId>ehcache</artifactId>
+        </dependency>
+        <!-- 数据库版本管理 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+<!--         plugins begin -->
+<!--        <dependency>-->
+<!--            <groupId>com.jd</groupId>-->
+<!--            <artifactId>jd-dbms-mysql</artifactId>-->
+<!--            <version>${version}</version>-->
+<!--        </dependency>-->
+        <dependency>
+            <groupId>com.jd</groupId>
+            <artifactId>jd-dbms-dm</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.jd</groupId>-->
+<!--            <artifactId>jd-dbms-oscar</artifactId>-->
+<!--            <version>${version}</version>-->
+<!--        </dependency>-->
+        <dependency>
+            <groupId>com.jd</groupId>
+            <artifactId>jd-dbms-oracle</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.jd</groupId>-->
+<!--            <artifactId>jd-dbms-kingbase</artifactId>-->
+<!--            <version>${version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>com.jd</groupId>-->
+<!--            <artifactId>jd-dbms-Gbase</artifactId>-->
+<!--            <version>${version}</version>-->
+<!--        </dependency>-->
+        <!-- plugins end -->
+        <!-- http -->
+        <dependency>
+            <groupId>com.dtflys.forest</groupId>
+            <artifactId>forest-spring</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.dtflys.forest</groupId>
+            <artifactId>forest-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.vertical-blank</groupId>
+            <artifactId>sql-formatter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>easyexcel</artifactId>
+        </dependency>
+        <!--poi-tl-->
+        <dependency>
+            <groupId>com.deepoove</groupId>
+            <artifactId>poi-tl</artifactId>
+        </dependency>
+        <!--pdf-->
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>itext-asian</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>itextpdf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

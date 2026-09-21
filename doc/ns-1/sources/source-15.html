@@ -1,0 +1,376 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > TableSpaceServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: TableSpaceServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">TableSpaceServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    15.4%
+  </span>
+  <span class="absValue">
+    (2/13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    1.5%
+  </span>
+  <span class="absValue">
+    (2/131)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">TableSpaceServiceImpl$$EnhancerBySpringCGLIB$$2627ae3</td>
+  </tr>
+  <tr>
+    <td class="name">TableSpaceServiceImpl$$EnhancerBySpringCGLIB$$4fc032ba</td>
+  </tr>
+  <tr>
+    <td class="name">TableSpaceServiceImpl$$EnhancerBySpringCGLIB$$8264afe5</td>
+  </tr>
+  <tr>
+    <td class="name">TableSpaceServiceImpl$$EnhancerBySpringCGLIB$$ca040fea</td>
+  </tr>
+  <tr>
+    <td class="name">TableSpaceServiceImpl$$EnhancerBySpringCGLIB$$e44a6610</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    15.4%
+  </span>
+  <span class="absValue">
+    (2/13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    1.5%
+  </span>
+  <span class="absValue">
+    (2/131)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import cn.hutool.core.util.StrUtil;
+<i class="no-highlight">4</i>&nbsp;import com.jd.common.enums.DBTypeEnum;
+<i class="no-highlight">5</i>&nbsp;import com.jd.biz.controller.rdb.enums.ResultType;
+<i class="no-highlight">6</i>&nbsp;import com.jd.biz.controller.rdb.request.TableBriefQueryRequest;
+<i class="no-highlight">7</i>&nbsp;import com.jd.biz.controller.rdb.request.TableSpaceCreateRequest;
+<i class="no-highlight">8</i>&nbsp;import com.jd.biz.controller.rdb.request.TableSpaceUpdateRequest;
+<i class="no-highlight">9</i>&nbsp;import com.jd.biz.domain.api.service.TableSpaceService;
+<i class="no-highlight">10</i>&nbsp;import com.jd.common.tools.base.excption.BusinessException;
+<i class="no-highlight">11</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ActionResult;
+<i class="no-highlight">12</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ListResult;
+<i class="no-highlight">13</i>&nbsp;import com.jd.spi.jdbc.DefaultValueHandler;
+<i class="no-highlight">14</i>&nbsp;import com.jd.spi.model.Table;
+<i class="no-highlight">15</i>&nbsp;import com.jd.spi.model.TableDetails;
+<i class="no-highlight">16</i>&nbsp;import com.jd.spi.sql.Chat2DBContext;
+<i class="no-highlight">17</i>&nbsp;import com.jd.spi.sql.SQLExecutor;
+<i class="no-highlight">18</i>&nbsp;import lombok.extern.slf4j.Slf4j;
+<i class="no-highlight">19</i>&nbsp;import org.apache.commons.lang3.StringUtils;
+<i class="no-highlight">20</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">21</i>&nbsp;import org.springframework.transaction.annotation.Transactional;
+<i class="no-highlight">22</i>&nbsp;
+<i class="no-highlight">23</i>&nbsp;import java.math.BigDecimal;
+<i class="no-highlight">24</i>&nbsp;import java.math.RoundingMode;
+<i class="no-highlight">25</i>&nbsp;import java.sql.SQLException;
+<i class="no-highlight">26</i>&nbsp;import java.util.ArrayList;
+<i class="no-highlight">27</i>&nbsp;import java.util.HashMap;
+<i class="no-highlight">28</i>&nbsp;import java.util.List;
+<i class="no-highlight">29</i>&nbsp;import java.util.Map;
+<i class="no-highlight">30</i>&nbsp;import java.util.Objects;
+<i class="no-highlight">31</i>&nbsp;import java.util.stream.Collectors;
+<i class="no-highlight">32</i>&nbsp;
+<i class="no-highlight">33</i>&nbsp;/**
+<i class="no-highlight">34</i>&nbsp; * 表空间管理
+<i class="no-highlight">35</i>&nbsp; */
+<i class="no-highlight">36</i>&nbsp;@Service
+<b class="fc"><i class="no-highlight">37</i>&nbsp;@Slf4j</b>
+<b class="fc"><i class="no-highlight">38</i>&nbsp;public class TableSpaceServiceImpl implements TableSpaceService {</b>
+<i class="no-highlight">39</i>&nbsp;
+<i class="no-highlight">40</i>&nbsp;
+<i class="no-highlight">41</i>&nbsp;    @Override
+<i class="no-highlight">42</i>&nbsp;    public ListResult&lt;Table&gt; list(String databaseName, Integer requestType) {
+<b class="nc"><i class="no-highlight">43</i>&nbsp;        List&lt;Table&gt; tableSpaces = Chat2DBContext.getMetaData().tableSpaces(Chat2DBContext.getConnection(), databaseName);</b>
+<b class="nc"><i class="no-highlight">44</i>&nbsp;        if (ResultType.ONE.getType().equals(requestType)) {</b>
+<b class="nc"><i class="no-highlight">45</i>&nbsp;            List&lt;String&gt; strings = tableSpaces.stream().map(Table::getName).collect(Collectors.toList());</b>
+<b class="nc"><i class="no-highlight">46</i>&nbsp;            List&lt;Table&gt; list = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">47</i>&nbsp;            strings.forEach(s -&gt; {</b>
+<b class="nc"><i class="no-highlight">48</i>&nbsp;                Table tableSpace = new Table();</b>
+<b class="nc"><i class="no-highlight">49</i>&nbsp;                tableSpace.setName(s);</b>
+<b class="nc"><i class="no-highlight">50</i>&nbsp;                list.add(tableSpace);</b>
+<i class="no-highlight">51</i>&nbsp;            });
+<b class="nc"><i class="no-highlight">52</i>&nbsp;            return ListResult.of(list);</b>
+<i class="no-highlight">53</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">54</i>&nbsp;        return ListResult.of(tableSpaces);</b>
+<i class="no-highlight">55</i>&nbsp;    }
+<i class="no-highlight">56</i>&nbsp;
+<i class="no-highlight">57</i>&nbsp;
+<i class="no-highlight">58</i>&nbsp;    @Override
+<i class="no-highlight">59</i>&nbsp;    public Table query(String path, String dbType) {
+<b class="nc"><i class="no-highlight">60</i>&nbsp;        Table table = Chat2DBContext.getMetaData().tableSpace(Chat2DBContext.getConnection(), path);</b>
+<b class="nc"><i class="no-highlight">61</i>&nbsp;        if (Objects.nonNull(table) &amp;&amp; Objects.nonNull(table.getTableDetails())) {</b>
+<b class="nc"><i class="no-highlight">62</i>&nbsp;            if (DBTypeEnum.DM.name().equals(dbType)) {</b>
+<b class="nc"><i class="no-highlight">63</i>&nbsp;                table.setQuerySql(Chat2DBContext.getSqlBuilder().createSpace(table.getTableDetails().getPath(), table.getTableDetails().getTableSpace(), table.getTableDetails().getTotalSize(), table.getTableDetails().getExpandUpperLimit(), StringUtils.isNotBlank(table.getTableDetails().getAutoScaling()) ? table.getTableDetails().getAutoScaling() : null));</b>
+<i class="no-highlight">64</i>&nbsp;            } else {
+<b class="nc"><i class="no-highlight">65</i>&nbsp;                table.setQuerySql(Chat2DBContext.getSqlBuilder().createSpace(table.getTableDetails().getPath(), table.getTableDetails().getTableSpace(), table.getTableDetails().getTotalSize() + &quot;M&quot;, table.getTableDetails().getExpandUpperLimit() + &quot;M&quot;, StringUtils.isNotBlank(table.getTableDetails().getAutoScaling()) ? table.getTableDetails().getAutoScaling() + &quot;M&quot; : null));</b>
+<i class="no-highlight">66</i>&nbsp;            }
+<i class="no-highlight">67</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">68</i>&nbsp;        return table;</b>
+<i class="no-highlight">69</i>&nbsp;    }
+<i class="no-highlight">70</i>&nbsp;
+<i class="no-highlight">71</i>&nbsp;
+<i class="no-highlight">72</i>&nbsp;    @Override
+<i class="no-highlight">73</i>&nbsp;    @Transactional(rollbackFor = Exception.class)
+<i class="no-highlight">74</i>&nbsp;    public ActionResult createTablespace(TableSpaceCreateRequest request) {
+<b class="nc"><i class="no-highlight">75</i>&nbsp;        if (StringUtils.isAllBlank(request.getTotalSize(), request.getSizeUnit())) {</b>
+<b class="nc"><i class="no-highlight">76</i>&nbsp;            throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">77</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">78</i>&nbsp;        String dbType = getDbType();</b>
+<b class="nc"><i class="no-highlight">79</i>&nbsp;        if (StringUtils.isBlank(dbType)) {</b>
+<b class="nc"><i class="no-highlight">80</i>&nbsp;            throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">81</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">82</i>&nbsp;        if (DBTypeEnum.ORACLE.name().equals(request.getDbType())) {</b>
+<b class="nc"><i class="no-highlight">83</i>&nbsp;            request.setTotalSize(request.getTotalSize() + request.getSizeUnit().charAt(0));</b>
+<b class="nc"><i class="no-highlight">84</i>&nbsp;            if (StringUtils.isNotBlank(request.getAutoSize())) {</b>
+<b class="nc"><i class="no-highlight">85</i>&nbsp;                if (StringUtils.isBlank(request.getAutoSizeUnit())) {</b>
+<b class="nc"><i class="no-highlight">86</i>&nbsp;                    throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">87</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">88</i>&nbsp;                request.setAutoSize(request.getAutoSize() + request.getAutoSizeUnit().charAt(0));</b>
+<i class="no-highlight">89</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">90</i>&nbsp;            if (StringUtils.isNotBlank(request.getExpandUpperLimit())) {</b>
+<b class="nc"><i class="no-highlight">91</i>&nbsp;                if (StringUtils.isBlank(request.getMaxSizeUnit())) {</b>
+<b class="nc"><i class="no-highlight">92</i>&nbsp;                    throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">93</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">94</i>&nbsp;                request.setExpandUpperLimit(request.getExpandUpperLimit() + request.getMaxSizeUnit().charAt(0));</b>
+<i class="no-highlight">95</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">96</i>&nbsp;        } else if (DBTypeEnum.DM.name().equals(request.getDbType())) {</b>
+<b class="nc"><i class="no-highlight">97</i>&nbsp;            request.setTotalSize(converterUnit(request.getSizeUnit(), request.getTotalSize()));</b>
+<b class="nc"><i class="no-highlight">98</i>&nbsp;            if (StringUtils.isNotBlank(request.getAutoSize())) {</b>
+<b class="nc"><i class="no-highlight">99</i>&nbsp;                if (StringUtils.isBlank(request.getAutoSizeUnit())) {</b>
+<b class="nc"><i class="no-highlight">100</i>&nbsp;                    throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">101</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">102</i>&nbsp;                request.setAutoSize(converterUnit(request.getAutoSizeUnit(), request.getAutoSize()));</b>
+<i class="no-highlight">103</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">104</i>&nbsp;            if (StringUtils.isNotBlank(request.getExpandUpperLimit())) {</b>
+<b class="nc"><i class="no-highlight">105</i>&nbsp;                if (StringUtils.isBlank(request.getMaxSizeUnit())) {</b>
+<b class="nc"><i class="no-highlight">106</i>&nbsp;                    throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">107</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">108</i>&nbsp;                request.setExpandUpperLimit(converterUnit(request.getMaxSizeUnit(), request.getExpandUpperLimit()));</b>
+<i class="no-highlight">109</i>&nbsp;            }
+<i class="no-highlight">110</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">111</i>&nbsp;        String sql = Chat2DBContext.getSqlBuilder().createSpace(request.getPath(), request.getTableSpace(), request.getTotalSize(), StringUtils.isNotBlank(request.getExpandUpperLimit()) ? request.getExpandUpperLimit() : null, StringUtils.isNotBlank(request.getAutoSize()) ? request.getAutoSize() : null);</b>
+<i class="no-highlight">112</i>&nbsp;        try {
+<b class="nc"><i class="no-highlight">113</i>&nbsp;            if (request.getIsUpdate()) {</b>
+<b class="nc"><i class="no-highlight">114</i>&nbsp;                Chat2DBContext.getMetaData().dropTablespace(Chat2DBContext.getConnection(), request.getTableSpace());</b>
+<i class="no-highlight">115</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">116</i>&nbsp;            SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);</b>
+<b class="nc"><i class="no-highlight">117</i>&nbsp;        } catch (SQLException e) {</b>
+<b class="nc"><i class="no-highlight">118</i>&nbsp;            throw new BusinessException(&quot;创建或修改表空间异常:&quot; + e.getMessage());</b>
+<b class="nc"><i class="no-highlight">119</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">120</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">121</i>&nbsp;    }
+<i class="no-highlight">122</i>&nbsp;
+<i class="no-highlight">123</i>&nbsp;    private String converterUnit(String unit, String size) {
+<b class="nc"><i class="no-highlight">124</i>&nbsp;        if (&quot;KB&quot;.equals(unit)) {</b>
+<b class="nc"><i class="no-highlight">125</i>&nbsp;            size = new BigDecimal(size).divide(new BigDecimal(&quot;1024&quot;).setScale(2, RoundingMode.HALF_UP)).toString();</b>
+<i class="no-highlight">126</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">127</i>&nbsp;        if (&quot;GB&quot;.equals(unit)) {</b>
+<b class="nc"><i class="no-highlight">128</i>&nbsp;            size = new BigDecimal(size).multiply(new BigDecimal(&quot;1024&quot;)).toString();</b>
+<i class="no-highlight">129</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">130</i>&nbsp;        return size;</b>
+<i class="no-highlight">131</i>&nbsp;    }
+<i class="no-highlight">132</i>&nbsp;
+<i class="no-highlight">133</i>&nbsp;    @Override
+<i class="no-highlight">134</i>&nbsp;    public void dropTablespace(TableSpaceCreateRequest request) {
+<i class="no-highlight">135</i>&nbsp;        try{
+<b class="nc"><i class="no-highlight">136</i>&nbsp;            if (request.getTableSpaceNames().size() &gt; 0) {</b>
+<b class="nc"><i class="no-highlight">137</i>&nbsp;                List&lt;String&gt; tableSpaceNames = request.getTableSpaceNames();</b>
+<b class="nc"><i class="no-highlight">138</i>&nbsp;                tableSpaceNames.forEach(tableSpace -&gt; {</b>
+<b class="nc"><i class="no-highlight">139</i>&nbsp;                    Chat2DBContext.getMetaData().dropTablespace(Chat2DBContext.getConnection(), tableSpace);</b>
+<i class="no-highlight">140</i>&nbsp;                });
+<i class="no-highlight">141</i>&nbsp;            }
+<b class="nc"><i class="no-highlight">142</i>&nbsp;        }catch (Exception e){</b>
+<b class="nc"><i class="no-highlight">143</i>&nbsp;            throw new RuntimeException(&quot;表空间删除出错，错误信息：{}&quot;,e);</b>
+<b class="nc"><i class="no-highlight">144</i>&nbsp;        }</b>
+<i class="no-highlight">145</i>&nbsp;    }
+<i class="no-highlight">146</i>&nbsp;
+<i class="no-highlight">147</i>&nbsp;    @Override
+<i class="no-highlight">148</i>&nbsp;    public List&lt;TableDetails&gt; listPath(TableBriefQueryRequest request) {
+<b class="nc"><i class="no-highlight">149</i>&nbsp;        return Chat2DBContext.getMetaData().tableSpacesFile(Chat2DBContext.getConnection(), request.getPageNo(), request.getPageSize());</b>
+<i class="no-highlight">150</i>&nbsp;    }
+<i class="no-highlight">151</i>&nbsp;
+<i class="no-highlight">152</i>&nbsp;    @Override
+<i class="no-highlight">153</i>&nbsp;    public List&lt;Map&lt;String, String&gt;&gt; tempList(Integer type) {
+<b class="nc"><i class="no-highlight">154</i>&nbsp;        List&lt;Map&lt;String, String&gt;&gt; valueList = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">155</i>&nbsp;        List&lt;String&gt; list = Chat2DBContext.getMetaData().tempList(Chat2DBContext.getConnection(), type);</b>
+<b class="nc"><i class="no-highlight">156</i>&nbsp;        for (int i = 0; i &lt; list.size(); i++) {</b>
+<b class="nc"><i class="no-highlight">157</i>&nbsp;            Map&lt;String, String&gt; map = new HashMap&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">158</i>&nbsp;            map.put(&quot;name&quot;, list.get(i));</b>
+<b class="nc"><i class="no-highlight">159</i>&nbsp;            map.put(&quot;id&quot;, i + &quot;&quot;);</b>
+<b class="nc"><i class="no-highlight">160</i>&nbsp;            valueList.add(map);</b>
+<i class="no-highlight">161</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">162</i>&nbsp;        return valueList;</b>
+<i class="no-highlight">163</i>&nbsp;    }
+<i class="no-highlight">164</i>&nbsp;
+<i class="no-highlight">165</i>&nbsp;    @Override
+<i class="no-highlight">166</i>&nbsp;    @Transactional(rollbackFor = Exception.class)
+<i class="no-highlight">167</i>&nbsp;    public ActionResult updateTablespaceSql(TableSpaceUpdateRequest request) {
+<b class="nc"><i class="no-highlight">168</i>&nbsp;        if (Objects.isNull(request.getNewTableSpace()) || Objects.isNull(request.getOldTableSpace())) {</b>
+<b class="nc"><i class="no-highlight">169</i>&nbsp;            throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">170</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">171</i>&nbsp;        String dbType = getDbType();</b>
+<b class="nc"><i class="no-highlight">172</i>&nbsp;        if (StringUtils.isBlank(dbType)) {</b>
+<b class="nc"><i class="no-highlight">173</i>&nbsp;            throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">174</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">175</i>&nbsp;        List&lt;String&gt; sqls = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">176</i>&nbsp;        TableSpaceCreateRequest newTableSpace = request.getNewTableSpace();</b>
+<b class="nc"><i class="no-highlight">177</i>&nbsp;        TableSpaceCreateRequest oldTableSpace = request.getOldTableSpace();</b>
+<b class="nc"><i class="no-highlight">178</i>&nbsp;        if (!StringUtils.equals(newTableSpace.getTableSpace(), oldTableSpace.getTableSpace())) {</b>
+<b class="nc"><i class="no-highlight">179</i>&nbsp;            StringBuilder stringBuilder = new StringBuilder(&quot;ALTER TABLESPACE \&quot;&quot;).append(oldTableSpace.getTableSpace()).append(&quot;\&quot; rename to &quot;).append(newTableSpace.getTableSpace()).append(&quot;;&quot;);</b>
+<b class="nc"><i class="no-highlight">180</i>&nbsp;            sqls.add(stringBuilder.toString());</b>
+<i class="no-highlight">181</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">182</i>&nbsp;        if (!StringUtils.equals(newTableSpace.getPath(), oldTableSpace.getPath())) {</b>
+<b class="nc"><i class="no-highlight">183</i>&nbsp;            StringBuilder stringBuilder = new StringBuilder(&quot;ALTER TABLESPACE \&quot;&quot;).append(newTableSpace.getTableSpace()).append(&quot;\&quot; offline;&quot;);</b>
+<b class="nc"><i class="no-highlight">184</i>&nbsp;            StringBuilder stringBuilder2 = new StringBuilder(&quot;ALTER TABLESPACE \&quot;&quot;).append(newTableSpace.getTableSpace()).append(&quot;\&quot; rename datafile &#39;&quot;).append(oldTableSpace.getPath()).append(&quot;&#39; to &#39;&quot;).append(newTableSpace.getPath()).append(&quot;&#39;&quot;).append(&quot;;&quot;);</b>
+<b class="nc"><i class="no-highlight">185</i>&nbsp;            StringBuilder stringBuilder3 = new StringBuilder(&quot;ALTER TABLESPACE \&quot;&quot;).append(newTableSpace.getTableSpace()).append(&quot;\&quot; online;&quot;);</b>
+<b class="nc"><i class="no-highlight">186</i>&nbsp;            sqls.add(stringBuilder.toString());</b>
+<b class="nc"><i class="no-highlight">187</i>&nbsp;            sqls.add(stringBuilder2.toString());</b>
+<b class="nc"><i class="no-highlight">188</i>&nbsp;            sqls.add(stringBuilder3.toString());</b>
+<i class="no-highlight">189</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">190</i>&nbsp;        if (StringUtils.isNotBlank(newTableSpace.getAutoSize())) {</b>
+<b class="nc"><i class="no-highlight">191</i>&nbsp;            if (!newTableSpace.getAutoSize().equals(oldTableSpace.getAutoSize()) ||</b>
+<b class="nc"><i class="no-highlight">192</i>&nbsp;                    !newTableSpace.getAutoSizeUnit().equals(oldTableSpace.getAutoSizeUnit()) ||</b>
+<b class="nc"><i class="no-highlight">193</i>&nbsp;                    (StrUtil.isNotBlank(newTableSpace.getExpandUpperLimit()) &amp;&amp; !newTableSpace.getExpandUpperLimit().equals(oldTableSpace.getExpandUpperLimit()))) {</b>
+<b class="nc"><i class="no-highlight">194</i>&nbsp;                String maxSize = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">195</i>&nbsp;                if (DBTypeEnum.DM.name().equals(dbType)) {</b>
+<i class="no-highlight">196</i>&nbsp;//                    String size = converterUnit(newTableSpace.getAutoSizeUnit(), newTableSpace.getAutoSize());
+<b class="nc"><i class="no-highlight">197</i>&nbsp;                    if (StringUtils.isNotBlank(newTableSpace.getExpandUpperLimit())) {</b>
+<b class="nc"><i class="no-highlight">198</i>&nbsp;                        maxSize = converterUnit(newTableSpace.getMaxSizeUnit(), newTableSpace.getExpandUpperLimit());</b>
+<i class="no-highlight">199</i>&nbsp;                    }
+<i class="no-highlight">200</i>&nbsp;//                    newTableSpace.setAutoSize(size);
+<b class="nc"><i class="no-highlight">201</i>&nbsp;                } else if (DBTypeEnum.ORACLE.name().equals(dbType)) {</b>
+<b class="nc"><i class="no-highlight">202</i>&nbsp;                    newTableSpace.setAutoSize(newTableSpace.getAutoSize() + newTableSpace.getAutoSizeUnit().charAt(0));</b>
+<b class="nc"><i class="no-highlight">203</i>&nbsp;                    if (StringUtils.isNotBlank(newTableSpace.getExpandUpperLimit())) {</b>
+<b class="nc"><i class="no-highlight">204</i>&nbsp;                        maxSize = newTableSpace.getExpandUpperLimit() + newTableSpace.getExpandUpperLimit().charAt(0);</b>
+<i class="no-highlight">205</i>&nbsp;                    }
+<i class="no-highlight">206</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">207</i>&nbsp;                String sql = Chat2DBContext.getSqlBuilder().updateAutoSpace(Chat2DBContext.getConnection(), newTableSpace.getPath(), newTableSpace.getAutoSize(), maxSize, newTableSpace.getTableSpace());</b>
+<b class="nc"><i class="no-highlight">208</i>&nbsp;                sqls.add(sql);</b>
+<b class="nc"><i class="no-highlight">209</i>&nbsp;            }</b>
+<i class="no-highlight">210</i>&nbsp;        } else {
+<b class="nc"><i class="no-highlight">211</i>&nbsp;            String sql = Chat2DBContext.getSqlBuilder().updateOFFAutoSpace(Chat2DBContext.getConnection(), newTableSpace.getPath(), newTableSpace.getTableSpace());</b>
+<b class="nc"><i class="no-highlight">212</i>&nbsp;            sqls.add(sql);</b>
+<i class="no-highlight">213</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">214</i>&nbsp;        if (StringUtils.isNotBlank(newTableSpace.getTotalSize())) {</b>
+<b class="nc"><i class="no-highlight">215</i>&nbsp;            if (!newTableSpace.getTotalSize().equals(oldTableSpace.getTotalSize()) || !newTableSpace.getSizeUnit().equals(oldTableSpace.getSizeUnit())) {</b>
+<b class="nc"><i class="no-highlight">216</i>&nbsp;                if (DBTypeEnum.DM.name().equals(dbType)) {</b>
+<b class="nc"><i class="no-highlight">217</i>&nbsp;                    String size = converterUnit(newTableSpace.getSizeUnit(), newTableSpace.getTotalSize());</b>
+<b class="nc"><i class="no-highlight">218</i>&nbsp;                    newTableSpace.setTotalSize(size);</b>
+<b class="nc"><i class="no-highlight">219</i>&nbsp;                } else if (DBTypeEnum.ORACLE.name().equals(dbType)) {</b>
+<b class="nc"><i class="no-highlight">220</i>&nbsp;                    newTableSpace.setTotalSize(newTableSpace.getTotalSize() + newTableSpace.getSizeUnit().charAt(0));</b>
+<i class="no-highlight">221</i>&nbsp;                }
+<b class="nc"><i class="no-highlight">222</i>&nbsp;                String sql = Chat2DBContext.getSqlBuilder().updateDefaultSpace(Chat2DBContext.getConnection(), newTableSpace.getTableSpace(), newTableSpace.getPath(), newTableSpace.getTotalSize());</b>
+<b class="nc"><i class="no-highlight">223</i>&nbsp;                sqls.add(sql);</b>
+<i class="no-highlight">224</i>&nbsp;            }
+<i class="no-highlight">225</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">226</i>&nbsp;        for (String sql : sqls) {</b>
+<i class="no-highlight">227</i>&nbsp;            try {
+<b class="nc"><i class="no-highlight">228</i>&nbsp;                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, new DefaultValueHandler());</b>
+<b class="nc"><i class="no-highlight">229</i>&nbsp;            } catch (SQLException e) {</b>
+<b class="nc"><i class="no-highlight">230</i>&nbsp;                throw new BusinessException(&quot;表空间修改SQL执行失败&quot;);</b>
+<b class="nc"><i class="no-highlight">231</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">232</i>&nbsp;        }</b>
+<b class="nc"><i class="no-highlight">233</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">234</i>&nbsp;    }
+<i class="no-highlight">235</i>&nbsp;
+<i class="no-highlight">236</i>&nbsp;    private String getDbType() {
+<b class="nc"><i class="no-highlight">237</i>&nbsp;        String dbType = &quot;&quot;;</b>
+<b class="nc"><i class="no-highlight">238</i>&nbsp;        if (Objects.isNull(Chat2DBContext.getConnectInfo())) {</b>
+<b class="nc"><i class="no-highlight">239</i>&nbsp;            throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">240</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">241</i>&nbsp;        if (StringUtils.isNotBlank(Chat2DBContext.getConnectInfo().getDbType())) {</b>
+<b class="nc"><i class="no-highlight">242</i>&nbsp;            dbType = Chat2DBContext.getConnectInfo().getDbType();</b>
+<i class="no-highlight">243</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">244</i>&nbsp;        if (StringUtils.isBlank(dbType)) {</b>
+<b class="nc"><i class="no-highlight">245</i>&nbsp;            throw new BusinessException(&quot;参数缺失&quot;);</b>
+<i class="no-highlight">246</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">247</i>&nbsp;        return dbType;</b>
+<i class="no-highlight">248</i>&nbsp;    }
+<i class="no-highlight">249</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

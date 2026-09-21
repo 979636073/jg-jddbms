@@ -1,0 +1,343 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > TestServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: TestServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">TestServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (5/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    76.2%
+  </span>
+  <span class="absValue">
+    (80/105)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;
+<i class="no-highlight">4</i>&nbsp;import cn.hutool.core.collection.CollUtil;
+<i class="no-highlight">5</i>&nbsp;import cn.hutool.core.date.DatePattern;
+<i class="no-highlight">6</i>&nbsp;import cn.hutool.core.io.FileUtil;
+<i class="no-highlight">7</i>&nbsp;import cn.hutool.core.util.StrUtil;
+<i class="no-highlight">8</i>&nbsp;import com.alibaba.druid.sql.SQLUtils;
+<i class="no-highlight">9</i>&nbsp;import com.alibaba.druid.sql.visitor.VisitorFeature;
+<i class="no-highlight">10</i>&nbsp;import com.jd.common.enums.DBTypeEnum;
+<i class="no-highlight">11</i>&nbsp;import com.jd.biz.controller.rdb.request.DmpExportRequest;
+<i class="no-highlight">12</i>&nbsp;import com.jd.biz.domain.api.enums.TaskStatusEnum;
+<i class="no-highlight">13</i>&nbsp;import com.jd.biz.domain.repository.entity.DataSourceDO;
+<i class="no-highlight">14</i>&nbsp;import com.jd.biz.domain.repository.mapper.DataSourceMapper;
+<i class="no-highlight">15</i>&nbsp;import com.jd.biz.util.OSUtils;
+<i class="no-highlight">16</i>&nbsp;import com.jd.common.config.HzbConfig;
+<i class="no-highlight">17</i>&nbsp;import com.jd.common.constant.CacheConstants;
+<i class="no-highlight">18</i>&nbsp;import com.jd.common.core.redis.RedisCache;
+<i class="no-highlight">19</i>&nbsp;import com.jd.common.tools.base.excption.BusinessException;
+<i class="no-highlight">20</i>&nbsp;import com.jd.common.tools.common.model.Context;
+<i class="no-highlight">21</i>&nbsp;import com.jd.common.tools.common.model.LoginUser;
+<i class="no-highlight">22</i>&nbsp;import com.jd.common.tools.common.util.ContextUtils;
+<i class="no-highlight">23</i>&nbsp;import com.jd.spi.MetaData;
+<i class="no-highlight">24</i>&nbsp;import com.jd.spi.model.DmpExportVo;
+<i class="no-highlight">25</i>&nbsp;import com.jd.spi.sql.Chat2DBContext;
+<i class="no-highlight">26</i>&nbsp;import com.jd.spi.sql.ConnectInfo;
+<i class="no-highlight">27</i>&nbsp;import lombok.extern.slf4j.Slf4j;
+<i class="no-highlight">28</i>&nbsp;import org.apache.commons.lang3.StringUtils;
+<i class="no-highlight">29</i>&nbsp;import org.springframework.beans.factory.annotation.Autowired;
+<i class="no-highlight">30</i>&nbsp;import org.springframework.beans.factory.annotation.Value;
+<i class="no-highlight">31</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">32</i>&nbsp;
+<i class="no-highlight">33</i>&nbsp;import java.io.BufferedReader;
+<i class="no-highlight">34</i>&nbsp;import java.io.File;
+<i class="no-highlight">35</i>&nbsp;import java.io.InputStream;
+<i class="no-highlight">36</i>&nbsp;import java.io.InputStreamReader;
+<i class="no-highlight">37</i>&nbsp;import java.io.UnsupportedEncodingException;
+<i class="no-highlight">38</i>&nbsp;import java.net.URLEncoder;
+<i class="no-highlight">39</i>&nbsp;import java.nio.charset.StandardCharsets;
+<i class="no-highlight">40</i>&nbsp;import java.time.LocalDateTime;
+<i class="no-highlight">41</i>&nbsp;import java.util.Arrays;
+<i class="no-highlight">42</i>&nbsp;import java.util.List;
+<i class="no-highlight">43</i>&nbsp;import java.util.concurrent.CompletableFuture;
+<i class="no-highlight">44</i>&nbsp;
+<b class="fc"><i class="no-highlight">45</i>&nbsp;@Slf4j</b>
+<i class="no-highlight">46</i>&nbsp;@Service
+<b class="fc"><i class="no-highlight">47</i>&nbsp;public class TestServiceImpl {</b>
+<i class="no-highlight">48</i>&nbsp;
+<i class="no-highlight">49</i>&nbsp;    /**
+<i class="no-highlight">50</i>&nbsp;     * Format insert statement
+<i class="no-highlight">51</i>&nbsp;     */
+<b class="fc"><i class="no-highlight">52</i>&nbsp;    private static final SQLUtils.FormatOption INSERT_FORMAT_OPTION = new SQLUtils.FormatOption(true, false);</b>
+<i class="no-highlight">53</i>&nbsp;
+<i class="no-highlight">54</i>&nbsp;    static {
+<b class="fc"><i class="no-highlight">55</i>&nbsp;        INSERT_FORMAT_OPTION.config(VisitorFeature.OutputNameQuote, true);</b>
+<i class="no-highlight">56</i>&nbsp;    }
+<i class="no-highlight">57</i>&nbsp;
+<i class="no-highlight">58</i>&nbsp;    @Autowired
+<i class="no-highlight">59</i>&nbsp;    private RedisCache redisCache;
+<i class="no-highlight">60</i>&nbsp;
+<i class="no-highlight">61</i>&nbsp;    @Value(&quot;${exportDmp.dm}&quot;)
+<i class="no-highlight">62</i>&nbsp;    private String dmDmpExport;
+<i class="no-highlight">63</i>&nbsp;
+<i class="no-highlight">64</i>&nbsp;    @Value(&quot;${importDmp.dm}&quot;)
+<i class="no-highlight">65</i>&nbsp;    private String dmDmpImport;
+<i class="no-highlight">66</i>&nbsp;
+<i class="no-highlight">67</i>&nbsp;    @Value(&quot;${exportDmp.oracle}&quot;)
+<i class="no-highlight">68</i>&nbsp;    private String oraDmpExport;
+<i class="no-highlight">69</i>&nbsp;
+<i class="no-highlight">70</i>&nbsp;    @Value(&quot;${importDmp.oracle}&quot;)
+<i class="no-highlight">71</i>&nbsp;    private String oraDmpImport;
+<i class="no-highlight">72</i>&nbsp;
+<i class="no-highlight">73</i>&nbsp;
+<i class="no-highlight">74</i>&nbsp;    @Autowired
+<i class="no-highlight">75</i>&nbsp;    private DataSourceMapper dataSourceMapper;
+<i class="no-highlight">76</i>&nbsp;
+<i class="no-highlight">77</i>&nbsp;
+<i class="no-highlight">78</i>&nbsp;
+<i class="no-highlight">79</i>&nbsp;    public DmpExportVo exportDmp(DmpExportRequest dmpExportRequest) {
+<b class="fc"><i class="no-highlight">80</i>&nbsp;        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();</b>
+<b class="fc"><i class="no-highlight">81</i>&nbsp;        MetaData metaData = Chat2DBContext.getMetaData();</b>
+<i class="no-highlight">82</i>&nbsp;
+<i class="no-highlight">83</i>&nbsp;        //导出路径是否存在
+<i class="no-highlight">84</i>&nbsp;//        final File file = FileUtil.newFile(dmpExportRequest.getFilePath());
+<b class="fc"><i class="no-highlight">85</i>&nbsp;        final File file = FileUtil.newFile(HzbConfig.getProfile());</b>
+<b class="fc"><i class="no-highlight">86</i>&nbsp;        dmpExportRequest.setFilePath(HzbConfig.getProfile());</b>
+<b class="fc"><i class="no-highlight">87</i>&nbsp;        if (!file.exists()) {</b>
+<b class="nc"><i class="no-highlight">88</i>&nbsp;            boolean mkdirs = file.mkdirs();</b>
+<b class="nc"><i class="no-highlight">89</i>&nbsp;            if (!mkdirs) {</b>
+<b class="nc"><i class="no-highlight">90</i>&nbsp;                log.error(&quot;创建文件夹失败,创建文件路径：{}&quot;, HzbConfig.getProfile());</b>
+<b class="nc"><i class="no-highlight">91</i>&nbsp;                throw new RuntimeException(&quot;创建文件夹失败&quot;);</b>
+<i class="no-highlight">92</i>&nbsp;            }
+<i class="no-highlight">93</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">94</i>&nbsp;        LoginUser loginUser = null;</b>
+<b class="fc"><i class="no-highlight">95</i>&nbsp;        Long userId = null;</b>
+<i class="no-highlight">96</i>&nbsp;        try {
+<b class="fc"><i class="no-highlight">97</i>&nbsp;            loginUser = ContextUtils.getLoginUser();</b>
+<b class="nc"><i class="no-highlight">98</i>&nbsp;            userId = loginUser.getId();</b>
+<b class="fc"><i class="no-highlight">99</i>&nbsp;        } catch (Exception e) {</b>
+<b class="fc"><i class="no-highlight">100</i>&nbsp;            loginUser = new LoginUser();</b>
+<b class="nc"><i class="no-highlight">101</i>&nbsp;        }</b>
+<b class="fc"><i class="no-highlight">102</i>&nbsp;        String key = CacheConstants.EXPORT_DMP_KEY + userId + &quot;:&quot; + dmpExportRequest.getDataSourceId()</b>
+<b class="fc"><i class="no-highlight">103</i>&nbsp;                + &quot;:&quot; + StrUtil.nullToEmpty(dmpExportRequest.getSchemaName());</b>
+<b class="fc"><i class="no-highlight">104</i>&nbsp;        log.debug(&quot;KRY_NAME==&gt;{}&quot;, key);</b>
+<b class="fc"><i class="no-highlight">105</i>&nbsp;        if (redisCache.hasKey(key)) {</b>
+<b class="nc"><i class="no-highlight">106</i>&nbsp;            DmpExportVo vo = redisCache.getCacheObject(key);</b>
+<b class="nc"><i class="no-highlight">107</i>&nbsp;            return redisCache.getCacheObject(key);</b>
+<i class="no-highlight">108</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">109</i>&nbsp;        DataSourceDO dataSourceDO = dataSourceMapper.selectById(dmpExportRequest.getDataSourceId());</b>
+<b class="fc"><i class="no-highlight">110</i>&nbsp;        if (DBTypeEnum.ORACLE.equals(dataSourceDO.getType()) &amp;&amp; StrUtil.isBlank(dataSourceDO.getServiceName())) {</b>
+<b class="nc"><i class="no-highlight">111</i>&nbsp;            throw new BusinessException(&quot;SID不支持请切换serverName执行导出&quot;);</b>
+<i class="no-highlight">112</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">113</i>&nbsp;        String dmpExport = &quot;&quot;;</b>
+<b class="fc"><i class="no-highlight">114</i>&nbsp;        if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {</b>
+<b class="fc"><i class="no-highlight">115</i>&nbsp;            dmpExport = dmDmpExport;</b>
+<i class="no-highlight">116</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">117</i>&nbsp;        if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.ORACLE.name())) {</b>
+<b class="nc"><i class="no-highlight">118</i>&nbsp;            dmpExport = oraDmpExport;</b>
+<i class="no-highlight">119</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">120</i>&nbsp;        String logFileName = &quot;&quot;;</b>
+<b class="fc"><i class="no-highlight">121</i>&nbsp;        String dmpFileName = &quot;&quot;;</b>
+<b class="fc"><i class="no-highlight">122</i>&nbsp;        DmpExportVo dmpExportVo = new DmpExportVo();</b>
+<b class="fc"><i class="no-highlight">123</i>&nbsp;        dmpExportVo.setDataSourceId(connectInfo.getDataSourceId());</b>
+<b class="fc"><i class="no-highlight">124</i>&nbsp;        dmpExportVo.setDatabaseName(dmpExportRequest.getDatabaseName());</b>
+<b class="fc"><i class="no-highlight">125</i>&nbsp;        dmpExportVo.setUserId(loginUser.getId());</b>
+<b class="fc"><i class="no-highlight">126</i>&nbsp;        dmpExportVo.setStatus(TaskStatusEnum.INIT.name());</b>
+<b class="fc"><i class="no-highlight">127</i>&nbsp;        dmpExportVo.setSchemaName(StringUtils.isNotBlank(dmpExportRequest.getSchemaName()) ? dmpExportRequest.getSchemaName() : &quot;&quot;);</b>
+<i class="no-highlight">128</i>&nbsp;        try {
+<b class="fc"><i class="no-highlight">129</i>&nbsp;            logFileName = URLEncoder.encode(&quot;dmp_&quot; +</b>
+<b class="fc"><i class="no-highlight">130</i>&nbsp;                            connectInfo.getDataSourceId() + &quot;_&quot;</b>
+<b class="fc"><i class="no-highlight">131</i>&nbsp;                            + StrUtil.nullToEmpty(connectInfo.getSchemaName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">132</i>&nbsp;                            + &quot;.log&quot;,
+<b class="fc"><i class="no-highlight">133</i>&nbsp;                    StandardCharsets.UTF_8.toString());</b>
+<b class="fc"><i class="no-highlight">134</i>&nbsp;            dmpFileName = URLEncoder.encode(&quot;dmp_&quot; +</b>
+<b class="fc"><i class="no-highlight">135</i>&nbsp;                            connectInfo.getDataSourceId() + &quot;_&quot;</b>
+<b class="fc"><i class="no-highlight">136</i>&nbsp;                            + StrUtil.nullToEmpty(connectInfo.getSchemaName()) + &quot;_&quot; + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER)</b>
+<i class="no-highlight">137</i>&nbsp;                            + &quot;.dmp&quot;,
+<b class="fc"><i class="no-highlight">138</i>&nbsp;                    StandardCharsets.UTF_8.toString());</b>
+<b class="nc"><i class="no-highlight">139</i>&nbsp;        } catch (UnsupportedEncodingException e) {</b>
+<b class="nc"><i class="no-highlight">140</i>&nbsp;            dmpExportVo.setStatus(TaskStatusEnum.ERROR.name());</b>
+<b class="nc"><i class="no-highlight">141</i>&nbsp;            return dmpExportVo;</b>
+<b class="fc"><i class="no-highlight">142</i>&nbsp;        }</b>
+<i class="no-highlight">143</i>&nbsp;
+<b class="fc"><i class="no-highlight">144</i>&nbsp;        dmpExportVo.setDmpUrl(HzbConfig.getProfile() + &quot;/&quot; + dmpFileName);</b>
+<b class="fc"><i class="no-highlight">145</i>&nbsp;        dmpExportVo.setLogUrl(HzbConfig.getProfile() + &quot;/&quot; + logFileName);</b>
+<i class="no-highlight">146</i>&nbsp;        // init状态
+<b class="fc"><i class="no-highlight">147</i>&nbsp;        redisCache.setCacheObject(key, dmpExportVo);</b>
+<b class="fc"><i class="no-highlight">148</i>&nbsp;        redisCache.expire(key, 300);</b>
+<b class="fc"><i class="no-highlight">149</i>&nbsp;        final File finalLogFile = new File(HzbConfig.getProfile() + &quot;/&quot; + logFileName);</b>
+<b class="fc"><i class="no-highlight">150</i>&nbsp;        final File finalDmpFile = new File(HzbConfig.getProfile() + &quot;/&quot; + dmpFileName);</b>
+<b class="fc"><i class="no-highlight">151</i>&nbsp;        String schemas = &quot;&quot;;</b>
+<b class="fc"><i class="no-highlight">152</i>&nbsp;        if (CollUtil.isEmpty(dmpExportRequest.getSchemaList())) {</b>
+<b class="nc"><i class="no-highlight">153</i>&nbsp;            schemas = dmpExportRequest.getSchemaName();</b>
+<i class="no-highlight">154</i>&nbsp;        } else {
+<b class="fc"><i class="no-highlight">155</i>&nbsp;            schemas = String.join(&quot;,&quot;, dmpExportRequest.getSchemaList());</b>
+<i class="no-highlight">156</i>&nbsp;        }
+<b class="fc"><i class="no-highlight">157</i>&nbsp;        String finalDmpExport = dmpExport;</b>
+<b class="fc"><i class="no-highlight">158</i>&nbsp;        String finalSchemas = schemas;</b>
+<i class="no-highlight">159</i>&nbsp;
+<b class="fc"><i class="no-highlight">160</i>&nbsp;        LoginUser finalLoginUser = loginUser;</b>
+<b class="fc"><i class="no-highlight">161</i>&nbsp;        CompletableFuture.supplyAsync(() -&gt; {</b>
+<i class="no-highlight">162</i>&nbsp;
+<b class="fc"><i class="no-highlight">163</i>&nbsp;            buildContext(finalLoginUser, connectInfo);</b>
+<b class="fc"><i class="no-highlight">164</i>&nbsp;            Boolean isWin = false;</b>
+<b class="fc"><i class="no-highlight">165</i>&nbsp;            if (OSUtils.isWindows()) {</b>
+<b class="fc"><i class="no-highlight">166</i>&nbsp;                isWin = true;</b>
+<i class="no-highlight">167</i>&nbsp;            }
+<b class="fc"><i class="no-highlight">168</i>&nbsp;            String cmd = metaData.exportDmp(connectInfo, dmpExportRequest.getTableList(), finalSchemas, finalLogFile, finalDmpFile, finalDmpExport, isWin);</b>
+<b class="fc"><i class="no-highlight">169</i>&nbsp;            ProcessBuilder processBuilder = null;</b>
+<b class="fc"><i class="no-highlight">170</i>&nbsp;            boolean shouldClose = false;</b>
+<b class="fc"><i class="no-highlight">171</i>&nbsp;            if (OSUtils.isKylin() || OSUtils.isLinux()) {</b>
+<b class="nc"><i class="no-highlight">172</i>&nbsp;                List&lt;String&gt; cmds = Arrays.asList(cmd.split(&quot; &quot;));</b>
+<b class="nc"><i class="no-highlight">173</i>&nbsp;                log.info(&quot;执行命令========&gt;{}&quot;, cmds);</b>
+<b class="nc"><i class="no-highlight">174</i>&nbsp;                processBuilder = new ProcessBuilder(cmds).inheritIO();</b>
+<b class="nc"><i class="no-highlight">175</i>&nbsp;                processBuilder = processBuilder.directory(new File(&quot;/root&quot;));</b>
+<b class="nc"><i class="no-highlight">176</i>&nbsp;            } else {</b>
+<b class="fc"><i class="no-highlight">177</i>&nbsp;                log.info(&quot;执行命令========&gt;{}&quot;, cmd);</b>
+<b class="fc"><i class="no-highlight">178</i>&nbsp;                processBuilder = new ProcessBuilder(&quot;cmd.exe&quot;, &quot;/c&quot;, cmd).inheritIO();</b>
+<i class="no-highlight">179</i>&nbsp;            }
+<b class="fc"><i class="no-highlight">180</i>&nbsp;            dmpExportVo.setCmdCommand(cmd);</b>
+<b class="fc"><i class="no-highlight">181</i>&nbsp;            processBuilder.redirectErrorStream();</b>
+<b class="fc"><i class="no-highlight">182</i>&nbsp;            StringBuilder stringBuilder = new StringBuilder();</b>
+<b class="fc"><i class="no-highlight">183</i>&nbsp;            Process start = null;</b>
+<i class="no-highlight">184</i>&nbsp;            try {
+<b class="fc"><i class="no-highlight">185</i>&nbsp;                start = processBuilder.start();</b>
+<b class="fc"><i class="no-highlight">186</i>&nbsp;                InputStream inputStream = start.getInputStream();</b>
+<b class="fc"><i class="no-highlight">187</i>&nbsp;                BufferedReader gbk = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));</b>
+<i class="no-highlight">188</i>&nbsp;                String line;
+<b class="fc"><i class="no-highlight">189</i>&nbsp;                while ((line = gbk.readLine()) != null) {</b>
+<b class="nc"><i class="no-highlight">190</i>&nbsp;                    stringBuilder.append(line).append(&quot;/n&quot;);</b>
+<i class="no-highlight">191</i>&nbsp;                }
+<b class="fc"><i class="no-highlight">192</i>&nbsp;                gbk.close();</b>
+<b class="fc"><i class="no-highlight">193</i>&nbsp;                start.waitFor();</b>
+<b class="nc"><i class="no-highlight">194</i>&nbsp;            } catch (Exception e) {</b>
+<b class="nc"><i class="no-highlight">195</i>&nbsp;                shouldClose = true;</b>
+<b class="nc"><i class="no-highlight">196</i>&nbsp;                throw new BusinessException(&quot;导出失败：&quot; + e.getMessage());</b>
+<b class="nc"><i class="no-highlight">197</i>&nbsp;            }</b>
+<b class="nc"><i class="no-highlight">198</i>&nbsp;            return Boolean.TRUE;</b>
+<b class="fc"><i class="no-highlight">199</i>&nbsp;        }).thenAccept(result -&gt; {</b>
+<i class="no-highlight">200</i>&nbsp;//            if (Boolean.TRUE.equals(result)) {
+<i class="no-highlight">201</i>&nbsp;//                try {
+<i class="no-highlight">202</i>&nbsp;//                    List&lt;String&gt; resultmsg = new ArrayList&lt;&gt;();
+<i class="no-highlight">203</i>&nbsp;//                    try {
+<i class="no-highlight">204</i>&nbsp;//                        if (OSUtils.isWindows()) {
+<i class="no-highlight">205</i>&nbsp;//                            resultmsg = FileUtil.readLines(finalLogFile, &quot;GBK&quot;);
+<i class="no-highlight">206</i>&nbsp;//                        } else {
+<i class="no-highlight">207</i>&nbsp;//                            resultmsg = FileUtil.readLines(finalLogFile, StandardCharsets.UTF_8);
+<i class="no-highlight">208</i>&nbsp;//                        }
+<i class="no-highlight">209</i>&nbsp;//                    } catch (IORuntimeException e) {
+<i class="no-highlight">210</i>&nbsp;//                        resultmsg.add(&quot;日志文件生成失败,程序结束&quot;);
+<i class="no-highlight">211</i>&nbsp;//                        resultmsg.add(&quot;但出现警告&quot;);
+<i class="no-highlight">212</i>&nbsp;//                    }
+<i class="no-highlight">213</i>&nbsp;//                    log.info(resultmsg.toString());
+<i class="no-highlight">214</i>&nbsp;//                    if (resultmsg.size() &gt; 0 &amp;&amp; resultmsg.toString().contains(&quot;但出现警告&quot;)) {
+<i class="no-highlight">215</i>&nbsp;//                        dmpExportVo.setMsg(resultmsg.toString());
+<i class="no-highlight">216</i>&nbsp;//                    }
+<i class="no-highlight">217</i>&nbsp;//                } catch (Exception e) {
+<i class="no-highlight">218</i>&nbsp;//                    dmpExportVo.setMsg(e.getMessage());
+<i class="no-highlight">219</i>&nbsp;//                }
+<i class="no-highlight">220</i>&nbsp;//                dmpExportVo.setStatus(TaskStatusEnum.FINISH.name());
+<i class="no-highlight">221</i>&nbsp;//                removeContext();
+<i class="no-highlight">222</i>&nbsp;//                redisCache.setCacheObject(key, dmpExportVo);
+<i class="no-highlight">223</i>&nbsp;//            } else {
+<i class="no-highlight">224</i>&nbsp;//                redisCache.deleteObject(key);
+<i class="no-highlight">225</i>&nbsp;//            }
+<i class="no-highlight">226</i>&nbsp;        });
+<b class="fc"><i class="no-highlight">227</i>&nbsp;        return dmpExportVo;</b>
+<i class="no-highlight">228</i>&nbsp;    }
+<i class="no-highlight">229</i>&nbsp;
+<i class="no-highlight">230</i>&nbsp;
+<i class="no-highlight">231</i>&nbsp;    private void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
+<b class="fc"><i class="no-highlight">232</i>&nbsp;        ContextUtils.setContext(Context.builder()</b>
+<b class="fc"><i class="no-highlight">233</i>&nbsp;                .loginUser(loginUser)</b>
+<b class="fc"><i class="no-highlight">234</i>&nbsp;                .build());</b>
+<b class="fc"><i class="no-highlight">235</i>&nbsp;        Chat2DBContext.putContext(connectInfo);</b>
+<i class="no-highlight">236</i>&nbsp;    }
+<i class="no-highlight">237</i>&nbsp;
+<i class="no-highlight">238</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

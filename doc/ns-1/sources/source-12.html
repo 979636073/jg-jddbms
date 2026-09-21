@@ -1,0 +1,185 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > PinServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: PinServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">PinServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    20%
+  </span>
+  <span class="absValue">
+    (1/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    3%
+  </span>
+  <span class="absValue">
+    (1/33)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import com.jd.biz.domain.api.param.PinTableParam;
+<i class="no-highlight">4</i>&nbsp;import com.jd.biz.domain.api.service.PinService;
+<i class="no-highlight">5</i>&nbsp;import com.jd.biz.domain.core.converter.PinTableConverter;
+<i class="no-highlight">6</i>&nbsp;import com.jd.biz.domain.repository.entity.PinTableDO;
+<i class="no-highlight">7</i>&nbsp;import com.jd.biz.domain.repository.mapper.PinTableMapper;
+<i class="no-highlight">8</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ActionResult;
+<i class="no-highlight">9</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ListResult;
+<i class="no-highlight">10</i>&nbsp;import com.jd.common.tools.common.util.ContextUtils;
+<i class="no-highlight">11</i>&nbsp;import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<i class="no-highlight">12</i>&nbsp;import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+<i class="no-highlight">13</i>&nbsp;import org.apache.commons.lang3.StringUtils;
+<i class="no-highlight">14</i>&nbsp;import org.springframework.beans.factory.annotation.Autowired;
+<i class="no-highlight">15</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">16</i>&nbsp;import org.springframework.util.CollectionUtils;
+<i class="no-highlight">17</i>&nbsp;
+<i class="no-highlight">18</i>&nbsp;import javax.annotation.Resource;
+<i class="no-highlight">19</i>&nbsp;import java.util.ArrayList;
+<i class="no-highlight">20</i>&nbsp;import java.util.List;
+<i class="no-highlight">21</i>&nbsp;import java.util.stream.Collectors;
+<i class="no-highlight">22</i>&nbsp;
+<b class="nc"><i class="no-highlight">23</i>&nbsp;@Service</b>
+<b class="fc"><i class="no-highlight">24</i>&nbsp;public class PinServiceImpl implements PinService {</b>
+<i class="no-highlight">25</i>&nbsp;
+<i class="no-highlight">26</i>&nbsp;    @Autowired
+<i class="no-highlight">27</i>&nbsp;    private PinTableConverter pinTableConverter;
+<i class="no-highlight">28</i>&nbsp;    @Resource
+<i class="no-highlight">29</i>&nbsp;    private PinTableMapper pinTableMapper;
+<i class="no-highlight">30</i>&nbsp;
+<i class="no-highlight">31</i>&nbsp;    @Override
+<i class="no-highlight">32</i>&nbsp;    public ActionResult pinTable(PinTableParam param) {
+<b class="nc"><i class="no-highlight">33</i>&nbsp;        PinTableDO entity = pinTableConverter.param2do(param);</b>
+<b class="nc"><i class="no-highlight">34</i>&nbsp;        entity.setUserId(ContextUtils.getUserId());</b>
+<b class="nc"><i class="no-highlight">35</i>&nbsp;        pinTableMapper.insert(entity);</b>
+<b class="nc"><i class="no-highlight">36</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">37</i>&nbsp;    }
+<i class="no-highlight">38</i>&nbsp;
+<i class="no-highlight">39</i>&nbsp;    @Override
+<i class="no-highlight">40</i>&nbsp;    public ActionResult deletePinTable(PinTableParam param) {
+<b class="nc"><i class="no-highlight">41</i>&nbsp;        param.setUserId(ContextUtils.getUserId());</b>
+<b class="nc"><i class="no-highlight">42</i>&nbsp;        LambdaUpdateWrapper&lt;PinTableDO&gt; updateWrapper = new LambdaUpdateWrapper&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">43</i>&nbsp;        updateWrapper.eq(PinTableDO::getUserId, param.getUserId());</b>
+<b class="nc"><i class="no-highlight">44</i>&nbsp;        updateWrapper.eq(PinTableDO::getDataSourceId, param.getDataSourceId());</b>
+<b class="nc"><i class="no-highlight">45</i>&nbsp;        if (StringUtils.isNotBlank(param.getDatabaseName())) {</b>
+<b class="nc"><i class="no-highlight">46</i>&nbsp;            updateWrapper.eq(PinTableDO::getDatabaseName, param.getDatabaseName());</b>
+<i class="no-highlight">47</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">48</i>&nbsp;        if (StringUtils.isNotBlank(param.getSchemaName())) {</b>
+<b class="nc"><i class="no-highlight">49</i>&nbsp;            updateWrapper.eq(PinTableDO::getSchemaName, param.getSchemaName());</b>
+<i class="no-highlight">50</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">51</i>&nbsp;        if (StringUtils.isNotBlank(param.getTableName())) {</b>
+<b class="nc"><i class="no-highlight">52</i>&nbsp;            updateWrapper.eq(PinTableDO::getTableName, param.getTableName());</b>
+<i class="no-highlight">53</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">54</i>&nbsp;        pinTableMapper.delete(updateWrapper);</b>
+<b class="nc"><i class="no-highlight">55</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">56</i>&nbsp;    }
+<i class="no-highlight">57</i>&nbsp;
+<i class="no-highlight">58</i>&nbsp;    @Override
+<i class="no-highlight">59</i>&nbsp;    public ListResult&lt;String&gt; queryPinTables(PinTableParam param) {
+<b class="nc"><i class="no-highlight">60</i>&nbsp;        List&lt;String&gt; result = new ArrayList&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">61</i>&nbsp;        LambdaQueryWrapper&lt;PinTableDO&gt; queryWrapper = new LambdaQueryWrapper&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">62</i>&nbsp;        queryWrapper.eq(PinTableDO::getUserId, param.getUserId());</b>
+<b class="nc"><i class="no-highlight">63</i>&nbsp;        queryWrapper.eq(PinTableDO::getDataSourceId, param.getDataSourceId());</b>
+<b class="nc"><i class="no-highlight">64</i>&nbsp;        if (StringUtils.isNotBlank(param.getDatabaseName())) {</b>
+<b class="nc"><i class="no-highlight">65</i>&nbsp;            queryWrapper.eq(PinTableDO::getDatabaseName, param.getDatabaseName());</b>
+<i class="no-highlight">66</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">67</i>&nbsp;        if (StringUtils.isNotBlank(param.getSchemaName())) {</b>
+<b class="nc"><i class="no-highlight">68</i>&nbsp;            queryWrapper.eq(PinTableDO::getSchemaName, param.getSchemaName());</b>
+<i class="no-highlight">69</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">70</i>&nbsp;        if (StringUtils.isNotBlank(param.getTableName())) {</b>
+<b class="nc"><i class="no-highlight">71</i>&nbsp;            queryWrapper.eq(PinTableDO::getTableName, param.getTableName());</b>
+<i class="no-highlight">72</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">73</i>&nbsp;        queryWrapper.orderByDesc(PinTableDO::getGmtModified);</b>
+<b class="nc"><i class="no-highlight">74</i>&nbsp;        List&lt;PinTableDO&gt; list = pinTableMapper.selectList(queryWrapper);</b>
+<b class="nc"><i class="no-highlight">75</i>&nbsp;        if (!CollectionUtils.isEmpty(list)) {</b>
+<b class="nc"><i class="no-highlight">76</i>&nbsp;            result = list.stream().map(pinTableDO -&gt; pinTableDO.getTableName()).collect(Collectors.toList());</b>
+<i class="no-highlight">77</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">78</i>&nbsp;        return ListResult.of(result);</b>
+<i class="no-highlight">79</i>&nbsp;    }
+<i class="no-highlight">80</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

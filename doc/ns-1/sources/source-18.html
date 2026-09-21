@@ -1,0 +1,251 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <title>Coverage Report > TeamServiceImpl</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/highlight-idea.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.pack.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.jd.biz.domain.core.impl</a>
+</div>
+
+<h1>Coverage Summary for Class: TeamServiceImpl (com.jd.biz.domain.core.impl)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">TeamServiceImpl</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    20%
+  </span>
+  <span class="absValue">
+    (2/10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    4.1%
+  </span>
+  <span class="absValue">
+    (2/49)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<div class="sourceCode" id="sourceCode"><i class="no-highlight">1</i>&nbsp;package com.jd.biz.domain.core.impl;
+<i class="no-highlight">2</i>&nbsp;
+<i class="no-highlight">3</i>&nbsp;import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<i class="no-highlight">4</i>&nbsp;import com.baomidou.mybatisplus.core.metadata.IPage;
+<i class="no-highlight">5</i>&nbsp;import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<i class="no-highlight">6</i>&nbsp;import com.jd.biz.domain.api.enums.AccessObjectTypeEnum;
+<i class="no-highlight">7</i>&nbsp;import com.jd.biz.domain.api.enums.RoleCodeEnum;
+<i class="no-highlight">8</i>&nbsp;import com.jd.biz.domain.api.model.Team;
+<i class="no-highlight">9</i>&nbsp;import com.jd.biz.domain.api.param.team.TeamCreateParam;
+<i class="no-highlight">10</i>&nbsp;import com.jd.biz.domain.api.param.team.TeamPageQueryParam;
+<i class="no-highlight">11</i>&nbsp;import com.jd.biz.domain.api.param.team.TeamSelector;
+<i class="no-highlight">12</i>&nbsp;import com.jd.biz.domain.api.param.team.TeamUpdateParam;
+<i class="no-highlight">13</i>&nbsp;import com.jd.biz.domain.api.service.TeamService;
+<i class="no-highlight">14</i>&nbsp;import com.jd.biz.domain.core.converter.TeamConverter;
+<i class="no-highlight">15</i>&nbsp;import com.jd.biz.domain.core.converter.UserConverter;
+<i class="no-highlight">16</i>&nbsp;import com.jd.biz.domain.repository.entity.DataSourceAccessDO;
+<i class="no-highlight">17</i>&nbsp;import com.jd.biz.domain.repository.entity.TeamDO;
+<i class="no-highlight">18</i>&nbsp;import com.jd.biz.domain.repository.entity.TeamUserDO;
+<i class="no-highlight">19</i>&nbsp;import com.jd.biz.domain.repository.mapper.DataSourceAccessMapper;
+<i class="no-highlight">20</i>&nbsp;import com.jd.biz.domain.repository.mapper.TeamMapper;
+<i class="no-highlight">21</i>&nbsp;import com.jd.biz.domain.repository.mapper.TeamUserMapper;
+<i class="no-highlight">22</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ActionResult;
+<i class="no-highlight">23</i>&nbsp;import com.jd.common.tools.base.wrapper.result.DataResult;
+<i class="no-highlight">24</i>&nbsp;import com.jd.common.tools.base.wrapper.result.ListResult;
+<i class="no-highlight">25</i>&nbsp;import com.jd.common.tools.base.wrapper.result.PageResult;
+<i class="no-highlight">26</i>&nbsp;import com.jd.common.tools.common.exception.DataAlreadyExistsBusinessException;
+<i class="no-highlight">27</i>&nbsp;import com.jd.common.tools.common.exception.ParamBusinessException;
+<i class="no-highlight">28</i>&nbsp;import com.jd.common.tools.common.model.EasyLambdaQueryWrapper;
+<i class="no-highlight">29</i>&nbsp;import com.jd.common.tools.common.util.ContextUtils;
+<i class="no-highlight">30</i>&nbsp;import com.jd.common.tools.common.util.EasyCollectionUtils;
+<i class="no-highlight">31</i>&nbsp;import lombok.extern.slf4j.Slf4j;
+<i class="no-highlight">32</i>&nbsp;import org.apache.commons.collections4.CollectionUtils;
+<i class="no-highlight">33</i>&nbsp;import org.apache.commons.lang3.BooleanUtils;
+<i class="no-highlight">34</i>&nbsp;import org.apache.commons.lang3.StringUtils;
+<i class="no-highlight">35</i>&nbsp;import org.springframework.stereotype.Service;
+<i class="no-highlight">36</i>&nbsp;
+<i class="no-highlight">37</i>&nbsp;import javax.annotation.Resource;
+<i class="no-highlight">38</i>&nbsp;import java.util.List;
+<i class="no-highlight">39</i>&nbsp;
+<i class="no-highlight">40</i>&nbsp;/**
+<i class="no-highlight">41</i>&nbsp; * team
+<i class="no-highlight">42</i>&nbsp; *
+<i class="no-highlight">43</i>&nbsp; * @author Jiaju Zhuang
+<i class="no-highlight">44</i>&nbsp; */
+<b class="fc"><i class="no-highlight">45</i>&nbsp;@Slf4j</b>
+<i class="no-highlight">46</i>&nbsp;@Service
+<b class="fc"><i class="no-highlight">47</i>&nbsp;public class TeamServiceImpl implements TeamService {</b>
+<i class="no-highlight">48</i>&nbsp;    @Resource
+<i class="no-highlight">49</i>&nbsp;    private TeamMapper teamMapper;
+<i class="no-highlight">50</i>&nbsp;    @Resource
+<i class="no-highlight">51</i>&nbsp;    private TeamUserMapper teamUserMapper;
+<i class="no-highlight">52</i>&nbsp;    @Resource
+<i class="no-highlight">53</i>&nbsp;    private DataSourceAccessMapper dataSourceAccessMapper;
+<i class="no-highlight">54</i>&nbsp;    @Resource
+<i class="no-highlight">55</i>&nbsp;    private TeamConverter teamConverter;
+<i class="no-highlight">56</i>&nbsp;    @Resource
+<i class="no-highlight">57</i>&nbsp;    private UserConverter userConverter;
+<i class="no-highlight">58</i>&nbsp;
+<i class="no-highlight">59</i>&nbsp;    @Override
+<i class="no-highlight">60</i>&nbsp;    public ListResult&lt;Team&gt; listQuery(List&lt;Long&gt; idList) {
+<b class="nc"><i class="no-highlight">61</i>&nbsp;        if (CollectionUtils.isEmpty(idList)) {</b>
+<b class="nc"><i class="no-highlight">62</i>&nbsp;            return ListResult.empty();</b>
+<i class="no-highlight">63</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">64</i>&nbsp;        LambdaQueryWrapper&lt;TeamDO&gt; queryWrapper = new LambdaQueryWrapper&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">65</i>&nbsp;        queryWrapper.in(TeamDO::getId, idList);</b>
+<b class="nc"><i class="no-highlight">66</i>&nbsp;        List&lt;TeamDO&gt; dataList = teamMapper.selectList(queryWrapper);</b>
+<b class="nc"><i class="no-highlight">67</i>&nbsp;        List&lt;Team&gt; list = teamConverter.do2dto(dataList);</b>
+<b class="nc"><i class="no-highlight">68</i>&nbsp;        return ListResult.of(list);</b>
+<i class="no-highlight">69</i>&nbsp;    }
+<i class="no-highlight">70</i>&nbsp;
+<i class="no-highlight">71</i>&nbsp;    @Override
+<i class="no-highlight">72</i>&nbsp;    public PageResult&lt;Team&gt; pageQuery(TeamPageQueryParam param, TeamSelector selector) {
+<b class="nc"><i class="no-highlight">73</i>&nbsp;        EasyLambdaQueryWrapper&lt;TeamDO&gt; queryWrapper = new EasyLambdaQueryWrapper&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">74</i>&nbsp;        if (StringUtils.isNotBlank(param.getSearchKey())) {</b>
+<b class="nc"><i class="no-highlight">75</i>&nbsp;            queryWrapper.and(wrapper -&gt; wrapper.like(TeamDO::getCode, &quot;%&quot; + param.getSearchKey() + &quot;%&quot;)</b>
+<b class="nc"><i class="no-highlight">76</i>&nbsp;                .or()</b>
+<b class="nc"><i class="no-highlight">77</i>&nbsp;                .like(TeamDO::getName, &quot;%&quot; + param.getSearchKey() + &quot;%&quot;));</b>
+<i class="no-highlight">78</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">79</i>&nbsp;        Page&lt;TeamDO&gt; page = new Page&lt;&gt;(param.getPageNo(), param.getPageSize());</b>
+<b class="nc"><i class="no-highlight">80</i>&nbsp;        page.setSearchCount(param.getEnableReturnCount());</b>
+<b class="nc"><i class="no-highlight">81</i>&nbsp;        queryWrapper.orderBy(param.getOrderByList());</b>
+<b class="nc"><i class="no-highlight">82</i>&nbsp;        IPage&lt;TeamDO&gt; iPage = teamMapper.selectPage(page, queryWrapper);</b>
+<b class="nc"><i class="no-highlight">83</i>&nbsp;        List&lt;Team&gt; list = teamConverter.do2dto(iPage.getRecords());</b>
+<i class="no-highlight">84</i>&nbsp;
+<b class="nc"><i class="no-highlight">85</i>&nbsp;        fillData(list, selector);</b>
+<i class="no-highlight">86</i>&nbsp;
+<b class="nc"><i class="no-highlight">87</i>&nbsp;        return PageResult.of(list, iPage.getTotal(), param);</b>
+<i class="no-highlight">88</i>&nbsp;    }
+<i class="no-highlight">89</i>&nbsp;
+<i class="no-highlight">90</i>&nbsp;    @Override
+<i class="no-highlight">91</i>&nbsp;    public DataResult&lt;Long&gt; create(TeamCreateParam param) {
+<b class="nc"><i class="no-highlight">92</i>&nbsp;        LambdaQueryWrapper&lt;TeamDO&gt; queryWrapper = new LambdaQueryWrapper&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">93</i>&nbsp;        queryWrapper.eq(TeamDO::getCode, param.getCode());</b>
+<b class="nc"><i class="no-highlight">94</i>&nbsp;        Page&lt;TeamDO&gt; page = new Page&lt;&gt;(1, 1);</b>
+<b class="nc"><i class="no-highlight">95</i>&nbsp;        page.setSearchCount(false);</b>
+<b class="nc"><i class="no-highlight">96</i>&nbsp;        IPage&lt;TeamDO&gt; iPage = teamMapper.selectPage(page, queryWrapper);</b>
+<b class="nc"><i class="no-highlight">97</i>&nbsp;        if (CollectionUtils.isNotEmpty(iPage.getRecords())) {</b>
+<b class="nc"><i class="no-highlight">98</i>&nbsp;            throw new DataAlreadyExistsBusinessException(&quot;code&quot;, param.getCode());</b>
+<i class="no-highlight">99</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">100</i>&nbsp;        if (RoleCodeEnum.DESKTOP.getCode().equals(param.getRoleCode())) {</b>
+<b class="nc"><i class="no-highlight">101</i>&nbsp;            throw new ParamBusinessException(&quot;roleCode&quot;);</b>
+<i class="no-highlight">102</i>&nbsp;        }
+<i class="no-highlight">103</i>&nbsp;
+<b class="nc"><i class="no-highlight">104</i>&nbsp;        TeamDO data = teamConverter.param2do(param, ContextUtils.getUserId());</b>
+<b class="nc"><i class="no-highlight">105</i>&nbsp;        teamMapper.insert(data);</b>
+<b class="nc"><i class="no-highlight">106</i>&nbsp;        return DataResult.of(data.getId());</b>
+<i class="no-highlight">107</i>&nbsp;    }
+<i class="no-highlight">108</i>&nbsp;
+<i class="no-highlight">109</i>&nbsp;    @Override
+<i class="no-highlight">110</i>&nbsp;    public DataResult&lt;Long&gt; update(TeamUpdateParam param) {
+<b class="nc"><i class="no-highlight">111</i>&nbsp;        TeamDO data = teamConverter.param2do(param, ContextUtils.getUserId());</b>
+<b class="nc"><i class="no-highlight">112</i>&nbsp;        teamMapper.updateById(data);</b>
+<b class="nc"><i class="no-highlight">113</i>&nbsp;        return DataResult.of(data.getId());</b>
+<i class="no-highlight">114</i>&nbsp;    }
+<i class="no-highlight">115</i>&nbsp;
+<i class="no-highlight">116</i>&nbsp;    @Override
+<i class="no-highlight">117</i>&nbsp;    public ActionResult delete(Long id) {
+<b class="nc"><i class="no-highlight">118</i>&nbsp;        teamMapper.deleteById(id);</b>
+<i class="no-highlight">119</i>&nbsp;
+<b class="nc"><i class="no-highlight">120</i>&nbsp;        LambdaQueryWrapper&lt;TeamUserDO&gt; teamUserQueryWrapper = new LambdaQueryWrapper&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">121</i>&nbsp;        teamUserQueryWrapper.eq(TeamUserDO::getTeamId, id);</b>
+<b class="nc"><i class="no-highlight">122</i>&nbsp;        teamUserMapper.delete(teamUserQueryWrapper);</b>
+<i class="no-highlight">123</i>&nbsp;
+<b class="nc"><i class="no-highlight">124</i>&nbsp;        LambdaQueryWrapper&lt;DataSourceAccessDO&gt;  dataSourceAccessQueryWrapper = new LambdaQueryWrapper&lt;&gt;();</b>
+<b class="nc"><i class="no-highlight">125</i>&nbsp;        dataSourceAccessQueryWrapper.eq(DataSourceAccessDO::getAccessObjectId, id)</b>
+<b class="nc"><i class="no-highlight">126</i>&nbsp;            .eq(DataSourceAccessDO::getAccessObjectType, AccessObjectTypeEnum.TEAM.getCode())</b>
+<i class="no-highlight">127</i>&nbsp;        ;
+<b class="nc"><i class="no-highlight">128</i>&nbsp;        dataSourceAccessMapper.delete(dataSourceAccessQueryWrapper);</b>
+<b class="nc"><i class="no-highlight">129</i>&nbsp;        return ActionResult.isSuccess();</b>
+<i class="no-highlight">130</i>&nbsp;    }
+<i class="no-highlight">131</i>&nbsp;
+<i class="no-highlight">132</i>&nbsp;    private void fillData(List&lt;Team&gt; list, TeamSelector selector) {
+<b class="nc"><i class="no-highlight">133</i>&nbsp;        if (CollectionUtils.isEmpty(list) || selector == null) {</b>
+<i class="no-highlight">134</i>&nbsp;            return;
+<i class="no-highlight">135</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">136</i>&nbsp;        fillUser(list, selector);</b>
+<i class="no-highlight">137</i>&nbsp;    }
+<i class="no-highlight">138</i>&nbsp;
+<i class="no-highlight">139</i>&nbsp;    private void fillUser(List&lt;Team&gt; list, TeamSelector selector) {
+<b class="nc"><i class="no-highlight">140</i>&nbsp;        if (BooleanUtils.isNotTrue(selector.getModifiedUser())) {</b>
+<i class="no-highlight">141</i>&nbsp;            return;
+<i class="no-highlight">142</i>&nbsp;        }
+<b class="nc"><i class="no-highlight">143</i>&nbsp;        userConverter.fillDetail(EasyCollectionUtils.toList(list, Team::getModifiedUser));</b>
+<i class="no-highlight">144</i>&nbsp;    }
+<i class="no-highlight">145</i>&nbsp;
+<i class="no-highlight">146</i>&nbsp;}
+</div>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+        var codeBlock = document.getElementById('sourceCode');
+
+        if (codeBlock) {
+            hljs.highlightBlock(codeBlock);
+        }
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-04-02 11:52</div>
+</div>
+</body>
+</html>

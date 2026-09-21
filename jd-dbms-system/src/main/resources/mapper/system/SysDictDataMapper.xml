@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jd.system.mapper.SysDictDataMapper">
+	
+	<resultMap type="com.jd.common.core.domain.entity.SysDictData" id="SysDictDataResult">
+		<id     property="dictCode"   column="DICT_CODE"   />
+		<result property="dictSort"   column="DICT_SORT"   />
+		<result property="dictLabel"  column="DICT_LABEL"  />
+		<result property="dictValue"  column="DICT_VALUE"  />
+		<result property="dictType"   column="DICT_TYPE"   />
+		<result property="cssClass"   column="CSS_CLASS"   />
+		<result property="listClass"  column="LIST_CLASS"  />
+		<result property="isDefault"  column="IS_DEFAULT"  />
+		<result property="status"     column="STATUS"      />
+		<result property="createBy"   column="CREATE_BY"   />
+		<result property="createTime" column="CREATE_TIME" />
+		<result property="updateBy"   column="UPDATE_BY"   />
+		<result property="updateTime" column="UPDATE_TIME" />
+	</resultMap>
+	
+	<sql id="selectDictDataVo">
+        SELECT DICT_CODE, DICT_SORT, DICT_LABEL, DICT_VALUE, DICT_TYPE, CSS_CLASS, LIST_CLASS, IS_DEFAULT, STATUS, CREATE_BY, CREATE_TIME, REMARK
+		FROM SYS_DICT_DATA
+    </sql>
+
+	<select id="selectDictDataList" parameterType="com.jd.common.core.domain.entity.SysDictData" resultMap="SysDictDataResult">
+	    <include refid="selectDictDataVo"/>
+		<where>
+		    <if test="dictType != null and dictType != ''">
+				AND DICT_TYPE = #{dictType}
+			</if>
+			<if test="dictLabel != null and dictLabel != ''">
+				AND DICT_LABEL like concat('%', #{dictLabel}, '%')
+			</if>
+			<if test="status != null and status != ''">
+				AND STATUS = #{status}
+			</if>
+		</where>
+		order by DICT_SORT asc
+	</select>
+	
+	<select id="selectDictDataByType" parameterType="com.jd.common.core.domain.entity.SysDictData" resultMap="SysDictDataResult">
+		<include refid="selectDictDataVo"/>
+		where STATUS = '0' and DICT_TYPE = #{dictType} order by DICT_SORT asc
+	</select>
+	
+	<select id="selectDictLabel" resultType="String">
+		select DICT_LABEL from SYS_DICT_DATA
+		where DICT_TYPE = #{dictType} and DICT_VALUE = #{dictValue}
+	</select>
+	
+	<select id="selectDictDataById" parameterType="Long" resultMap="SysDictDataResult">
+		<include refid="selectDictDataVo"/>
+		where DICT_CODE = #{dictCode}
+	</select>
+	
+	<select id="countDictDataByType" resultType="Integer">
+	    select count(1) from SYS_DICT_DATA where DICT_TYPE=#{dictType}
+	</select>
+	
+	<delete id="deleteDictDataById" parameterType="Long">
+ 		delete from SYS_DICT_DATA where DICT_CODE = #{dictCode}
+ 	</delete>
+ 	
+ 	<delete id="deleteDictDataByIds" parameterType="Long">
+ 		delete from SYS_DICT_DATA where DICT_CODE in
+ 		<foreach collection="array" item="dictCode" open="(" separator="," close=")">
+ 			#{dictCode}
+        </foreach> 
+ 	</delete>
+	
+	<update id="updateDictData" parameterType="com.jd.common.core.domain.entity.SysDictData">
+ 		update SYS_DICT_DATA
+ 		<set>
+ 			<if test="dictSort != null">DICT_SORT = #{dictSort},</if>
+ 			<if test="dictLabel != null and dictLabel != ''">DICT_LABEL = #{dictLabel},</if>
+ 			<if test="dictValue != null and dictValue != ''">DICT_VALUE = #{dictValue},</if>
+ 			<if test="dictType != null and dictType != ''">DICT_TYPE = #{dictType},</if>
+ 			<if test="cssClass != null">CSS_CLASS = #{cssClass},</if>
+ 			<if test="listClass != null">LIST_CLASS = #{listClass},</if>
+ 			<if test="isDefault != null and isDefault != ''">IS_DEFAULT = #{isDefault},</if>
+ 			<if test="status != null">STATUS = #{status},</if>
+ 			<if test="remark != null">REMARK = #{remark},</if>
+ 			<if test="updateBy != null and updateBy != ''">UPDATE_BY = #{updateBy},</if>
+ 			UPDATE_TIME = CURRENT_TIMESTAMP
+ 		</set>
+ 		where DICT_CODE = #{dictCode}
+	</update>
+	
+	<update id="updateDictDataType" parameterType="String">
+ 		update SYS_DICT_DATA set DICT_TYPE = #{newDictType} where DICT_TYPE = #{oldDictType}
+	</update>
+ 	
+ 	<insert id="insertDictData" parameterType="com.jd.common.core.domain.entity.SysDictData">
+ 		insert into SYS_DICT_DATA(
+ 			<if test="dictSort != null">DICT_SORT,</if>
+ 			<if test="dictLabel != null and dictLabel != ''">DICT_LABEL,</if>
+ 			<if test="dictValue != null and dictValue != ''">DICT_VALUE,</if>
+ 			<if test="dictType != null and dictType != ''">DICT_TYPE,</if>
+ 			<if test="cssClass != null and cssClass != ''">CSS_CLASS,</if>
+ 			<if test="listClass != null and listClass != ''">LIST_CLASS,</if>
+ 			<if test="isDefault != null and isDefault != ''">IS_DEFAULT,</if>
+ 			<if test="status != null">STATUS,</if>
+ 			<if test="remark != null and remark != ''">REMARK,</if>
+ 			<if test="createBy != null and createBy != ''">CREATE_BY,</if>
+ 			CREATE_TIME
+ 		)values(
+ 		    <if test="dictSort != null">#{dictSort},</if>
+ 		    <if test="dictLabel != null and dictLabel != ''">#{dictLabel},</if>
+ 			<if test="dictValue != null and dictValue != ''">#{dictValue},</if>
+ 			<if test="dictType != null and dictType != ''">#{dictType},</if>
+ 			<if test="cssClass != null and cssClass != ''">#{cssClass},</if>
+ 			<if test="listClass != null and listClass != ''">#{listClass},</if>
+ 			<if test="isDefault != null and isDefault != ''">#{isDefault},</if>
+ 			<if test="status != null">#{status},</if>
+ 			<if test="remark != null and remark != ''">#{remark},</if>
+ 			<if test="createBy != null and createBy != ''">#{createBy},</if>
+ 			CURRENT_TIMESTAMP
+ 		)
+	</insert>
+	
+</mapper> 
