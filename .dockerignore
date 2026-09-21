@@ -1,0 +1,14 @@
+.git
+.github
+.codegraph
+.idea
+**/target
+!jd-dbms-admin/target/
+!jd-dbms-admin/target/jd-dbms-admin.jar
+**/node_modules
+**/dist
+dm_tools
+orcale_tools
+jd-dbms-ui/node_modules.rar
+.env.docker
+*.log

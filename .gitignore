@@ -12,6 +12,7 @@ node_modules.rar
 .codegraph/
 dm_tools/
 orcale_tools/
+.env.docker
 
 ######################################################################
 # IDE

@@ -1,0 +1,63 @@
+name: jddbms-test
+
+services:
+  redis:
+    image: public.ecr.aws/docker/library/redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend-runtime
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      JDDBMS_META_DB_URL: ${JDDBMS_META_DB_URL:-jdbc:dm://host.docker.internal:5236/JDDBMS?useUnicode=true&characterEncoding=UTF-8}
+      JDDBMS_META_DB_USERNAME: ${JDDBMS_META_DB_USERNAME:-JDDBMS}
+      JDDBMS_META_DB_PASSWORD: ${JDDBMS_META_DB_PASSWORD:?set JDDBMS_META_DB_PASSWORD in .env.docker}
+      JDDBMS_TOKEN_SECRET: ${JDDBMS_TOKEN_SECRET:-}
+      JDDBMS_DATASOURCE_ENCRYPTION_KEY: ${JDDBMS_DATASOURCE_ENCRYPTION_KEY:-}
+      JDDBMS_REDIS_HOST: redis
+      JDDBMS_REDIS_PASSWORD: ""
+      JDDBMS_LOG_LEVEL: ${JDDBMS_LOG_LEVEL:-info}
+      SERVER_TOMCAT_THREADS_MAX: ${JDDBMS_TOMCAT_MAX_THREADS:-100}
+      SERVER_TOMCAT_THREADS_MIN_SPARE: ${JDDBMS_TOMCAT_MIN_THREADS:-10}
+    ports:
+      - "${JDDBMS_API_PORT:-28080}:28080"
+    volumes:
+      - app-data:/data/jddbms
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:28080/captchaImage"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 8
+
+  frontend:
+    build:
+      context: .
+      dockerfile: jd-dbms-ui/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    restart: unless-stopped
+    ports:
+      - "${JDDBMS_WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  redis-data:
+  app-data:

@@ -174,13 +174,18 @@ export default {
     },
   },
   data() {
-    var ipRegex = (rule, value, callback) => {
-      var regex =
+    var hostValidator = (rule, value, callback) => {
+      const ipv4Regex =
         /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+      const hostnameRegex =
+        /^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
       if (!value) {
-        return callback(new Error("IP地址不能为空!"));
-      } else if (!regex.test(value)) {
-        callback(new Error("请输入正确的IP地址!"));
+        return callback(new Error("主机地址不能为空!"));
+      } else if (
+        !ipv4Regex.test(value) &&
+        (!hostnameRegex.test(value) || /^[0-9.]+$/.test(value))
+      ) {
+        callback(new Error("请输入正确的IP地址或主机名!"));
       } else {
         callback();
       }
@@ -217,7 +222,7 @@ export default {
         username: [
           { required: true, message: "请输入用户名", trigger: "blur" },
         ],
-        host: [{ validator: ipRegex, trigger: "blur" }],
+        host: [{ validator: hostValidator, trigger: "blur" }],
         port: [{ validator: postRegex, trigger: "blur" }],
         input: [{ required: true, message: "请输入", trigger: "blur" }],
       },
