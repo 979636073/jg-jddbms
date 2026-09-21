@@ -101,6 +101,9 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
                 .eq(DataSourceDO::getPort, param.getPort())
                 .eq(DataSourceDO::getUserName, param.getUserName())
                 .eq(DataSourceDO::getType, param.getType());
+        if (DataSourceKindEnum.PRIVATE.getCode().equals(param.getKind())) {
+            lambdaQueryWrapper.eq(DataSourceDO::getUserId, ContextUtils.getUserId());
+        }
         param.setId(null);
         if (DBTypeEnum.DM.name().equals(param.getType())) {
             List<DataSourceDO> dataSourceDOS = getBaseMapper().selectList(lambdaQueryWrapper);
