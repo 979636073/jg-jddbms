@@ -4,6 +4,8 @@ import com.jd.biz.controller.rdb.converter.RdbWebConverter;
 import com.jd.biz.controller.rdb.request.TableDetailQueryRequest;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.TriggerService;
+import com.jd.common.annotation.Log;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.core.domain.AjaxResult;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
@@ -63,6 +65,7 @@ public class TriggerController {
      * @return
      */
     @PostMapping("/createTriggersWH")
+    @Log(title = "创建或更新数据库触发器", businessType = BusinessType.INSERT)
     public ActionResult createTriggersWH(@Valid @RequestBody TriggerDetailRequest request) {
         return triggerService.createTriggersWH(request);
     }
@@ -74,6 +77,7 @@ public class TriggerController {
      * @return
      */
     @PostMapping("/deleteTriggers")
+    @Log(title = "删除数据库触发器", businessType = BusinessType.DELETE)
     public DataResult<ExecuteResult> deleteTriggers(@Valid @RequestBody TriggerDetailRequest request) {
         return triggerService.deleteTriggers(request);
     }

@@ -4,6 +4,8 @@ import com.jd.biz.controller.rdb.converter.RdbWebConverter;
 import com.jd.biz.controller.rdb.request.TableDetailQueryRequest;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.FunctionService;
+import com.jd.common.annotation.Log;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.common.tools.base.wrapper.result.web.WebPageResult;
@@ -60,6 +62,7 @@ public class FunctionController {
      * @return
      */
     @PostMapping("/delete_function")
+    @Log(title = "删除数据库函数", businessType = BusinessType.DELETE)
     public DataResult<ExecuteResult> deleteFunction(@Valid @RequestBody FunctionDetailRequest request) {
         return functionService.deleteFunction(request);
     }

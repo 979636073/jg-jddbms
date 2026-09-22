@@ -429,8 +429,17 @@ public class DlTemplateServiceImpl implements DlTemplateService {
     public DataResult<ExecuteResult> JDBCExecute(DlExecuteParam param) {
         CommandExecutor executor = Chat2DBContext.getMetaData().getCommandExecutor();
         Command command = commandConverter.param2model(param);
-        ExecuteResult results = executor.JDBCExecute(command);
-        return DataResult.of(results);
+        ExecuteResult result = executor.JDBCExecute(command);
+        if (result == null) {
+            return DataResult.error("execute error", "未返回执行结果");
+        }
+        DataResult<ExecuteResult> dataResult = DataResult.of(result);
+        if (!Boolean.TRUE.equals(result.getSuccess())) {
+            dataResult.setSuccess(false);
+            dataResult.setErrorCode("execute error");
+            dataResult.setErrorMessage(StringUtils.defaultIfBlank(result.getMessage(), "执行失败"));
+        }
+        return dataResult;
     }
 
 //    @Override

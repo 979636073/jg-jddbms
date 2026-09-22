@@ -6,6 +6,8 @@ import com.jd.biz.controller.rdb.request.ProcedureUpdateRequest;
 import com.jd.biz.controller.rdb.request.TableDetailQueryRequest;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.ProcedureService;
+import com.jd.common.annotation.Log;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
@@ -49,6 +51,7 @@ public class ProcedureController {
     }
 
     @PostMapping("/update")
+    @Log(title = "更新存储过程", businessType = BusinessType.UPDATE)
     public ActionResult update(@Valid @RequestBody ProcedureUpdateRequest request) throws SQLException {
         Procedure procedure = procedureConverter.request2param(request);
         return procedureService.update(request.getDatabaseName(), request.getSchemaName(), procedure);
@@ -71,6 +74,7 @@ public class ProcedureController {
      * @return
      */
     @PostMapping("/delete_procedure")
+    @Log(title = "删除存储过程", businessType = BusinessType.DELETE)
     public DataResult<ExecuteResult> deleteProcedure(@Valid @RequestBody ProcedureDetailRequest request) {
         return procedureService.deleteProcedure(request);
     }

@@ -1,7 +1,6 @@
 package com.jd.biz.controller.rdb;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.exceptions.ExceptionUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.Validator;
 import cn.hutool.core.util.StrUtil;
@@ -20,8 +19,10 @@ import com.jd.biz.domain.api.service.DlTemplateService;
 import com.jd.biz.domain.api.service.TableService;
 import com.jd.biz.domain.api.service.TaskService;
 import com.jd.biz.util.ToolUtil;
+import com.jd.common.annotation.Log;
 import com.jd.common.constant.CacheConstants;
 import com.jd.common.core.redis.RedisCache;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.constant.EasyToolsConstant;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
@@ -278,6 +279,7 @@ public class TableController {
      * @return
      */
     @GetMapping("/copyTable")
+    @Log(title = "复制数据库表", businessType = BusinessType.INSERT)
     public ListResult<ExecuteResultVO> copyTable(@Valid TableDetailQueryRequest request) {
         try {
             if (StrUtil.isEmpty(request.getCopySchemaName())) {
@@ -396,6 +398,7 @@ public class TableController {
 
 
     @GetMapping("/drop_table_constraint")
+    @Log(title = "删除表约束", businessType = BusinessType.DELETE)
     public ActionResult dropConstraint(@Valid TypeQueryRequest request) throws SQLException {
         tableService.dropConstraint(request, Chat2DBContext.getConnection());
         return ActionResult.isSuccess();
@@ -403,6 +406,7 @@ public class TableController {
 
 
     @PostMapping("/createTable_constraint")
+    @Log(title = "创建表约束", businessType = BusinessType.INSERT)
     public ActionResult createTableConstraint(@Valid @RequestBody ConstraintInfoRequest request) throws SQLException {
         tableService.createTableConstraint(request);
         return ActionResult.isSuccess();
@@ -415,6 +419,7 @@ public class TableController {
      * @return
      */
     @PostMapping("/delete")
+    @Log(title = "删除数据库表", businessType = BusinessType.DELETE)
     public ActionResult delete(@Valid @RequestBody TableDeleteRequest request) {
         DropParam dropParam = rdbWebConverter.tableDelete2dropParam(request);
         return tableService.drop(dropParam);
@@ -427,6 +432,8 @@ public class TableController {
      * @return
      */
     @PostMapping("/import")
+    @Log(title = "导入表数据", businessType = BusinessType.IMPORT,
+            excludeParamNames = {"importUrl"})
     public DataResult<TableImportVo> importTable(@Valid @RequestBody TableImportRequest request) {
         return tableService.importTable1(request);
     }
@@ -505,12 +512,14 @@ public class TableController {
      * @return
      */
     @PostMapping("/createTable")
+    @Log(title = "创建数据库表", businessType = BusinessType.INSERT)
     public ActionResult createTable(@Validated @RequestBody TableRequest request) throws SQLException {
         if(StringUtils.isBlank(request.getName())){
             return ActionResult.fail("表名称不能为空");
         }
         boolean ref = false;
-        if(request.getColumnList().size()>0){
+        boolean tableCreated = false;
+        if(!CollectionUtils.isEmpty(request.getColumnList())){
             Table table = new Table();
             try {
                 BeanUtils.copyProperties(request, table);
@@ -571,20 +580,22 @@ public class TableController {
                 for(String sql:sqlArr){
                     if (StringUtils.isNotBlank(sql)){
                         SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(),sql, new DefaultValueHandler());
+                        tableCreated = true;
                     }
                 }
                 return ActionResult.isSuccess();
             } catch (Exception e) {
-                log.warn("创建表失败,异常:{}", e.getMessage());
-                if (!e.getMessage().contains("已存在")) {
-                    // 创建表失败删除表
+                String errorMessage = StringUtils.isBlank(e.getMessage()) ? "未知错误" : e.getMessage();
+                log.warn("创建表失败,异常:{}", errorMessage);
+                if (tableCreated) {
+                    // 仅回滚本次请求已经创建的表，避免误删请求前已存在的同名表。
                     String sql = Chat2DBContext.getSqlBuilder().deleteTable(table);
                     SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(),sql, new DefaultValueHandler());
                 }
                 if (ref) {
-                    return ActionResult.fail(EasyToolsConstant.ERROR_CODE, e.getMessage() ,e.getMessage());
+                    return ActionResult.fail(EasyToolsConstant.ERROR_CODE, errorMessage, null);
                 } else {
-                    return ActionResult.fail(EasyToolsConstant.ERROR_CODE, ExceptionUtil.stacktraceToString(e).split("\\n")[1].replaceAll("\\r", "") ,"创建表失败");
+                    return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "创建表失败：" + errorMessage, null);
                 }
             }
         } else {
@@ -597,6 +608,7 @@ public class TableController {
      * @return
      */
     @PostMapping("/dropTable")
+    @Log(title = "批量删除数据库表", businessType = BusinessType.DELETE)
     public ActionResult dropTable(@Validated @RequestBody TableRequest request) {
         if (CollectionUtils.isEmpty(request.getTableNames())) {
             return ActionResult.fail("删除的表不能为空");
@@ -613,6 +625,7 @@ public class TableController {
      * 大批量删除表转为后台任务，避免阻塞页面请求。
      */
     @PostMapping("/dropTableTask")
+    @Log(title = "提交批量删除表任务", businessType = BusinessType.DELETE)
     public DataResult<Long> dropTableTask(@Validated @RequestBody TableRequest request) {
         if (CollectionUtils.isEmpty(request.getTableNames())) {
             return DataResult.error(EasyToolsConstant.ERROR_CODE, "删除的表不能为空");

@@ -7,6 +7,8 @@ import com.jd.biz.controller.rdb.request.TableSpaceCreateRequest;
 import com.jd.biz.controller.rdb.request.TableSpaceUpdateRequest;
 import com.jd.biz.controller.rdb.vo.TableVO;
 import com.jd.biz.domain.api.service.TableSpaceService;
+import com.jd.common.annotation.Log;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.constant.EasyToolsConstant;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
@@ -107,6 +109,8 @@ public class TableSpaceController {
      * @return
      */
     @PostMapping("/createTablespaceSql")
+    @Log(title = "创建数据库表空间", businessType = BusinessType.INSERT,
+            excludeParamNames = {"path"})
     public ActionResult createTablespace(@Valid @RequestBody TableSpaceCreateRequest request) {
         return tableSpaceService.createTablespace(request);
     }
@@ -119,6 +123,8 @@ public class TableSpaceController {
      * @return
      */
     @PostMapping("/updateTablespaceSql")
+    @Log(title = "修改数据库表空间", businessType = BusinessType.UPDATE,
+            excludeParamNames = {"path"})
     public ActionResult updateTablespaceSql(@Valid @RequestBody TableSpaceUpdateRequest request) {
         return tableSpaceService.updateTablespaceSql(request);
     }
@@ -131,12 +137,14 @@ public class TableSpaceController {
      * @return
      */
     @PostMapping("/dropTablespace")
-    public ActionResult dropTablespace(@RequestBody TableSpaceCreateRequest request) {
+    @Log(title = "删除数据库表空间", businessType = BusinessType.DELETE,
+            excludeParamNames = {"path"})
+    public ActionResult dropTablespace(@Valid @RequestBody TableSpaceCreateRequest request) {
         try {
             tableSpaceService.dropTablespace(request);
             return ActionResult.isSuccess();
         } catch (Exception e) {
-            return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "删除表空间失败.", e.getMessage());
+            return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "删除表空间失败.", null);
         }
     }
 }

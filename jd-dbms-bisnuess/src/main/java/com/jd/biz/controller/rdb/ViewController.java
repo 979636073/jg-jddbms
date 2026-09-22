@@ -8,6 +8,8 @@ import com.jd.biz.controller.rdb.vo.TableVO;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.TableService;
 import com.jd.biz.domain.api.service.ViewService;
+import com.jd.common.annotation.Log;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.constant.EasyToolsConstant;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
@@ -59,9 +61,12 @@ public class ViewController {
      * @return 返回包含表信息的 WebPageResult 对象
      */
     @PostMapping("/updateViewTableName")
+    @Log(title = "修改视图名称", businessType = BusinessType.UPDATE)
     public DataResult<Boolean> updateViewTableName(@RequestBody  @Valid ViewQueryRequest request) {
         Boolean status = viewService.updateViewTableName(request);
-        return DataResult.of(status);
+        return Boolean.TRUE.equals(status)
+                ? DataResult.of(Boolean.TRUE)
+                : DataResult.error("view.rename.failed", "修改视图名称失败");
     }
 
 
@@ -71,9 +76,12 @@ public class ViewController {
      * @return 返回包含表信息的 WebPageResult 对象
      */
     @PostMapping("/updateViewColumnName")
+    @Log(title = "修改视图列名", businessType = BusinessType.UPDATE)
     public DataResult<Boolean> updateViewColumnName(@RequestBody @Valid ViewQueryRequest request) {
         Boolean status =  viewService.updateViewColumnName(request);
-        return DataResult.of(status);
+        return Boolean.TRUE.equals(status)
+                ? DataResult.of(Boolean.TRUE)
+                : DataResult.error("view.column.rename.failed", "修改视图列名失败");
     }
 
 
@@ -108,11 +116,15 @@ public class ViewController {
      * @return ActionResult 包含删除结果的响应对象
      */
     @PostMapping("/delete")
-    public ActionResult delete(@RequestBody ViewNewRequest request) {
+    @Log(title = "删除数据库视图", businessType = BusinessType.DELETE)
+    public ActionResult delete(@Valid @RequestBody ViewNewRequest request) {
         try {
-            if (request.getViewNames().size() > 0) {
+            if (request.getViewNames() != null && !request.getViewNames().isEmpty()) {
                 viewService.dropSelect(request);
                 return ActionResult.isSuccess();
+            }
+            if (StringUtils.isEmpty(request.getName())) {
+                return ActionResult.fail("view.delete.name.required", "待删除视图不能为空", null);
             }
             ViewRequest viewRequest = new ViewRequest();
             viewRequest.setDataSourceId(request.getDataSourceId());
@@ -121,7 +133,7 @@ public class ViewController {
             viewService.drop(viewRequest);
             return ActionResult.isSuccess();
         } catch (Exception e) {
-            return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "视图删除出错", e.getMessage());
+            return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "视图删除出错", null);
         }
 
     }
@@ -156,6 +168,7 @@ public class ViewController {
      * @return ListResult<ExecuteResult> 包含执行结果的列表
      */
     @PostMapping("/execute")
+    @Log(title = "执行视图 DDL", businessType = BusinessType.EXECUTE_DATA)
     public ListResult<ExecuteResult> execute(@RequestBody ViewRequest request) {
         return viewService.execute(request);
     }
@@ -168,6 +181,7 @@ public class ViewController {
      * @return ListResult<ExecuteResult> 包含执行结果的列表
      */
     @PostMapping("/allExecute")
+    @Log(title = "批量编译数据库视图", businessType = BusinessType.EXECUTE_DATA)
     public ListResult<ExecuteResult> allExecute(@Valid @RequestBody ViewRequest request) {
         ListResult executeResultListResult = new ListResult();
         List<ExecuteResult> data = new ArrayList();
