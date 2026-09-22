@@ -100,8 +100,8 @@ function  upatePassword(data) {
 function lockUser(data) {
   return  request({
     url: '/api/rdb/user/lockUser',
-    method: 'get',
-    params:data
+    method: 'post',
+    data
   })
 }
 

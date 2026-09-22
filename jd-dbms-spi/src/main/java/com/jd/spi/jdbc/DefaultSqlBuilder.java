@@ -725,6 +725,22 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
     }
 
     @Override
+    public String modifyUserTableSpaces(String userName, String defaultTableSpace, String tempTableSpace) {
+        if (StrUtil.isBlank(userName)
+                || (StrUtil.isBlank(defaultTableSpace) && StrUtil.isBlank(tempTableSpace))) {
+            throw new BusinessException("user.modify.paramRequired");
+        }
+        StringBuilder sql = new StringBuilder("ALTER USER ").append(quoteIdentifier(userName));
+        if (StrUtil.isNotBlank(defaultTableSpace)) {
+            sql.append(" DEFAULT TABLESPACE ").append(quoteIdentifier(defaultTableSpace));
+        }
+        if (StrUtil.isNotBlank(tempTableSpace)) {
+            sql.append(" TEMPORARY TABLESPACE ").append(quoteIdentifier(tempTableSpace));
+        }
+        return sql.toString();
+    }
+
+    @Override
     public String createUser(String name) {
         return null;
     }

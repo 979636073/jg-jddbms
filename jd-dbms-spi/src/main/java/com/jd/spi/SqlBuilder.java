@@ -218,6 +218,11 @@ public interface SqlBuilder<T> {
      */
     String lockOrUnlock(String userName, Boolean isLock);
 
+    /**
+     * 修改用户默认表空间和临时表空间。
+     */
+    String modifyUserTableSpaces(String userName, String defaultTableSpace, String tempTableSpace);
+
     String createUser(String name);
 
     String dropUser(String username);

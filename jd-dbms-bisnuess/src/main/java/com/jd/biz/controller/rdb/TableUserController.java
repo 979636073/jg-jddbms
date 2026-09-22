@@ -112,8 +112,8 @@ public class TableUserController {
      * @return
      */
     @Log(title = "数据库用户锁定状态", businessType = BusinessType.UPDATE)
-    @GetMapping("/lockUser")
-    public DataResult<Boolean> lockUser(@Valid TableBriefQueryRequest request) {
+    @PostMapping("/lockUser")
+    public DataResult<Boolean> lockUser(@RequestBody @Valid TableBriefQueryRequest request) {
         if (StringUtils.isBlank(request.getLockName()) || request.getIsLock() == null) {
             throw new BusinessException("user.lock.paramRequired");
         }

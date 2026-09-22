@@ -100,27 +100,20 @@ public class TableUserServiceImpl implements TableUserService {
 
     @Override
     public void modify(TableSpace tableSpace) {
-        if (StringUtils.isNotBlank(tableSpace.getDefaultTableSpace())) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("alter user ");
-            sb.append("\"").append(tableSpace.getUserName()).append("\"");
-            sb.append(" default tablespace ");
-            sb.append("\"").append(tableSpace.getDefaultTableSpace()).append("\"");
-            Boolean aBoolean = Chat2DBContext.getMetaData().executeSQL(Chat2DBContext.getConnection(), sb.toString());
-            if (!aBoolean) {
-                throw new BusinessException("user.modify.failed");
-            }
+        if (tableSpace == null || StringUtils.isBlank(tableSpace.getUserName())
+                || (StringUtils.isBlank(tableSpace.getDefaultTableSpace())
+                && StringUtils.isBlank(tableSpace.getTempTableSpace()))) {
+            throw new BusinessException("user.modify.paramRequired");
         }
-        if (StringUtils.isNotBlank(tableSpace.getTempTableSpace())) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("alter user ");
-            sb.append("\"").append(tableSpace.getUserName()).append("\"");
-            sb.append(" TEMPORARY tablespace ");
-            sb.append("\"").append(tableSpace.getTempTableSpace()).append("\"");
-            Boolean aBoolean = Chat2DBContext.getMetaData().executeSQL(Chat2DBContext.getConnection(), sb.toString());
-            if (!aBoolean) {
+        String sql = Chat2DBContext.getSqlBuilder().modifyUserTableSpaces(tableSpace.getUserName(),
+                tableSpace.getDefaultTableSpace(), tableSpace.getTempTableSpace());
+        try {
+            ExecuteResult result = SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);
+            if (result == null || !Boolean.TRUE.equals(result.getSuccess())) {
                 throw new BusinessException("user.modify.failed");
             }
+        } catch (SQLException e) {
+            throw new BusinessException("user.modify.failed", new Object[]{ExceptionUtils.getMessage(e)});
         }
     }
 
@@ -160,7 +153,7 @@ public class TableUserServiceImpl implements TableUserService {
             if (e instanceof BusinessException) {
                 throw (BusinessException) e;
             }
-            String message = ExceptionUtils.getMessage((SQLException) e);
+            String message = ExceptionUtils.getMessage(e);
             throw new BusinessException("user.create.failed", new Object[]{message});
         }
     }

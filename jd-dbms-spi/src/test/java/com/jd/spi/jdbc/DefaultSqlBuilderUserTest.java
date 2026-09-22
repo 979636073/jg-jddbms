@@ -28,6 +28,24 @@ public class DefaultSqlBuilderUserTest {
                 sqlBuilder.delUserRole("TEST\"USER", "APP\"ROLE"));
     }
 
+    @Test
+    public void shouldBuildAtomicUserTableSpaceChange() {
+        Assert.assertEquals(
+                "ALTER USER \"JDDBMS_USER\" DEFAULT TABLESPACE \"USERS\" TEMPORARY TABLESPACE \"TEMP\"",
+                sqlBuilder.modifyUserTableSpaces("JDDBMS_USER", "USERS", "TEMP"));
+        Assert.assertEquals(
+                "ALTER USER \"JDDBMS_USER\" DEFAULT TABLESPACE \"USERS\"",
+                sqlBuilder.modifyUserTableSpaces("JDDBMS_USER", "USERS", null));
+        Assert.assertEquals(
+                "ALTER USER \"JDDBMS_USER\" TEMPORARY TABLESPACE \"TEMP\"",
+                sqlBuilder.modifyUserTableSpaces("JDDBMS_USER", null, "TEMP"));
+    }
+
+    @Test(expected = BusinessException.class)
+    public void shouldRejectUserTableSpaceChangeWithoutAnyTableSpace() {
+        sqlBuilder.modifyUserTableSpaces("JDDBMS_USER", null, "");
+    }
+
     @Test(expected = BusinessException.class)
     public void shouldRejectMissingPassword() {
         sqlBuilder.createUser("JDDBMS_USER", "", null, null);
