@@ -84,6 +84,8 @@ export default {
       lastClickCol: "",
 
       editStatus: true,
+      editingOriginalRow: null,
+      editingHeader: null,
       queryData: {},
       checked: false,
       isErrorExecute: false,
@@ -771,6 +773,7 @@ export default {
     },
 
     async executeUpdateDataSql() {
+      this.commitActiveEdit();
       if (this.isFile) {
         this.executeBlobData();
       } else {
@@ -909,8 +912,11 @@ export default {
       let sqlInfoItem = this.sqlInfo.find((item) => {
         return item.rowId === row["行号"];
       });
-      let key = header.name || header.property;
-      if (this.oldRow[key] !== row[key]) {
+      const editedHeader = header || this.editingHeader || this.selectedColumn;
+      if (!editedHeader) return;
+      const originalRow = this.editingOriginalRow || this.oldRow || {};
+      let key = editedHeader.name || editedHeader.property;
+      if (originalRow[key] !== row[key]) {
         if (sqlInfoItem) {
           if (sqlInfoItem.type === "DELETE") {
             sqlInfoItem.type = "UPDATE";
@@ -919,23 +925,19 @@ export default {
             } else {
               sqlInfoItem.oldDataList = this.queryResultData.headerList.map(
                 (item) => {
-                  return this.oldRow[item.name] || null;
+                  return this.cellValue(originalRow, item);
                 }
               );
             }
           }
           if (sqlInfoItem.type === "CREATE") {
             sqlInfoItem.dataList = this.newArr.map((item) => {
-              return row[item.name]
-                ? row[item.name]
-                : item.defaultValue
-                ? "CHAT2DB_DEFAULT_VALUE"
-                : null;
+              return this.cellValue(row, item, true);
             });
           } else {
             sqlInfoItem.dataList = this.queryResultData.headerList.map(
               (item) => {
-                return row[item.name] || null;
+                return this.cellValue(row, item);
               }
             );
           }
@@ -944,16 +946,10 @@ export default {
             type: "UPDATE",
             rowId: row["行号"],
             oldDataList: this.queryResultData.headerList.map((item) => {
-              return this.oldRow[item.name] || null;
+              return this.cellValue(originalRow, item);
             }),
             dataList: this.queryResultData.headerList.map((item) => {
-              // console.log(item.defaultValue,row[item.name],'row[item.name]');
-              //  `"${item.defaultValue?.replace(/'/g,'')}"`
-              return row[item.name]
-                ? row[item.name]
-                : item.defaultValue
-                ? "CHAT2DB_DEFAULT_VALUE"
-                : null;
+              return this.cellValue(row, item, true);
             }),
           });
         }
@@ -961,6 +957,30 @@ export default {
 
       this.clickRow = null;
       this.clickCell = null;
+      this.editingOriginalRow = null;
+      this.editingHeader = null;
+    },
+    cellValue(row, header, useDefault) {
+      const value = row ? row[header.name] : null;
+      if (value !== undefined && value !== null) return value;
+      return useDefault && header.defaultValue
+        ? "CHAT2DB_DEFAULT_VALUE"
+        : null;
+    },
+    commitActiveEdit() {
+      if (this.clickRow === null || !this.editingHeader) return;
+      const row = this.dataTable[this.clickRow];
+      if (row) this.inputBlur(row, this.editingHeader);
+    },
+    isDateColumn(dataType) {
+      const type = String(dataType || "").toUpperCase();
+      return type === "DATE" || type === "DATETIME" || type === "YEAR" || type.startsWith("TIMESTAMP");
+    },
+    datePickerType(dataType) {
+      const type = String(dataType || "").toUpperCase();
+      if (type === "YEAR") return "year";
+      if (type === "DATE") return "date";
+      return "datetime";
     },
     // 撤销
     handleRevoke() {
@@ -1157,11 +1177,7 @@ export default {
         type: "CREATE",
         rowId: row["行号"],
         dataList: this.newArr.map((item) => {
-          return row[item.name]
-            ? row[item.name]
-            : item.defaultValue
-            ? "CHAT2DB_DEFAULT_VALUE"
-            : null;
+          return this.cellValue(row, item, true);
         }),
       });
       // console.log(this.sqlInfo, "this.sqlInfo");
@@ -1267,6 +1283,10 @@ export default {
       if (this.readonly) return;
       if (this.queryResultData.tableName) {
         this.oldRow = JSON.parse(JSON.stringify(row));
+        this.editingOriginalRow = JSON.parse(JSON.stringify(row));
+        this.editingHeader = this.queryResultData.headerList.find(
+          item => item.name === column.property
+        );
         this.clickRow = row.index;
         this.clickCell = column.index;
         this.$nextTick(() => {
@@ -2657,11 +2677,11 @@ export default {
               "
             >
               <el-date-picker
-                v-if="columnType.date.includes(header.dataType)"
+                v-if="isDateColumn(header.dataType)"
                 v-model="scope.row[header.name]"
-                :type="header.dataType.toLowerCase()"
+                :type="datePickerType(header.dataType)"
                 size="mini"
-                @blur="inputBlur(scope.row, header)"
+                @change="inputBlur(scope.row, header)"
                 value-format="yyyy-MM-dd HH:mm:ss"
                 placeholder="选择日期"
                 class="focusInput"
@@ -2730,11 +2750,11 @@ export default {
                   v-if="scope.$index === clickRow && index + 1 === clickCell"
                 >
                   <el-date-picker
-                    v-if="columnType.date.includes(header.dataType)"
+                    v-if="isDateColumn(header.dataType)"
                     v-model="scope.row[header.name]"
-                    :type="header.dataType.toLowerCase()"
+                    :type="datePickerType(header.dataType)"
                     size="mini"
-                    @blur="inputBlur(scope.row, header)"
+                    @change="inputBlur(scope.row, header)"
                     value-format="yyyy-MM-dd HH:mm:ss"
                     placeholder="选择日期"
                     class="focusInput"

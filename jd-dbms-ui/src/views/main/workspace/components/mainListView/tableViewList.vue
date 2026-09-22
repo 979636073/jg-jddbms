@@ -2,6 +2,7 @@
   <div class="table_box">
     <el-table
       :data="pagedDetailDataSource"
+      v-loading="overviewLoading"
       @row-dblclick="handleCurrentChange"
       :header-cell-style="{ background: '#f1f3f9', color: '#68728c' }"
       style="width: 100%; font-size: 12px"
@@ -52,6 +53,7 @@
 <script>
 import { v4 as uuidv4 } from "uuid";
 import sqlServer from "@/api/main/sql";
+import tableServer from "@/api/main/table";
 export default {
   props: {
     detailDataSource: {
@@ -70,6 +72,10 @@ export default {
       type: String,
       default: "",
     },
+    schema: {
+      type: String,
+      default: "",
+    },
   },
   data() {
     return {
@@ -78,6 +84,9 @@ export default {
         pageSize: 20,
         total: 0,
       },
+      remotePageData: null,
+      overviewLoading: false,
+      pageRequestId: 0,
     };
   },
   computed: {
@@ -85,6 +94,7 @@ export default {
       return this.$route.params.id;
     },
     pagedDetailDataSource() {
+      if (this.remotePageData) return this.remotePageData;
       const start = (this.queryParams.pageNum - 1) * this.queryParams.pageSize;
       return this.filteredDetailDataSource.slice(start, start + this.queryParams.pageSize);
     },
@@ -102,23 +112,75 @@ export default {
     detailDataSource: {
       immediate: true,
       handler(value) {
-        this.queryParams.total = this.filteredDetailDataSource.length;
+        this.remotePageData = null;
+        this.queryParams.total = this.detailDataSourceTotal;
         const maxPage = Math.max(1, Math.ceil(this.queryParams.total / this.queryParams.pageSize));
         if (this.queryParams.pageNum > maxPage) this.queryParams.pageNum = 1;
       },
     },
+    detailDataSourceTotal: {
+      immediate: true,
+      handler(value) {
+        this.queryParams.total = Number(value) || 0;
+      },
+    },
     filterName() {
-      this.queryParams.total = this.filteredDetailDataSource.length;
       this.queryParams.pageNum = 1;
+      this.remotePageData = null;
     },
   },
   methods: {
     handleSizeChange(val) {
       this.queryParams.pageSize = val;
       this.queryParams.pageNum = 1;
+      this.loadOverviewPage();
     },
     handleCurrentChangePage(val) {
       this.queryParams.pageNum = val;
+      this.loadOverviewPage();
+    },
+    async loadOverviewPage() {
+      const requestId = ++this.pageRequestId;
+      this.overviewLoading = true;
+      try {
+        const res = await tableServer.getTableList({
+          dataSourceId: this.dataInfo.dataSource.id,
+          dataSourceName: this.dataInfo.dataSource.alias,
+          databaseType: this.dataInfo.dataSource.type,
+          schemaName: this.schema,
+          refresh: false,
+          requestType: 2,
+          pageNo: this.queryParams.pageNum,
+          pageSize: this.queryParams.pageSize,
+          searchKey: this.filterName || undefined,
+          isRefreshCache: false,
+        });
+        if (requestId !== this.pageRequestId) return;
+        if (!res.success) {
+          this.$message.error(res.errorMessage || "加载表分页失败");
+          return;
+        }
+        const data = res.data.data || [];
+        this.remotePageData = data.map(item => {
+          const details = item.tableDetails || {};
+          return {
+            name: item.name,
+            schema: details.schema,
+            tableSpace: details.tableSpace,
+            comment: item.comment || details.comment,
+            numRows: details.numRows,
+            created: details.created ? details.created.split(".")[0] : details.created,
+            lastDDL: details.lastDDL ? details.lastDDL.split(".")[0] : details.lastDDL,
+          };
+        });
+        this.queryParams.total = Number(res.data.total) || 0;
+      } catch (e) {
+        if (requestId === this.pageRequestId) {
+          this.$message.error("加载表分页失败，请稍后重试");
+        }
+      } finally {
+        if (requestId === this.pageRequestId) this.overviewLoading = false;
+      }
     },
     overviewRowStyle() {
       const tableHeight = this.$el ? this.$el.clientHeight - 60 : 600;

@@ -83,7 +83,6 @@ export default {
   },
   watch: {
     tableData: {
-      deep: true,
       handler() {
         if (this.displayMode === "graph") this.$nextTick(this.initGraph);
       },

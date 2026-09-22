@@ -60,6 +60,9 @@ export default {
       dataTable: [],
       ReferencedList: [],
       relationType: "table",
+      relationRequestId: 0,
+      relationLoadingKey: "",
+      relationLoadedKey: "",
       isLoading: false,
       databaseSupportField: {
         columnTypes: [],
@@ -311,8 +314,19 @@ export default {
 
     // 被引用情况
     queryReferencedList(ref, relationType) {
-      this.isLoading = true;
       const type = relationType || this.relationType;
+      const relationKey = [
+        this.currentConfig?.uniqueData.dataSourceId,
+        this.currentConfig?.uniqueData.schemaName,
+        this.currentConfig?.uniqueData.tableName,
+        type,
+      ].join(":");
+      if (!ref && (this.relationLoadingKey === relationKey || this.relationLoadedKey === relationKey)) {
+        return;
+      }
+      const requestId = ++this.relationRequestId;
+      this.relationLoadingKey = relationKey;
+      this.isLoading = true;
       const params = {
         isRefreshCache: ref ? true : false,
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
@@ -325,16 +339,20 @@ export default {
         : tableServer.getQueryRefer(params);
       query
         .then(res => {
+          if (requestId !== this.relationRequestId) return;
           if (res.success && res.data) {
-            this.ReferencedList = [];
-            this.ReferencedList.push(res.data);
-            this.isLoading = false;
+            this.ReferencedList = [res.data];
           } else {
             this.ReferencedList = [];
-            this.isLoading = false;
           }
+          this.relationLoadedKey = relationKey;
         })
-        .catch(err => {
+        .catch(() => {
+          if (requestId === this.relationRequestId) this.ReferencedList = [];
+        })
+        .finally(() => {
+          if (requestId !== this.relationRequestId) return;
+          this.relationLoadingKey = "";
           this.isLoading = false;
         });
     },

@@ -88,6 +88,8 @@ export default {
       cascaderOptions: [],
       copyschemaName: "",
       timer: null,
+      tableSearchTimer: null,
+      tableSearchRequestId: 0,
       treeClickCount: 0,
       isOpened: true,
       DDLTitle: "",
@@ -237,6 +239,7 @@ export default {
   //解绑事件
   beforeDestroy() {
     this.$EventBus.$off("refreshRightTable");
+    clearTimeout(this.tableSearchTimer);
   },
   methods: {
     handleClick(val,index) {
@@ -807,6 +810,8 @@ export default {
       return data.label.indexOf(value) !== -1;
     },
     async getTableDataList(val, isRefreshCache) {
+      clearTimeout(this.tableSearchTimer);
+      this.tableSearchRequestId += 1;
       this.filterName = "";
       this.$emit("filterChange", "");
       // this.title = this.dataBaseInfo.url
@@ -1128,6 +1133,7 @@ export default {
           requestType: 2,
           pageNo: this.tableListPageNo + 1,
           pageSize: 200,
+          searchKey: this.filterName || undefined,
           isRefreshCache: false,
         });
         if (!res.success) {
@@ -1238,7 +1244,7 @@ export default {
             hasNextPage: true,
             pageNo: 1,
             pageSize: 100,
-            skipCount: true,
+            skipCount: false,
             schemaName: this.schema,
             sql: `select * from "${this.schema}"."${items.name}"`,
             tableName: items.name,
@@ -1495,6 +1501,70 @@ export default {
       this.heightIndexs = [];
       this.activeClass = -1;
       this.$emit("filterChange", this.filterName);
+      if (this.type !== "tables") return;
+      clearTimeout(this.tableSearchTimer);
+      this.tableSearchTimer = setTimeout(() => this.searchTableList(), 300);
+    },
+    async searchTableList() {
+      if (!this.dataInfo.dataSource) return;
+      const requestId = ++this.tableSearchRequestId;
+      this.styleLoading = true;
+      this.loadingText = "正在搜索全部表，请稍候…";
+      try {
+        const res = await tableServer.getTableList({
+          dataSourceId: this.dataInfo.dataSource.id,
+          dataSourceName: this.dataInfo.dataSource.alias,
+          databaseType: this.dataInfo.dataSource.type,
+          schemaName: this.schema,
+          refresh: false,
+          requestType: 2,
+          pageNo: 1,
+          pageSize: 200,
+          searchKey: this.filterName || undefined,
+          isRefreshCache: false,
+        });
+        if (requestId !== this.tableSearchRequestId) return;
+        if (!res.success) {
+          this.$message.error(res.errorMessage || "搜索表失败");
+          return;
+        }
+        const data = res.data.data || [];
+        this.dataTreeList = data.map(item => {
+          const details = item.tableDetails || {};
+          return {
+            name: item.name,
+            comment: item.comment || details.comment,
+            pinned: item.pinned,
+            tableDetails: {
+              tableSpace: details.tableSpace,
+              valid: details.valid,
+              path: details.path,
+            },
+          };
+        });
+        this.detailDataSource = data.map(item => {
+          const details = item.tableDetails || {};
+          return {
+            name: item.name,
+            schema: details.schema,
+            tableSpace: details.tableSpace,
+            comment: item.comment || details.comment,
+            numRows: details.numRows,
+            created: details.created,
+            lastDDL: details.lastDDL,
+          };
+        });
+        this.tableListPageNo = 1;
+        this.tableListTotal = Number(res.data.total) || data.length;
+        this.hasMoreTables = data.length < this.tableListTotal;
+        this.$emit("queryDetailTable", this.detailDataSource, this.tableListTotal);
+      } catch (e) {
+        if (requestId === this.tableSearchRequestId) {
+          this.$message.error("搜索表失败，请稍后重试");
+        }
+      } finally {
+        if (requestId === this.tableSearchRequestId) this.styleLoading = false;
+      }
     },
     visibleChange(val) {
       if (val) {

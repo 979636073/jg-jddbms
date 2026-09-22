@@ -34,6 +34,10 @@ export default {
       type: String,
       default: ""
     },
+    schema: {
+      type: String,
+      default: ""
+    },
     dataInfo: {
       type: Object,
       default: {}
@@ -395,6 +399,7 @@ export default {
         :detailDataSourceTotal="detailDataSourceTotal"
         :dataInfo="dataInfo"
         :filterName="filterName"
+        :schema="schema"
       />
       <ViewList
         v-else-if="typeView == 'views'"

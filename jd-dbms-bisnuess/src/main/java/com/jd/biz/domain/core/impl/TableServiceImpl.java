@@ -861,11 +861,20 @@ public class TableServiceImpl implements TableService {
     /**
      * 对已缓存的表元数据做内存分页，避免默认表列表一次返回并渲染整个模式。
      */
-    private PageResult<Table> pageTables(List<Table> tables, TablePageQueryParam param) {
+    PageResult<Table> pageTables(List<Table> tables, TablePageQueryParam param) {
         List<Table> source = tables == null ? Collections.emptyList() : tables;
+        if (StringUtils.isNotBlank(param.getSearchKey())) {
+            String searchKey = param.getSearchKey().trim();
+            source = source.stream()
+                    .filter(table -> StringUtils.containsIgnoreCase(table.getName(), searchKey)
+                            || StringUtils.containsIgnoreCase(table.getComment(), searchKey)
+                            || (table.getTableDetails() != null
+                            && StringUtils.containsIgnoreCase(table.getTableDetails().getComment(), searchKey)))
+                    .collect(Collectors.toList());
+        }
         int pageNo = param.getPageNo() == null || param.getPageNo() < 1 ? 1 : param.getPageNo();
         int pageSize = param.getPageSize() == null || param.getPageSize() < 1 ? 50 : param.getPageSize();
-        int from = Math.min((pageNo - 1) * pageSize, source.size());
+        int from = (int) Math.min((long) (pageNo - 1) * pageSize, source.size());
         int to = Math.min(from + pageSize, source.size());
         return PageResult.of(source.subList(from, to), (long) source.size(), pageNo, pageSize);
     }

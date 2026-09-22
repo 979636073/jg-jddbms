@@ -25,8 +25,10 @@
         @updateViewNameTwo="updateViewNameTwo"
         :typeView="typeView"
         :detailDataSource="detailDataSource"
+        :detailDataSourceTotal="detailDataSourceTotal"
         :dataInfo="dataInfo"
         :filterName="tableFilterName"
+        :schema="schema"
         :detailsObj="detailsObj"
       />
     </el-main>
