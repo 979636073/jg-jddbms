@@ -77,10 +77,10 @@ public class TableUserController {
     @PostMapping("/addOrDelUserRole")
     public AjaxResult addOrDelUserRole(@Valid @RequestBody TableBriefQueryRequest request) throws SQLException {
         if (StringUtils.isBlank(request.getUserName())) {
-            throw new BusinessException("参数缺失");
+            throw new BusinessException("user.role.change.paramRequired");
         }
-        if (CollUtil.isEmpty(request.getNewRoles()) || CollUtil.isEmpty(request.getOldRoles())) {
-            throw new BusinessException("参数缺失");
+        if (request.getNewRoles() == null || request.getOldRoles() == null) {
+            throw new BusinessException("user.role.change.paramRequired");
         }
         return tableUserService.addOrDelUserRole(request.getUserName(), request.getNewRoles(), request.getOldRoles());
     }
@@ -92,8 +92,8 @@ public class TableUserController {
      */
     @PostMapping("/createUser")
     public AjaxResult createUser(@Valid @RequestBody TableBriefQueryRequest request) {
-        if (StringUtils.isAllBlank(request.getUserName(), request.getNewPassWord(), request.getDefaultTableSpace(), request.getTempTableSpace())) {
-            throw new BusinessException("参数缺失");
+        if (StringUtils.isAnyBlank(request.getUserName(), request.getNewPassWord())) {
+            throw new BusinessException("user.namePassword.required");
         }
         List<TableRoleData> list = new ArrayList<>();
         if (CollUtil.isNotEmpty(request.getRoleList())) {
@@ -109,6 +109,9 @@ public class TableUserController {
      */
     @GetMapping("/lockUser")
     public DataResult<Boolean> lockUser(@Valid TableBriefQueryRequest request) {
+        if (StringUtils.isBlank(request.getLockName()) || request.getIsLock() == null) {
+            throw new BusinessException("user.lock.paramRequired");
+        }
         return tableUserService.lockUser(request.getLockName(), request.getIsLock());
     }
 
@@ -153,6 +156,9 @@ public class TableUserController {
      */
     @PostMapping("/managePassWord")
     public DataResult<ExecuteResult> managePassWord(@RequestBody @Valid TableBriefQueryRequest request) {
+        if (StringUtils.isAnyBlank(request.getUserName(), request.getNewPassWord())) {
+            throw new BusinessException("user.namePassword.required");
+        }
         return tableUserService.managePassWord(request.getUserName(), request.getNewPassWord());
     }
 
@@ -185,18 +191,15 @@ public class TableUserController {
      * @return
      */
     @PostMapping("/dropUser")
-    public ActionResult dropUser(@RequestBody TableBriefQueryRequest request) {
+    public ActionResult dropUser(@Valid @RequestBody TableBriefQueryRequest request) {
+        if (CollUtil.isEmpty(request.getUserNames())
+                || request.getUserNames().stream().anyMatch(StringUtils::isBlank)) {
+            throw new BusinessException("user.drop.nameRequired");
+        }
         try {
-            if(request.getUserNames().size()>0){
-                List<String> userNames = request.getUserNames();
-                userNames.forEach(userName ->{
-                    String sql = Chat2DBContext.getSqlBuilder().dropUser(userName);
-                    try {
-                        SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(),sql, new DefaultValueHandler());
-                    } catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+            for (String userName : request.getUserNames()) {
+                String sql = Chat2DBContext.getSqlBuilder().dropUser(userName);
+                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, new DefaultValueHandler());
             }
             return ActionResult.isSuccess();
         } catch (Exception e) {

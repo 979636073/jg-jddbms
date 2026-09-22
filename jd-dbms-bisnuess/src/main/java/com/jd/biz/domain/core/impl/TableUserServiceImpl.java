@@ -2,7 +2,6 @@ package com.jd.biz.domain.core.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
-import com.alibaba.fastjson2.JSON;
 import com.jd.common.enums.DBTypeEnum;
 import com.jd.biz.controller.rdb.enums.ResultType;
 import com.jd.biz.controller.rdb.request.TableBriefQueryRequest;
@@ -12,19 +11,22 @@ import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.common.utils.StringUtils;
+import com.jd.spi.SqlBuilder;
 import com.jd.spi.model.*;
 import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.SQLExecutor;
 import com.jd.spi.util.ExceptionUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -127,108 +129,43 @@ public class TableUserServiceImpl implements TableUserService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public AjaxResult addOrDelUserRole(String userName, List<TableRoleData> newRoles, List<TableRoleData> oldRoles) {
-        boolean ref = false;
-        List<TableRoleData> collect = oldRoles.stream().filter(TableRoleData::getIsGranted).collect(Collectors.toList());
-        try {
-            String dbType = Chat2DBContext.getConnectInfo().getDbType();
-            if (StringUtils.isEmpty(dbType)) {
-                throw new BusinessException("数据源类型未知");
-            }
-            List<String> delSqlList = new ArrayList<>();
-            if (CollUtil.isNotEmpty(collect)) {
-                for (TableRoleData tableRoleData : collect) {
-                    String delSql = Chat2DBContext.getSqlBuilder().delUserRole(userName, tableRoleData.getRole());
-                    delSqlList.add(delSql);
-                }
-            }
-            if (CollUtil.isNotEmpty(delSqlList)) {
-                for (String s : delSqlList) {
-                    SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), s);
-                }
-                ref = true;
-            }
-            List<TableRoleData> roleData = newRoles.stream().filter(TableRoleData::getIsGranted).collect(Collectors.toList());
-            List<String> list = new ArrayList<>();
-            for (TableRoleData newRole : roleData) {
-                String adminRole ="";
-                if (newRole.getIsAdmin()) {
-                    adminRole = newRole.getRole();
-                }
-                String addSql = Chat2DBContext.getSqlBuilder().addUserRole(userName, newRole.getRole(), adminRole);
-                list.add(addSql);
-            }
-            if (CollUtil.isNotEmpty(list)) {
-                for (String s : list) {
-                    SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), s);
-                }
-            }
-        } catch (SQLException e) {
-            log.warn("设置角色失败,{}", e.getMessage());
-            String[] split = e.getMessage().split(":\n");
-            List<String> list = Arrays.asList(split);
-            String message = "";
-            if (CollUtil.isEmpty(list) || list.size() < 2) {
-                message = "设置角色失败";
-            } else {
-                message = list.get(1);
-            }
-            if (ref) {
-                List<String> oldList = new ArrayList<>();
-                for (TableRoleData newRole : collect) {
-                    String adminRole ="";
-                    if (newRole.getIsAdmin()) {
-                        adminRole = newRole.getRole();
-                    }
-                    String addSql = Chat2DBContext.getSqlBuilder().addUserRole(userName, newRole.getRole(), adminRole);
-                    oldList.add(addSql);
-                }
-                if (CollUtil.isNotEmpty(oldList)) {
-                    for (String s : oldList) {
-                        try {
-                            SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), s);
-                        } catch (SQLException ex) {
-                            log.warn("异常信息,e:{}", ex.getMessage());
-                            ex.printStackTrace();
-                        }
-                    }
-                }
-            }
-            throw new BusinessException(message);
+        if (StrUtil.isBlank(userName) || newRoles == null || oldRoles == null) {
+            throw new BusinessException("user.role.change.paramRequired");
         }
+        executeChanges(buildUserRoleChanges(Chat2DBContext.getSqlBuilder(), userName, newRoles, oldRoles),
+                "user.role.change.failed");
         return AjaxResult.success();
     }
 
-
-    public void addOrDelUserRole(String userName, List<String> adds) throws SQLException {
-        try {
-            List<String> sql = new ArrayList<>();
-            if (CollUtil.isNotEmpty(adds)) {
-                for (String s : adds) {
-                    String addSql = Chat2DBContext.getSqlBuilder().addUserRole(userName, s, "");
-                    sql.add(addSql);
-                }
-            }
-            for (String s : sql) {
-                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), s);
-            }
-        } catch (SQLException e) {
-            throw new BusinessException("设置角色失败");
-        }
-    }
-
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public AjaxResult createUser(String userName, String newPassWord, String defaultTableSpace, String temptableSpace, List<TableRoleData> roles) {
+        if (StrUtil.isBlank(userName) || StrUtil.isBlank(newPassWord)) {
+            throw new BusinessException("user.namePassword.required");
+        }
+        boolean created = false;
         try {
             String createSql = Chat2DBContext.getSqlBuilder().createUser(userName, newPassWord, defaultTableSpace, temptableSpace);
             SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), createSql);
-            List<String> collect = roles.stream().filter(TableRoleData::getIsGranted).map(TableRoleData::getRole).collect(Collectors.toList());
-            addOrDelUserRole(userName, collect);
+            created = true;
+            List<TableRoleData> requestedRoles = roles == null ? Collections.emptyList() : roles;
+            executeChanges(buildUserRoleChanges(Chat2DBContext.getSqlBuilder(), userName,
+                    requestedRoles, Collections.emptyList()), "user.role.change.failed");
             return AjaxResult.success();
-        } catch (SQLException e) {
-            throw new BusinessException(e.getMessage());
+        } catch (SQLException | RuntimeException e) {
+            if (created) {
+                try {
+                    SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(),
+                            Chat2DBContext.getSqlBuilder().dropUser(userName));
+                } catch (SQLException cleanupException) {
+                    log.warn("创建用户失败后清理用户失败,userName:{},error:{}", userName, cleanupException.getMessage());
+                }
+            }
+            if (e instanceof BusinessException) {
+                throw (BusinessException) e;
+            }
+            String message = ExceptionUtils.getMessage((SQLException) e);
+            throw new BusinessException("user.create.failed", new Object[]{message});
         }
     }
 
@@ -323,45 +260,154 @@ public class TableUserServiceImpl implements TableUserService {
 
     @Override
     public Boolean addObjectRole(TableBriefQueryRequest request) {
-        boolean ref = false;
-        try {
-            if (CollUtil.isEmpty(request.getNewObjectRoleData()) || CollUtil.isEmpty(request.getOldObjectRoleData())) {
-                throw new BusinessException("对象权限入参缺失");
-            }
-            if (StrUtil.isBlank(request.getSchemaName()) || StrUtil.isBlank(request.getTableName()) || StrUtil.isBlank(request.getUserName())) {
-                throw new BusinessException("入参缺失");
-            }
-            if (request.getSchemaName().equals(request.getUserName())) {
-                throw new BusinessException("模式名不能与用户名相同");
-            }
-            List<String> delSql = Chat2DBContext.getSqlBuilder().delObjectRole(request.getSchemaName(), request.getUserName(), request.getTableName(), request.getOldObjectRoleData());
-            if (CollUtil.isNotEmpty(delSql)) {
-                for (String s : delSql) {
-                    SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), s);
-                }
-            }
-            ref = true;
-            List<TableObjectRoleData> newObjectRoleData = request.getNewObjectRoleData();
-            List<String> addSql = Chat2DBContext.getSqlBuilder().addObjectRole(request.getSchemaName(), request.getUserName(), request.getTableName(), newObjectRoleData);
-            if (CollUtil.isNotEmpty(addSql)) {
-                for (String s : addSql) {
-                    SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), s);
-                }
-            }
-        } catch (BusinessException | SQLException e) {
-            log.warn("对象权限变更失败,e:{}", e.getMessage());
-            try {
-                if (ref) {
-                    List<String> addSql = Chat2DBContext.getSqlBuilder().addObjectRole(request.getSchemaName(), request.getUserName(), request.getTableName(), request.getOldObjectRoleData());
-                    for (String s : addSql) {
-                        SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), s);
-                    }
-                }
-            } catch (SQLException ex) {
-                log.warn("对象权限变更失败,入参:{}", JSON.toJSONString(request));
-            }
-            throw new BusinessException( e.getMessage());
+        if (request.getNewObjectRoleData() == null || request.getOldObjectRoleData() == null) {
+            throw new BusinessException("user.objectRole.paramRequired");
         }
+        if (StrUtil.isBlank(request.getSchemaName()) || StrUtil.isBlank(request.getTableName()) || StrUtil.isBlank(request.getUserName())) {
+            throw new BusinessException("user.objectRole.paramRequired");
+        }
+        if (request.getSchemaName().equals(request.getUserName())) {
+            throw new BusinessException("user.objectRole.sameSchema");
+        }
+        executeChanges(buildObjectRoleChanges(Chat2DBContext.getSqlBuilder(), request), "user.objectRole.change.failed");
         return true;
+    }
+
+    List<SqlChange> buildUserRoleChanges(SqlBuilder<?> sqlBuilder, String userName,
+                                         List<TableRoleData> newRoles, List<TableRoleData> oldRoles) {
+        Map<String, TableRoleData> oldGranted = grantedRoleMap(oldRoles);
+        Map<String, TableRoleData> newGranted = grantedRoleMap(newRoles);
+        Set<String> roleNames = new LinkedHashSet<>(oldGranted.keySet());
+        roleNames.addAll(newGranted.keySet());
+        List<SqlChange> revokes = new ArrayList<>();
+        List<SqlChange> grants = new ArrayList<>();
+        for (String roleName : roleNames) {
+            TableRoleData oldRole = oldGranted.get(roleName);
+            TableRoleData newRole = newGranted.get(roleName);
+            boolean adminChanged = oldRole != null && newRole != null
+                    && !Objects.equals(Boolean.TRUE.equals(oldRole.getIsAdmin()), Boolean.TRUE.equals(newRole.getIsAdmin()));
+            if (oldRole != null && (newRole == null || adminChanged)) {
+                revokes.add(new SqlChange(
+                        sqlBuilder.delUserRole(userName, roleName),
+                        sqlBuilder.addUserRole(userName, roleName,
+                                Boolean.TRUE.equals(oldRole.getIsAdmin()) ? roleName : "")));
+            }
+            if (newRole != null && (oldRole == null || adminChanged)) {
+                grants.add(new SqlChange(
+                        sqlBuilder.addUserRole(userName, roleName,
+                                Boolean.TRUE.equals(newRole.getIsAdmin()) ? roleName : ""),
+                        sqlBuilder.delUserRole(userName, roleName)));
+            }
+        }
+        revokes.addAll(grants);
+        return revokes;
+    }
+
+    List<SqlChange> buildObjectRoleChanges(SqlBuilder<?> sqlBuilder, TableBriefQueryRequest request) {
+        Map<String, TableObjectRoleData> oldGranted = grantedObjectRoleMap(request.getOldObjectRoleData());
+        Map<String, TableObjectRoleData> newGranted = grantedObjectRoleMap(request.getNewObjectRoleData());
+        Set<String> privilegeNames = new LinkedHashSet<>(oldGranted.keySet());
+        privilegeNames.addAll(newGranted.keySet());
+        List<SqlChange> revokes = new ArrayList<>();
+        List<SqlChange> grants = new ArrayList<>();
+        for (String privilegeName : privilegeNames) {
+            TableObjectRoleData oldRole = oldGranted.get(privilegeName);
+            TableObjectRoleData newRole = newGranted.get(privilegeName);
+            boolean grantOptionChanged = oldRole != null && newRole != null
+                    && !Objects.equals(Boolean.TRUE.equals(oldRole.getToRule()), Boolean.TRUE.equals(newRole.getToRule()));
+            if (oldRole != null && (newRole == null || grantOptionChanged)) {
+                revokes.add(new SqlChange(
+                        singleSql(sqlBuilder.delObjectRole(request.getSchemaName(), request.getUserName(),
+                                request.getTableName(), Collections.singletonList(oldRole))),
+                        singleSql(sqlBuilder.addObjectRole(request.getSchemaName(), request.getUserName(),
+                                request.getTableName(), Collections.singletonList(oldRole)))));
+            }
+            if (newRole != null && (oldRole == null || grantOptionChanged)) {
+                grants.add(new SqlChange(
+                        singleSql(sqlBuilder.addObjectRole(request.getSchemaName(), request.getUserName(),
+                                request.getTableName(), Collections.singletonList(newRole))),
+                        singleSql(sqlBuilder.delObjectRole(request.getSchemaName(), request.getUserName(),
+                                request.getTableName(), Collections.singletonList(newRole)))));
+            }
+        }
+        revokes.addAll(grants);
+        return revokes;
+    }
+
+    private Map<String, TableRoleData> grantedRoleMap(List<TableRoleData> roles) {
+        Map<String, TableRoleData> result = new LinkedHashMap<>();
+        if (roles == null) {
+            return result;
+        }
+        for (TableRoleData role : roles) {
+            if (role != null && Boolean.TRUE.equals(role.getIsGranted())) {
+                if (StrUtil.isBlank(role.getRole())) {
+                    throw new BusinessException("user.role.name.required");
+                }
+                result.put(role.getRole(), role);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, TableObjectRoleData> grantedObjectRoleMap(List<TableObjectRoleData> roles) {
+        Map<String, TableObjectRoleData> result = new LinkedHashMap<>();
+        if (roles == null) {
+            return result;
+        }
+        for (TableObjectRoleData role : roles) {
+            if (role != null && Boolean.TRUE.equals(role.getRule())) {
+                if (StrUtil.isBlank(role.getDesc())) {
+                    throw new BusinessException("user.objectRole.name.required");
+                }
+                result.put(role.getDesc(), role);
+            }
+        }
+        return result;
+    }
+
+    private String singleSql(List<String> sqlList) {
+        if (CollUtil.isEmpty(sqlList) || StrUtil.isBlank(sqlList.get(0))) {
+            throw new BusinessException("user.objectRole.unsupported");
+        }
+        return sqlList.get(0);
+    }
+
+    private void executeChanges(List<SqlChange> changes, String errorCode) {
+        List<SqlChange> completed = new ArrayList<>();
+        try {
+            for (SqlChange change : changes) {
+                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), change.sql);
+                completed.add(change);
+            }
+        } catch (SQLException e) {
+            for (int i = completed.size() - 1; i >= 0; i--) {
+                try {
+                    SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), completed.get(i).rollbackSql);
+                } catch (SQLException rollbackException) {
+                    log.warn("权限变更补偿失败,sql:{},error:{}", completed.get(i).rollbackSql,
+                            rollbackException.getMessage());
+                }
+            }
+            throw new BusinessException(errorCode, new Object[]{ExceptionUtils.getMessage(e)});
+        }
+    }
+
+    static class SqlChange {
+        private final String sql;
+        private final String rollbackSql;
+
+        SqlChange(String sql, String rollbackSql) {
+            this.sql = sql;
+            this.rollbackSql = rollbackSql;
+        }
+
+        String getSql() {
+            return sql;
+        }
+
+        String getRollbackSql() {
+            return rollbackSql;
+        }
     }
 }

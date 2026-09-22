@@ -251,7 +251,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
                 + (grant ? " TO " : " FROM ") + quoteIdentifier(toGrantUser);
     }
 
-    private String quoteIdentifier(String identifier) {
+    protected String quoteIdentifier(String identifier) {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
@@ -746,11 +746,17 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
 
     @Override
     public String addUserRole(String userName, String role, String adminRole) {
-        StringBuilder stringBuilder = new StringBuilder(" GRANT \"%s\" TO \"%s\"");
-        if (StringUtils.isNotBlank(adminRole)) {
-            stringBuilder.append(" WITH ADMIN OPTION ");
+        if (StrUtil.isBlank(userName) || StrUtil.isBlank(role)) {
+            throw new BusinessException("user.role.name.required");
         }
-        return String.format(stringBuilder.toString(), role, userName);
+        StringBuilder stringBuilder = new StringBuilder("GRANT ")
+                .append(quoteIdentifier(role))
+                .append(" TO ")
+                .append(quoteIdentifier(userName));
+        if (StringUtils.isNotBlank(adminRole)) {
+            stringBuilder.append(" WITH ADMIN OPTION");
+        }
+        return stringBuilder.toString();
     }
 //
 //    @Override
@@ -767,14 +773,28 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
 
     @Override
     public String delUserRole(String userName, String role) {
-        StringBuilder stringBuilder = new StringBuilder(" REVOKE \"%s\" FROM \"%s\"");
-        return String.format(stringBuilder.toString(), role, userName);
+        if (StrUtil.isBlank(userName) || StrUtil.isBlank(role)) {
+            throw new BusinessException("user.role.name.required");
+        }
+        return "REVOKE " + quoteIdentifier(role) + " FROM " + quoteIdentifier(userName);
     }
 
     @Override
     public String createUser(String userName, String password, String defaultTableSpace, String temptableSpace) {
-        StringBuilder stringBuilder = new StringBuilder(" CREATE USER \"%s\" IDENTIFIED  BY \"%s\" DEFAULT TABLESPACE \"%s\" TEMPORARY TABLESPACE \"%s\"");
-        return String.format(stringBuilder.toString(), userName, password, defaultTableSpace, temptableSpace, defaultTableSpace);
+        if (StrUtil.isBlank(userName) || StrUtil.isBlank(password)) {
+            throw new BusinessException("user.namePassword.required");
+        }
+        StringBuilder sql = new StringBuilder("CREATE USER ")
+                .append(quoteIdentifier(userName))
+                .append(" IDENTIFIED BY ")
+                .append(quoteIdentifier(password));
+        if (StrUtil.isNotBlank(defaultTableSpace)) {
+            sql.append(" DEFAULT TABLESPACE ").append(quoteIdentifier(defaultTableSpace));
+        }
+        if (StrUtil.isNotBlank(temptableSpace)) {
+            sql.append(" TEMPORARY TABLESPACE ").append(quoteIdentifier(temptableSpace));
+        }
+        return sql.toString();
     }
 
     @Override

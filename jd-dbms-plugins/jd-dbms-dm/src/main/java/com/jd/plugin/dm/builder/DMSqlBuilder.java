@@ -310,28 +310,25 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
 
     @Override
     public String manageUserPassword(String userName, String newPassword) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format("ALTER USER \"%s\" IDENTIFIED BY \"%s\"", userName, newPassword));
-        return stringBuilder.toString();
+        return "ALTER USER " + quoteIdentifier(userName) + " IDENTIFIED BY " + quoteIdentifier(newPassword);
     }
 
     @Override
     public String lockOrUnlock(String userName, Boolean isLock) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("alter user \"%s\" account ");
+        StringBuilder stringBuilder = new StringBuilder("ALTER USER ")
+                .append(quoteIdentifier(userName))
+                .append(" ACCOUNT ");
         if (!isLock) {
-            stringBuilder.append("lock");
+            stringBuilder.append("LOCK");
         } else {
-            stringBuilder.append("unlock");
+            stringBuilder.append("UNLOCK");
         }
-        return String.format(stringBuilder.toString(), userName);
+        return stringBuilder.toString();
     }
 
     @Override
     public String createUser(String name) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("CREATE USER '%s' IDENTIFIED BY <PASSWORD>");
-        return String.format(stringBuilder.toString(), name);
+        return "CREATE USER " + quoteIdentifier(name) + " IDENTIFIED BY <PASSWORD>";
     }
 
 
@@ -370,9 +367,7 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
 
     @Override
     public String dropUser(String username) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("DROP USER \"" + username + "\" cascade");
-        return stringBuilder.toString();
+        return "DROP USER " + quoteIdentifier(username) + " CASCADE";
     }
 
     private String getTableColmunString(List<String> columnList) {
@@ -472,13 +467,15 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
 
     @Override
     public List<String> addObjectRole(String schemaName, String userName, String tableName, List<TableObjectRoleData> newObjectRoleData) {
-        List<TableObjectRoleData> collect = newObjectRoleData.stream().filter(TableObjectRoleData::getRule).collect(Collectors.toList());
+        List<TableObjectRoleData> collect = newObjectRoleData.stream()
+                .filter(data -> Boolean.TRUE.equals(data.getRule()))
+                .collect(Collectors.toList());
         List<String> list = new ArrayList<>();
         String sql = "grant %s on \"%s\".\"%s\" to \"%s\"";
         for (TableObjectRoleData data : collect) {
             String s = String.format(sql, data.getDesc(), schemaName, tableName, userName);
             StringBuilder stringBuilder = new StringBuilder(s);
-            if (data.getToRule()) {
+            if (Boolean.TRUE.equals(data.getToRule())) {
                 stringBuilder.append(" with grant option");
             }
             list.add(stringBuilder.toString());
@@ -489,7 +486,10 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
     @Override
     public List<String> delObjectRole(String schemaName, String userName, String tableName, List<TableObjectRoleData> newObjectRoleData) {
         List<String> list = new ArrayList<>();
-        List<String> collect = newObjectRoleData.stream().filter(TableObjectRoleData::getRule).map(TableObjectRoleData::getDesc).collect(Collectors.toList());
+        List<String> collect = newObjectRoleData.stream()
+                .filter(data -> Boolean.TRUE.equals(data.getRule()))
+                .map(TableObjectRoleData::getDesc)
+                .collect(Collectors.toList());
         String sql = "REVOKE %s ON TABLE \"%s\".\"%s\" FROM \"%s\"";
         for (String s : collect) {
             list.add(String.format(sql, s,schemaName, tableName, userName));
