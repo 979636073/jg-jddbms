@@ -222,6 +222,39 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         return null;
     }
 
+    /**
+     * 构建 Oracle 兼容的表级授权/撤权语句。
+     */
+    protected String buildTablePrivilegeSql(boolean grant, String databaseName, String schemaName,
+                                            String tableName, String toGrantUser, Boolean insert,
+                                            Boolean update, Boolean delete) {
+        String ownerName = StrUtil.isNotBlank(schemaName) ? schemaName : databaseName;
+        if (StrUtil.isBlank(ownerName) || StrUtil.isBlank(tableName) || StrUtil.isBlank(toGrantUser)) {
+            throw new BusinessException("授权对象参数缺失");
+        }
+
+        List<String> privileges = new ArrayList<>();
+        privileges.add("SELECT");
+        if (Boolean.TRUE.equals(insert)) {
+            privileges.add("INSERT");
+        }
+        if (Boolean.TRUE.equals(update)) {
+            privileges.add("UPDATE");
+        }
+        if (Boolean.TRUE.equals(delete)) {
+            privileges.add("DELETE");
+        }
+
+        return (grant ? "GRANT " : "REVOKE ")
+                + String.join(", ", privileges)
+                + " ON " + quoteIdentifier(ownerName) + "." + quoteIdentifier(tableName)
+                + (grant ? " TO " : " FROM ") + quoteIdentifier(toGrantUser);
+    }
+
+    private String quoteIdentifier(String identifier) {
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
     private String getSelectSql(String name, List<TableColumn> columnList) {
         StringBuilder script = new StringBuilder();
         script.append("SELECT ");

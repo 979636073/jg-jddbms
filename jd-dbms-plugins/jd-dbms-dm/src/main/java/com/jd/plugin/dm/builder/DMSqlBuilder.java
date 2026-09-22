@@ -270,6 +270,20 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
     }
 
     @Override
+    public String createGrantTemplate(String databaseName, String schemaName, String tableName, String toGrantUser,
+                                      Boolean insert, Boolean update, Boolean delete) {
+        return buildTablePrivilegeSql(true, databaseName, schemaName, tableName, toGrantUser,
+                insert, update, delete);
+    }
+
+    @Override
+    public String deleteGrantTemplate(String databaseName, String schemaName, String tableName, String toGrantUser,
+                                      Boolean insert, Boolean update, Boolean delete) {
+        return buildTablePrivilegeSql(false, databaseName, schemaName, tableName, toGrantUser,
+                insert, update, delete);
+    }
+
+    @Override
     public String dropTableSql(String schemaName, String tableName) {
         return "DROP TABLE IF EXISTS \"" + schemaName + "\".\"" + tableName + "\"";
     }

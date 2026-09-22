@@ -259,28 +259,14 @@ public class OracleSqlBuilder extends DefaultSqlBuilder {
     @Override
     public String createGrantTemplate(String databaseName, String schemaName, String tableName, String toGrantUser,
                                       Boolean insert, Boolean update, Boolean delete) {
-        String sql = "GRANT SELECT " +
-                (insert ? ",INSERT " : "") +
-                (update ? ",UPDATE " : "") +
-                (delete ? ",DELETE " : "")
-                +
-                " ON "
-                + format(schemaName != null ? schemaName : databaseName) + spot
-                + tableName + " TO " + format(toGrantUser);
-        return sql;
+        return buildTablePrivilegeSql(true, databaseName, schemaName, tableName, toGrantUser,
+                insert, update, delete);
     }
 
     @Override
     public String deleteGrantTemplate(String databaseName, String schemaName, String tableName, String toGrantUser, Boolean insert, Boolean update, Boolean delete) {
-        String sql = "REVOKE  SELECT " +
-                (insert ? ",INSERT " : "") +
-                (update ? ",UPDATE " : "") +
-                (delete ? ",DELETE " : "")
-                +
-                " ON "
-                + format(schemaName != null ? schemaName : databaseName) + spot
-                + tableName + " TO " + format(toGrantUser);
-        return sql;
+        return buildTablePrivilegeSql(false, databaseName, schemaName, tableName, toGrantUser,
+                insert, update, delete);
     }
 //    @Override
 //    public String buildCreateSchemaSql(Schema schema){
