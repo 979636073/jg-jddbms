@@ -23,6 +23,7 @@ import com.jd.biz.domain.api.service.OperationLogService;
 import com.jd.biz.domain.api.service.TableService;
 import com.jd.biz.domain.core.converter.CommandConverter;
 import com.jd.biz.domain.core.util.MetaNameUtils;
+import com.jd.biz.domain.core.util.SqlAuditUtils;
 import com.jd.biz.util.FileUtils;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.DataResult;
@@ -183,7 +184,7 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             List<Header> headers = executeResult.getHeaderList();
             if (CollectionUtil.isNotEmpty(headers)) {
                 if (executeResult.getSuccess() && CollectionUtils.isNotEmpty(headers)) {
-                    if (isColumn) {
+                    if (Boolean.TRUE.equals(isColumn)) {
                         long l = System.currentTimeMillis();
                         setColumnInfo(headers, executeResult.getTableName(), schemaName, databaseName);
                         log.info("列头耗时:{}ms", System.currentTimeMillis() - l);
@@ -194,9 +195,9 @@ public class DlTemplateServiceImpl implements DlTemplateService {
                     // 设置byte为空
                     replaceByteData(dataList, headerList);
                 }
-                if (isLog) {
-                    addOperationLog(executeResult);
-                }
+            }
+            if (Boolean.TRUE.equals(isLog)) {
+                addOperationLog(executeResult);
             }
         }
         return listResult;
@@ -508,15 +509,27 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         try {
             ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
             OperationLogCreateParam createParam = new OperationLogCreateParam();
-            createParam.setDdl(executeResult.getSql());
+            String auditSql = StrUtil.isNotBlank(executeResult.getOriginalSql())
+                    ? executeResult.getOriginalSql()
+                    : executeResult.getSql();
+            createParam.setDdl(SqlAuditUtils.sanitizeSql(auditSql));
             createParam.setStatus(executeResult.getSuccess() ? "success" : "fail");
             createParam.setDatabaseName(connectInfo.getDatabaseName());
             createParam.setDataSourceId(connectInfo.getDataSourceId());
             createParam.setSchemaName(connectInfo.getSchemaName());
             createParam.setUseTime(executeResult.getDuration());
             createParam.setType(connectInfo.getDbType());
-            createParam.setOperationRows(
-                    executeResult.getUpdateCount() != null ? Long.valueOf(executeResult.getUpdateCount()) : null);
+            Integer updateCount = executeResult.getUpdateCount();
+            createParam.setOperationRows(updateCount != null && updateCount >= 0
+                    ? Long.valueOf(updateCount)
+                    : null);
+            JSONObject extendInfo = new JSONObject();
+            extendInfo.put("sqlType", SqlAuditUtils.resolveSqlType(executeResult.getSqlType(), auditSql));
+            String errorMessage = SqlAuditUtils.sanitizeErrorMessage(executeResult.getMessage());
+            if (StrUtil.isNotBlank(errorMessage)) {
+                extendInfo.put("errorMessage", errorMessage);
+            }
+            createParam.setExtendInfo(extendInfo.toJSONString());
             operationLogService.create(createParam);
         } catch (Exception e) {
             log.error("addOperationLog error:", e);

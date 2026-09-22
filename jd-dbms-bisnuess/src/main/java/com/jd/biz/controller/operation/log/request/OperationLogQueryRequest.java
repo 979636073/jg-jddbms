@@ -24,6 +24,11 @@ public class OperationLogQueryRequest extends PageQueryRequest {
     private String searchKey;
 
     /**
+     * 执行状态
+     */
+    private String status;
+
+    /**
      * 数据源id
      */
     private Long dataSourceId;

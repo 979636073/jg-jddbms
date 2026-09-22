@@ -23,6 +23,11 @@ public class OperationLogPageQueryParam extends PageQueryParam {
      */
     private String searchKey;
 
+    /**
+     * 执行状态
+     */
+    private String status;
+
     private Map<String, Object> params;
 
     /**

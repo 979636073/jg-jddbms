@@ -1,6 +1,7 @@
 package com.jd.biz.domain.core.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.alibaba.fastjson2.JSONObject;
 import com.jd.biz.domain.api.model.DataSource;
 import com.jd.biz.domain.api.model.OperationLog;
 import com.jd.biz.domain.api.param.operation.OperationLogCreateParam;
@@ -21,6 +22,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -75,9 +77,21 @@ public class OperationLogServiceImpl implements OperationLogService {
     public PageResult<OperationLog> queryPage(OperationLogPageQueryParam param) {
         LambdaQueryWrapper<OperationLogDO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(OperationLogDO::getUserId, param.getUserId());
-//        queryWrapper.eq(OperationLogDO::getDataSourceId, param.getDataSourceId());
-//        queryWrapper.eq(OperationLogDO::getDatabaseName, param.getDatabaseName());
-//        queryWrapper.eq(OperationLogDO::getSchemaName, param.getSchemaName());
+        if (Objects.nonNull(param.getDataSourceId())) {
+            queryWrapper.eq(OperationLogDO::getDataSourceId, param.getDataSourceId());
+        }
+        if (StringUtils.isNotBlank(param.getDatabaseName())) {
+            queryWrapper.eq(OperationLogDO::getDatabaseName, param.getDatabaseName());
+        }
+        if (StringUtils.isNotBlank(param.getSchemaName())) {
+            queryWrapper.eq(OperationLogDO::getSchemaName, param.getSchemaName());
+        }
+        if (StringUtils.isNotBlank(param.getStatus())) {
+            queryWrapper.eq(OperationLogDO::getStatus, param.getStatus());
+        }
+        if (StringUtils.isNotBlank(param.getSearchKey())) {
+            queryWrapper.like(OperationLogDO::getDdl, param.getSearchKey());
+        }
         if (Objects.nonNull(param.getParams())) {
             if (Objects.nonNull(param.getParams().get("beginTime"))) {
                 queryWrapper.ge(OperationLogDO::getGmtCreate, param.getParams().get("beginTime") + " 00:00:00");
@@ -100,10 +114,24 @@ public class OperationLogServiceImpl implements OperationLogService {
         Map<Long, DataSource> dataSourceMap = dataSourceListResult.getData().stream().collect(
                 Collectors.toMap(DataSource::getId, Function.identity(), (a, b) -> a));
         executedDdlDTOS.forEach(executeDdl -> {
+            populateAuditDetails(executeDdl);
             if (dataSourceMap.containsKey(executeDdl.getDataSourceId())) {
                 executeDdl.setDataSourceName(dataSourceMap.get(executeDdl.getDataSourceId()).getAlias());
             }
         });
         return PageResult.of(executedDdlDTOS, executedDdlDOIPage.getTotal(), param);
+    }
+
+    private void populateAuditDetails(OperationLog operationLog) {
+        if (StringUtils.isBlank(operationLog.getExtendInfo())) {
+            return;
+        }
+        try {
+            JSONObject extendInfo = JSONObject.parseObject(operationLog.getExtendInfo());
+            operationLog.setSqlType(extendInfo.getString("sqlType"));
+            operationLog.setErrorMessage(extendInfo.getString("errorMessage"));
+        } catch (Exception e) {
+            // 兼容历史上写入的非 JSON 扩展信息。
+        }
     }
 }

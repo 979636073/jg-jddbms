@@ -21,6 +21,11 @@ public class OperationLog {
     private Long id;
 
     /**
+     * 执行用户ID
+     */
+    private Long userId;
+
+    /**
      * 创建时间
      */
     private LocalDateTime gmtCreate;
@@ -76,6 +81,16 @@ public class OperationLog {
      * 扩展信息
      */
     private String extendInfo;
+
+    /**
+     * SQL类型（由扩展信息解析，不对应数据库列）
+     */
+    private String sqlType;
+
+    /**
+     * 失败信息（由扩展信息解析，不对应数据库列）
+     */
+    private String errorMessage;
 
     /**
      * schema名称

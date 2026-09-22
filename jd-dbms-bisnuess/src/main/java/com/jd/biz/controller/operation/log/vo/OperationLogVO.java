@@ -20,6 +20,11 @@ public class OperationLogVO {
     private Long id;
 
     /**
+     * 执行用户ID
+     */
+    private Long userId;
+
+    /**
      * 创建时间
      */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -85,6 +90,16 @@ public class OperationLogVO {
      * 扩展信息
      */
     private String extendInfo;
+
+    /**
+     * SQL类型
+     */
+    private String sqlType;
+
+    /**
+     * 失败信息
+     */
+    private String errorMessage;
 
     /**
      * schema名称

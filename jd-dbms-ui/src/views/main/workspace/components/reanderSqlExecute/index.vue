@@ -45,6 +45,9 @@ export default {
       dialogTableVisible: false,
       gridData: [],
       dateRange: [],
+      logSearchKey: "",
+      logStatus: "",
+      logLoading: false,
       page: {
         pageNum: 1,
         pageSize: 20,
@@ -439,17 +442,28 @@ export default {
         });
     },
     logData() {
+      const uniqueData = this.currentConfig.uniqueData || {};
       const params = {
         pageSize: this.page.pageSize,
         pageNo: this.page.pageNum,
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        schemaName: uniqueData.schemaName,
+        searchKey: this.logSearchKey || undefined,
+        status: this.logStatus || undefined,
       };
+      this.logLoading = true;
       sqlServer
         .sqlLog(this.addDateRange(params, this.dateRange))
         .then((res) => {
           if (res.success) {
-            this.gridData = res.data.data;
-            this.page.total = res.data.total;
+            this.gridData = res.data.data || [];
+            this.page.total = res.data.total || 0;
           }
+          this.logLoading = false;
+        })
+        .catch(() => {
+          this.logLoading = false;
         });
     },
     execute() {
@@ -808,12 +822,16 @@ export default {
       this.inputSqlName = val.replace(/[@!=]/g, "");
     },
     viewLog() {
+      this.page.pageNum = 1;
       this.dialogTableVisible = true;
+      this.logData();
     },
     handleClose() {
       this.page.pageNum = 1;
       this.dialogTableVisible = false;
       this.dateRange = [];
+      this.logSearchKey = "";
+      this.logStatus = "";
     },
     handleSizeChange(val) {
       this.page.pageSize = val;
@@ -1182,7 +1200,7 @@ export default {
     <el-dialog
       title="查看日志"
       :visible.sync="dialogTableVisible"
-      width="70%"
+      width="90%"
       :before-close="handleClose"
     >
       <span>
@@ -1196,6 +1214,24 @@ export default {
           end-placeholder="结束日期"
           size="small"
         ></el-date-picker>
+        <el-input
+          v-model.trim="logSearchKey"
+          clearable
+          size="small"
+          style="width: 240px; margin-left: 10px"
+          placeholder="搜索 SQL 内容"
+          @keyup.enter.native="searchKey"
+        ></el-input>
+        <el-select
+          v-model="logStatus"
+          clearable
+          size="small"
+          style="width: 130px; margin-left: 10px"
+          placeholder="执行状态"
+        >
+          <el-option label="成功" value="success"></el-option>
+          <el-option label="失败" value="fail"></el-option>
+        </el-select>
         <el-button
           type="primary"
           size="small"
@@ -1208,6 +1244,8 @@ export default {
           style="margin-top: 15px"
           :data="gridData"
           border
+          v-loading="logLoading"
+          empty-text="暂无执行审计记录"
           :cell-style="cellStyle"
           @cell-click="tableCellClick"
         >
@@ -1217,33 +1255,70 @@ export default {
             show-overflow-tooltip
           ></el-table-column>
           <el-table-column
-            property="gmtModified"
-            label="修改时间"
-            show-overflow-tooltip
-          ></el-table-column>
-          <el-table-column
-            property="dataSourceId"
-            label="数据源连接ID"
-            show-overflow-tooltip
+            property="userId"
+            label="用户ID"
+            width="80"
           ></el-table-column>
           <el-table-column
             property="dataSourceName"
-            label="数据源名称"
+            label="数据源"
             show-overflow-tooltip
           ></el-table-column>
           <el-table-column
             property="type"
             label="数据库类型"
+            width="100"
+          ></el-table-column>
+          <el-table-column
+            property="databaseName"
+            label="数据库"
             show-overflow-tooltip
+          ></el-table-column>
+          <el-table-column
+            property="schemaName"
+            label="模式"
+            show-overflow-tooltip
+          ></el-table-column>
+          <el-table-column
+            property="sqlType"
+            label="SQL类型"
+            width="90"
           ></el-table-column>
           <el-table-column
             property="ddl"
-            label="DDL内容"
+            label="SQL内容（已脱敏）"
+            min-width="260"
             show-overflow-tooltip
           ></el-table-column>
           <el-table-column
-            property="status"
             label="状态"
+            width="80"
+          >
+            <template slot-scope="scope">
+              <el-tag
+                size="mini"
+                :type="scope.row.status === 'success' ? 'success' : 'danger'"
+              >{{ scope.row.status === "success" ? "成功" : "失败" }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
+            property="operationRows"
+            label="影响行数"
+            width="90"
+          >
+            <template slot-scope="scope">
+              {{ scope.row.operationRows == null ? "-" : scope.row.operationRows }}
+            </template>
+          </el-table-column>
+          <el-table-column label="耗时" width="90">
+            <template slot-scope="scope">
+              {{ scope.row.useTime == null ? "-" : `${scope.row.useTime} ms` }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            property="errorMessage"
+            label="失败信息"
+            min-width="180"
             show-overflow-tooltip
           ></el-table-column>
         </el-table>
