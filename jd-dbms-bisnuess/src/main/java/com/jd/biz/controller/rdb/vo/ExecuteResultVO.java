@@ -77,6 +77,21 @@ public class ExecuteResultVO {
     private Boolean hasNextPage;
 
     /**
+     * 总行数是否为精确值。
+     */
+    private Boolean totalExact;
+
+    /**
+     * 是否由用户取消。
+     */
+    private Boolean cancelled;
+
+    /**
+     * 是否执行超时。
+     */
+    private Boolean timedOut;
+
+    /**
      * 分页编码
      * 只有select语句才有
      */

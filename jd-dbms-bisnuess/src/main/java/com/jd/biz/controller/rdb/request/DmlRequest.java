@@ -38,6 +38,16 @@ public class DmlRequest extends DataSourceBaseRequest implements DataSourceConso
     private Integer pageSize;
 
     /**
+     * 本次执行的唯一标识，用于取消正在运行的 SQL。
+     */
+    private String executionId;
+
+    /**
+     * 查询超时秒数。
+     */
+    private Integer queryTimeoutSeconds;
+
+    /**
      * 是否是查询模版
      */
     private Boolean queryTemplate = false;

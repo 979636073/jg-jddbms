@@ -26,6 +26,7 @@ import com.jd.common.constant.Constants;
 import com.jd.common.enums.BusinessType;
 import com.jd.common.enums.DBTypeEnum;
 import com.jd.common.tools.base.excption.BusinessException;
+import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.common.tools.common.util.ConfigUtils;
@@ -113,6 +114,16 @@ public class RdbDmlController {
         ListResult<ExecuteResult> resultDTOListResult = dlTemplateService.execute(param);
         ListResult<ExecuteResultVO> result = toExecuteResult(resultDTOListResult);
         return result;
+    }
+
+    @RequestMapping(value = "/cancel", method = RequestMethod.POST)
+    public ActionResult cancel(@RequestBody DmlRequest request) {
+        if (StrUtil.isBlank(request.getExecutionId())) {
+            return ActionResult.fail("缺少执行标识");
+        }
+        return dlTemplateService.cancelExecution(request.getExecutionId())
+                ? ActionResult.isSuccess()
+                : ActionResult.fail("SQL 已结束或尚未开始执行");
     }
 
     private ListResult<ExecuteResultVO> toExecuteResult(ListResult<ExecuteResult> source) {

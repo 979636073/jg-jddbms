@@ -91,6 +91,16 @@ public class Command implements Serializable {
     private Integer pageSize;
 
     /**
+     * Unique identifier for a running SQL execution.
+     */
+    private String executionId;
+
+    /**
+     * Query timeout in seconds.
+     */
+    private Integer queryTimeoutSeconds;
+
+    /**
      * Return all data
      * Only available for select statements
      */

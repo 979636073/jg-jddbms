@@ -64,4 +64,11 @@ public interface CommandExecutor {
     ExecuteResult JDBCExecute(Command command);
 
     boolean rollbackSession(Command command);
+
+    /**
+     * Cancel a running SQL execution when supported by the driver.
+     */
+    default boolean cancel(String executionId) {
+        return false;
+    }
 }

@@ -79,6 +79,16 @@ public class DlExecuteParam {
     private Integer pageSize;
 
     /**
+     * 本次执行的唯一标识，用于取消正在运行的 SQL。
+     */
+    private String executionId;
+
+    /**
+     * 查询超时秒数。
+     */
+    private Integer queryTimeoutSeconds;
+
+    /**
      * 返回全部数据
      * 只有select语句才有
      */

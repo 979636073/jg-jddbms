@@ -96,5 +96,7 @@ public interface DlTemplateService {
 
     boolean commitSession(DlExecuteParam param);
 
+    boolean cancelExecution(String executionId);
+
     String getBlobData(GetBlobRequest request) throws SQLException;
 }

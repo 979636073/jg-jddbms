@@ -28,6 +28,9 @@ export default {
       sessionId: "",
       sqlContent: null,
       sqlLoading: false,
+      currentExecutionId: "",
+      cancelRequested: false,
+      queryTimeoutSeconds: 60,
       // 当前展示查詢結果sql下标
       successCurrentIndex: 0,
       errorCurrentIndex: 0,
@@ -129,6 +132,7 @@ export default {
       });
     },
     consoleStatus() {
+      if (this.cancelRequested) return "正在取消";
       if (this.sqlLoading) return "执行中";
       if (this.lastOperationStatus) return this.lastOperationStatus;
       if (this.lastExecutionDuration !== null) return `最近执行 ${this.lastExecutionDuration}ms`;
@@ -513,6 +517,7 @@ export default {
       this.successCurrentIndex = 0;
       this.errorCurrentIndex = 0;
       this.lastOperationStatus = "";
+      this.cancelRequested = false;
       this.sqlLoading = true;
 
       if (type == "run") {
@@ -535,9 +540,12 @@ export default {
           isLog: true,
           queryTemplate: true,
           isCommit: this.isCommit,
+          executionId: this.createExecutionId(),
+          queryTimeoutSeconds: this.queryTimeoutSeconds,
           // 控制台只展示当前结果页，跳过达梦上代价较高的全量 count(*)。
           skipCount: true,
         };
+        this.currentExecutionId = send.executionId;
         if (this.flag) {
           this.flag = false;
         } else {
@@ -590,6 +598,11 @@ export default {
             ? durations.reduce((total, duration) => total + duration, 0)
             : null;
           this.lastResultCount = results.length;
+          this.lastOperationStatus = results.some((item) => item.cancelled)
+            ? "执行已取消"
+            : results.some((item) => item.timedOut)
+            ? "执行超时"
+            : "";
           this.resultTab = results.some((item) => item.success) ? "success" : "error";
           this.isShow = results.length > 0;
           console.log(res.data, "(res.data");
@@ -597,7 +610,7 @@ export default {
 
           if (results.length < 2) {
             if (results[0]) {
-              results[0].params = send;
+              results[0].params = { ...send, executionId: undefined };
               this.sessionId = results[0].sessionId;
               this.disableCommit = results[0].sign;
               this.disableRollBack = results[0].sign;
@@ -618,6 +631,8 @@ export default {
           this.Allmessage = true;
           this.successCurrentIndex = null;
           this.sqlLoading = false;
+          this.currentExecutionId = "";
+          this.cancelRequested = false;
           this.isSuccessShow = results.some((item) => item.success);
           // this.errorShow = false;
           // } else {
@@ -630,6 +645,40 @@ export default {
         })
         .catch(() => {
           this.sqlLoading = false;
+          this.currentExecutionId = "";
+          this.cancelRequested = false;
+        });
+    },
+    createExecutionId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    },
+    cancelSqlExecution() {
+      if (!this.sqlLoading || !this.currentExecutionId || this.cancelRequested) {
+        return;
+      }
+      const uniqueData = this.currentConfig.uniqueData;
+      this.cancelRequested = true;
+      sqlServer
+        .cancelSql({
+          executionId: this.currentExecutionId,
+          consoleId: this.currentConfig.id,
+          dataSourceId: uniqueData.dataSourceId,
+          databaseName: uniqueData.databaseName,
+          schemaName: uniqueData.schemaName,
+        })
+        .then((res) => {
+          if (res.success) {
+            this.$message.success("已发送停止请求");
+          } else {
+            this.cancelRequested = false;
+            this.$message.warning(res.errorMessage || "SQL 已结束");
+          }
+        })
+        .catch(() => {
+          this.cancelRequested = false;
         });
     },
     // 清空
@@ -791,10 +840,22 @@ export default {
         sql: sql,
         exportType: "EXCEL",
       };
-      downloadFile(
-        process.env.VUE_APP_BASE_API + "/api/rdb/table/customExport",
-        { ...params }
-      );
+      this.$confirm(
+        "为避免大结果集占满服务内存，单次最多导出 1000 行。是否继续？",
+        "导出限制",
+        {
+          confirmButtonText: "继续导出",
+          cancelButtonText: "取消",
+          type: "warning",
+        }
+      )
+        .then(() => {
+          downloadFile(
+            process.env.VUE_APP_BASE_API + "/api/rdb/table/customExport",
+            { ...params }
+          );
+        })
+        .catch(() => {});
     },
     currentClick(item, index) {
       this.Allmessage = false;
@@ -983,16 +1044,39 @@ export default {
           </el-button>
         </el-popover>
         <el-button
+          v-if="!sqlLoading"
           size="mini"
           @click="executeSQL('run')"
           type="text"
           style="margin-left: 0"
-          :loading="sqlLoading"
           title="执行（F9 / Ctrl+Enter）"
         >
           <img src="@/assets/main/1-con-ico01.png" alt />
           运行
         </el-button>
+        <el-button
+          v-else
+          size="mini"
+          @click="cancelSqlExecution"
+          type="danger"
+          plain
+          :disabled="cancelRequested"
+          title="停止当前 SQL"
+        >
+          <i :class="cancelRequested ? 'el-icon-loading' : 'el-icon-video-pause'"></i>
+          {{ cancelRequested ? "正在停止" : "停止" }}
+        </el-button>
+        <el-select
+          v-model="queryTimeoutSeconds"
+          size="mini"
+          style="width: 92px; margin-left: 6px"
+          title="单条 SQL 超时时间"
+        >
+          <el-option label="5秒超时" :value="5"></el-option>
+          <el-option label="30秒超时" :value="30"></el-option>
+          <el-option label="60秒超时" :value="60"></el-option>
+          <el-option label="120秒超时" :value="120"></el-option>
+        </el-select>
         <el-button size="mini" @click="emptySql" type="text">
           <img src="@/assets/main/1-con-ico03.png" alt />
           清空

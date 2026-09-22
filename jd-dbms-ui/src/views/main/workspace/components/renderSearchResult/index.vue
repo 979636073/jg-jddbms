@@ -2804,7 +2804,11 @@ export default {
       <div class="table_bottom_info">
         <span>【结果】 {{ queryResultData.description }}</span>
         <span>【耗时】 {{ queryResultData.duration }}ms</span>
-        <span>【查询行数】 {{ queryResultData.fuzzyTotal }}行</span>
+        <span>
+          【查询行数】
+          {{ queryResultData.totalExact === false ? "至少 " : "" }}{{ queryResultData.fuzzyTotal }}行
+        </span>
+        <span v-if="queryResultData.hasNextPage">【提示】结果较多，请翻页继续查看</span>
       </div>
       <el-pagination
         @size-change="handleSizeChange"

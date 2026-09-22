@@ -203,6 +203,10 @@ public class RdbDmlExportController {
     @Log(title = "导出管理", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(@Valid @RequestBody TableDataExportRequest request, HttpServletResponse response) throws Exception {
+        if (CollUtil.isNotEmpty(request.getDataList())
+                && request.getDataList().size() > EasyToolsConstant.MAX_EXPORT_SIZE) {
+            throw new BusinessException("单次最多导出 " + EasyToolsConstant.MAX_EXPORT_SIZE + " 行数据");
+        }
         ExportSizeEnum exportSize = EasyEnumUtils.getEnum(ExportSizeEnum.class, request.getExportSize());
         ExportTypeEnum exportType = EasyEnumUtils.getEnum(ExportTypeEnum.class, request.getExportType());
         DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
@@ -414,6 +418,7 @@ public class RdbDmlExportController {
 
     private void doExportCsv(String sql, HttpServletResponse response, String fileName, String exportType)
             throws Exception {
+        response.setHeader("X-Export-Row-Limit", String.valueOf(EasyToolsConstant.MAX_EXPORT_SIZE));
         ExportTypeEnum exportType1 = EasyEnumUtils.getEnum(ExportTypeEnum.class, exportType);
         ExcelWrapper excelWrapper = new ExcelWrapper();
         ExcelWriterBuilder excelWriterBuilder = new ExcelWriterBuilder();
@@ -436,7 +441,8 @@ public class RdbDmlExportController {
             }
             ExcelWriterBuilder WriterBuilder = excelWriterBuilder;
             excelWrapper.setExcelWriterBuilder(WriterBuilder);
-            ExecuteResult execute = SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, new DefaultValueHandler());
+            ExecuteResult execute = SQLExecutor.getInstance().execute(sql, Chat2DBContext.getConnection(), true,
+                    0, EasyToolsConstant.MAX_EXPORT_SIZE, new DefaultValueHandler());
             WriterBuilder.registerWriteHandler(new ExcelSheetWriteHandler(execute.getHeaderList().size()));
             List<List<String>> arrayLists = EasyCollectionUtils.toList(execute.getHeaderList(), header -> Lists.newArrayList(header.getName()));
             WriterBuilder.head(arrayLists);
@@ -455,6 +461,7 @@ public class RdbDmlExportController {
 
     private void doExportCsv(List<Map<String, String>> dataList, HttpServletResponse response, String fileName, String exportType)
             throws Exception {
+        response.setHeader("X-Export-Row-Limit", String.valueOf(EasyToolsConstant.MAX_EXPORT_SIZE));
         ExportTypeEnum exportType1 = EasyEnumUtils.getEnum(ExportTypeEnum.class, exportType);
         ExcelWrapper excelWrapper = new ExcelWrapper();
         ExcelWriterBuilder excelWriterBuilder = new ExcelWriterBuilder();
@@ -500,6 +507,7 @@ public class RdbDmlExportController {
     private void doExportInsert(String sql, HttpServletResponse response, String fileName, DbType dbType,
                                 String tableName)
             throws Exception {
+        response.setHeader("X-Export-Row-Limit", String.valueOf(EasyToolsConstant.MAX_EXPORT_SIZE));
         response.setContentType("text/sql");
         response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + URLEncoder.encode(fileName + ".sql", CharsetUtil.UTF_8));
         try (PrintWriter printWriter = response.getWriter()) {
@@ -518,7 +526,7 @@ public class RdbDmlExportController {
                         }
                         sqlInsertStatement.setValues(valuesClause);
                         printWriter.println(SQLUtils.toSQLString(sqlInsertStatement, dbType, INSERT_FORMAT_OPTION) + ";");
-                    }, false, new DefaultValueHandler());
+                    }, false, EasyToolsConstant.MAX_EXPORT_SIZE, new DefaultValueHandler());
         }
     }
 
@@ -526,6 +534,7 @@ public class RdbDmlExportController {
     private void doExportInsert(List<Map<String, String>> dataList, HttpServletResponse response, String fileName, DbType dbType,
                                 String tableName)
             throws Exception {
+        response.setHeader("X-Export-Row-Limit", String.valueOf(EasyToolsConstant.MAX_EXPORT_SIZE));
         Set<String> headerList = new HashSet<>();
         List<List<String>> datas = new ArrayList<>();
         for (Map<String, String> map : dataList) {

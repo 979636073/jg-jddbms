@@ -76,6 +76,14 @@ function executeSql(data) {
   })
 }
 
+function cancelSql(data) {
+  return request({
+    url: '/api/rdb/dml/cancel',
+    method: 'post',
+    data: data
+  })
+}
+
 // 提交
 function commitSession(data) {
   return request({
@@ -814,6 +822,7 @@ export default {
   implementationPlan,
   createExportSql,
   sqlLog,
+  cancelSql,
   rollBackSession,
   delSession,
   commitSession

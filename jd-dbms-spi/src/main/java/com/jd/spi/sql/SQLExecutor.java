@@ -52,6 +52,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.SQLTimeoutException;
 import java.sql.Statement;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,15 +70,32 @@ public class SQLExecutor implements CommandExecutor {
 
     private static final long SESSION_TIMEOUT_MILLIS = 30L * 60L * 1000L;
     private static final int QUERY_TIMEOUT_SECONDS = 60;
+    private static final int MAX_QUERY_TIMEOUT_SECONDS = 300;
 
 
     // 存储所有活跃的事务（session_id → Connection）
     private static final Map<String, ConnectionVo> ACTIVE_SESSIONS = new ConcurrentHashMap<>();
+    private static final Map<String, RunningStatement> RUNNING_STATEMENTS = new ConcurrentHashMap<>();
+    private static final Set<String> CANCEL_REQUESTS = ConcurrentHashMap.newKeySet();
 
     /**
      * Singleton instance of SQLExecutor.
      */
     private static final SQLExecutor INSTANCE = new SQLExecutor();
+
+    private static final class RunningStatement {
+        private final Statement statement;
+        private final ConnectionVo owner = new ConnectionVo();
+
+        private RunningStatement(Statement statement, ConnectInfo connectInfo) {
+            this.statement = statement;
+            this.owner.bind(connectInfo);
+        }
+
+        private boolean ownedBy(ConnectInfo connectInfo) {
+            return owner.ownedBy(connectInfo);
+        }
+    }
 
 
 
@@ -162,10 +180,19 @@ public class SQLExecutor implements CommandExecutor {
 
     public void execute(Connection connection, String sql, Consumer<List<Header>> headerConsumer,
                         Consumer<List<String>> rowConsumer, boolean limitSize, ValueHandler valueHandler) {
+        execute(connection, sql, headerConsumer, rowConsumer, limitSize, null, valueHandler);
+    }
+
+    public void execute(Connection connection, String sql, Consumer<List<Header>> headerConsumer,
+                        Consumer<List<String>> rowConsumer, boolean limitSize, Integer maxRows,
+                        ValueHandler valueHandler) {
         Assert.notNull(sql, "SQL must not be null");
         log.debug("Executing SQL (length={})", StringUtils.length(sql));
         try (Statement stmt = connection.createStatement();) {
             configureStatement(stmt);
+            if (maxRows != null && maxRows > 0) {
+                stmt.setMaxRows(maxRows);
+            }
             boolean query = stmt.execute(sql);
             // Represents the query
             if (query) {
@@ -312,6 +339,13 @@ public class SQLExecutor implements CommandExecutor {
     public ExecuteResult execute(final String sql, Connection connection, boolean limitRowSize, Integer offset,
                                  Integer count, ValueHandler valueHandler)
             throws SQLException {
+        return execute(sql, connection, limitRowSize, offset, count, valueHandler, null, null);
+    }
+
+    public ExecuteResult execute(final String sql, Connection connection, boolean limitRowSize, Integer offset,
+                                 Integer count, ValueHandler valueHandler, String executionId,
+                                 Integer queryTimeoutSeconds)
+            throws SQLException {
         Assert.notNull(sql, "SQL must not be null");
         log.debug("Executing SQL (length={})", StringUtils.length(sql));
 
@@ -320,10 +354,13 @@ public class SQLExecutor implements CommandExecutor {
 //        log.info("之前事务提交状态==> {},", connection.getAutoCommit());
         try (Statement stmt = connection.createStatement()) {
             stmt.setFetchSize(EasyToolsConstant.MAX_PAGE_SIZE);
-            configureStatement(stmt);
+            configureStatement(stmt, queryTimeoutSeconds);
             if (offset != null && count != null) {
                 stmt.setMaxRows(offset + count);
             }
+
+            RunningStatement runningStatement = registerRunningStatement(executionId, stmt);
+            try {
 
             TimeInterval timeInterval = new TimeInterval();
             boolean query = stmt.execute(sql);
@@ -439,6 +476,9 @@ public class SQLExecutor implements CommandExecutor {
                 executeResult.setDuration(timeInterval.interval());
                 // Modification or other
                 executeResult.setUpdateCount(stmt.getUpdateCount());
+            }
+            } finally {
+                unregisterRunningStatement(executionId, runningStatement);
             }
         }
         return executeResult;
@@ -857,27 +897,36 @@ public class SQLExecutor implements CommandExecutor {
         Boolean sign = parseSqlCommit(sqlList);
         command.setSign(sign);
         // Execute SQL
-        for (String originalSql : sqlList) {
-            try {
-                ExecuteResult executeResult = executeSQL(originalSql.replaceAll("\\. \\.", ".."), dbType, command);
-                // session会话ID
-                if (StrUtil.isNotBlank(executeResult.getSessionId())) {
-                    command.setSessionId(executeResult.getSessionId());
+        try {
+            for (String originalSql : sqlList) {
+                try {
+                    ExecuteResult executeResult = executeSQL(originalSql.replaceAll("\\. \\.", ".."), dbType, command);
+                    // session会话ID
+                    if (StrUtil.isNotBlank(executeResult.getSessionId())) {
+                        command.setSessionId(executeResult.getSessionId());
+                    }
+                    result.add(executeResult);
+                    if (Boolean.TRUE.equals(executeResult.getCancelled())) {
+                        break;
+                    }
+                } catch (Exception e) {
+                    log.warn("SQL执行失败（长度={}）", StringUtils.length(originalSql), e);
+                    ExecuteResult executeResult = new ExecuteResult();
+                    executeResult.setSuccess(Boolean.FALSE);
+                    executeResult.setSql(originalSql);
+                    executeResult.setOriginalSql(originalSql);
+                    executeResult.setMessage(e.getMessage());
+                    executeResult.setSign(false);
+                    executeResult.setSessionId(command.getSessionId());
+                    result.add(executeResult);
+                    if (command.getIsErrorExecute()) {
+                        break;
+                    }
                 }
-                result.add(executeResult);
-            } catch (Exception e) {
-                log.warn("SQL执行失败（长度={}）", StringUtils.length(originalSql), e);
-                ExecuteResult executeResult = new ExecuteResult();
-                executeResult.setSuccess(Boolean.FALSE);
-                executeResult.setSql(originalSql);
-                executeResult.setOriginalSql(originalSql);
-                executeResult.setMessage(e.getMessage());
-                executeResult.setSign(false);
-                executeResult.setSessionId(command.getSessionId());
-                result.add(executeResult);
-                if (command.getIsErrorExecute()) {
-                    break;
-                }
+            }
+        } finally {
+            if (StrUtil.isNotBlank(command.getExecutionId())) {
+                CANCEL_REQUESTS.remove(command.getExecutionId());
             }
         }
         return result;
@@ -918,31 +967,43 @@ public class SQLExecutor implements CommandExecutor {
             }
         }
         if (!supportDruid || (sqlStatement instanceof SQLSelectStatement)) {
-            pageNo = Optional.ofNullable(param.getPageNo()).orElse(1);
-            pageSize = Optional.ofNullable(param.getPageSize()).orElse(EasyToolsConstant.MAX_PAGE_SIZE);
-            offset = (pageNo - 1) * pageSize;
-            count = pageSize;
+            pageNo = normalizePageNo(param.getPageNo());
+            pageSize = Boolean.TRUE.equals(param.getPageSizeAll())
+                    ? EasyToolsConstant.MAX_PAGE_SIZE
+                    : normalizePageSize(param.getPageSize());
+            long calculatedOffset = (long) (pageNo - 1) * pageSize;
+            if (calculatedOffset > Integer.MAX_VALUE) {
+                throw new BusinessException("分页页码过大");
+            }
+            offset = (int) calculatedOffset;
+            count = pageSize + 1;
             sqlType = SqlTypeEnum.SELECT.getCode();
         }
 
         ExecuteResult executeResult = null;
         if (SqlTypeEnum.SELECT.getCode().equals(sqlType) && !SqlUtils.hasPageLimit(originalSql, dbType)) {
-            String pageLimit = Chat2DBContext.getSqlBuilder().pageLimit(originalSql, offset, pageNo, pageSize);
+            String pageLimit = Chat2DBContext.getSqlBuilder().pageLimit(originalSql, offset, pageNo, count);
             if (StringUtils.isNotBlank(pageLimit)) {
 //                executeResult = execute(originalSql, offset, count);
                 if (param.getQueryTemplate()) {
-                    executeResult = execute(pageLimit, 0, count, param.getIsCommit(), param.getSessionId(), param.getSign());
+                    executeResult = execute(pageLimit, 0, count, param.getIsCommit(), param.getSessionId(),
+                            param.getSign(), param.getExecutionId(), param.getQueryTimeoutSeconds());
                 } else {
-                    executeResult = execute(originalSql, offset, count);
+                    executeResult = execute(originalSql, offset, count, param.getExecutionId(),
+                            param.getQueryTimeoutSeconds());
                 }
             }
         }
-        if (executeResult == null || !executeResult.getSuccess()) {
+        if (executeResult == null || (!executeResult.getSuccess()
+                && !Boolean.TRUE.equals(executeResult.getCancelled())
+                && !Boolean.TRUE.equals(executeResult.getTimedOut()))) {
 //            executeResult = execute(originalSql, offset, count);
             if (param.getQueryTemplate()) {
-                executeResult = execute(originalSql, offset, count, param.getIsCommit(), param.getSessionId(), param.getSign());
+                executeResult = execute(originalSql, offset, count, param.getIsCommit(), param.getSessionId(),
+                        param.getSign(), param.getExecutionId(), param.getQueryTimeoutSeconds());
             } else {
-                executeResult = execute(originalSql, offset, count);
+                executeResult = execute(originalSql, offset, count, param.getExecutionId(),
+                        param.getQueryTimeoutSeconds());
             }
         }
         executeResult.setSqlType(sqlType);
@@ -959,10 +1020,13 @@ public class SQLExecutor implements CommandExecutor {
             executeResult.setTableName("\"" + param.getSchemaName() + "\".\"" + param.getTableName() + "\"");
         }
         if (SqlTypeEnum.SELECT.getCode().equals(sqlType)) {
+            boolean hasNextPage = CollectionUtils.size(executeResult.getDataList()) > pageSize;
+            if (hasNextPage) {
+                executeResult.getDataList().remove(executeResult.getDataList().size() - 1);
+            }
             executeResult.setPageNo(pageNo);
             executeResult.setPageSize(pageSize);
-            executeResult.setHasNextPage(
-                    CollectionUtils.size(executeResult.getDataList()) >= executeResult.getPageSize());
+            executeResult.setHasNextPage(hasNextPage);
         } else {
             executeResult.setPageNo(pageNo);
             executeResult.setPageSize(CollectionUtils.size(executeResult.getDataList()));
@@ -988,15 +1052,25 @@ public class SQLExecutor implements CommandExecutor {
             }
         }
         // 仅对 SELECT 统计总数；控制台可通过 skipCount 跳过额外的全量查询。
-        if (SqlTypeEnum.SELECT.getCode().equals(sqlType) && !Boolean.TRUE.equals(param.getSkipCount())) {
-            String sql = "select count(*) as COUNT FROM (" +  originalSql + ") a";
-            executeResult.setTotal(getCount(sql));
+        if (SqlTypeEnum.SELECT.getCode().equals(sqlType)) {
+            if (Boolean.TRUE.equals(param.getSkipCount())) {
+                long lowerBound = (long) Math.max(pageNo - 1, 0) * pageSize
+                        + CollectionUtils.size(executeResult.getDataList())
+                        + (Boolean.TRUE.equals(executeResult.getHasNextPage()) ? 1 : 0);
+                executeResult.setTotal(Long.toString(lowerBound));
+                executeResult.setTotalExact(!Boolean.TRUE.equals(executeResult.getHasNextPage()));
+            } else {
+                String sql = "select count(*) as COUNT FROM (" +  originalSql + ") a";
+                executeResult.setTotal(getCount(sql));
+                executeResult.setTotalExact(StrUtil.isNotBlank(executeResult.getTotal()));
+            }
         }
         if (GenConstants.ZERO_STR.equals(executeResult.getTotal()) || StrUtil.isBlank(executeResult.getTotal())) {
             if (CollUtil.isEmpty(executeResult.getDataList())) {
                 executeResult.setTotal(null);
             } else {
                 executeResult.setTotal(executeResult.getDataList().size()+"");
+                executeResult.setTotalExact(Boolean.FALSE);
             }
         }
         executeResult.setFuzzyTotal(executeResult.getTotal());
@@ -1030,29 +1104,33 @@ public class SQLExecutor implements CommandExecutor {
     }
 
     private ExecuteResult execute(String sql, Integer offset, Integer count) {
+        return execute(sql, offset, count, null, null);
+    }
+
+    private ExecuteResult execute(String sql, Integer offset, Integer count, String executionId,
+                                  Integer queryTimeoutSeconds) {
         ExecuteResult executeResult;
         try {
             ValueHandler valueHandler = Chat2DBContext.getMetaData().getValueHandler();
-            executeResult = SQLExecutor.getInstance().execute(sql, Chat2DBContext.getConnection(), true, offset, count, valueHandler);
+            executeResult = SQLExecutor.getInstance().execute(sql, Chat2DBContext.getConnection(), true, offset,
+                    count, valueHandler, executionId, queryTimeoutSeconds);
         } catch (SQLException e) {
             log.warn("SQL执行失败（长度={}）", StringUtils.length(sql), e);
-            executeResult = ExecuteResult.builder()
-                    .sql(sql)
-                    .success(Boolean.FALSE)
-                    .message(e.getMessage())
-                    .build();
+            executeResult = buildFailureResult(sql, e, executionId, null);
         }
         return executeResult;
     }
 
 
 
-    private ExecuteResult execute(String sql, Integer offset, Integer count, Boolean isCommit, String sessionId, Boolean sign) {
+    private ExecuteResult execute(String sql, Integer offset, Integer count, Boolean isCommit, String sessionId,
+                                  Boolean sign, String executionId, Integer queryTimeoutSeconds) {
         ExecuteResult executeResult;
         // 会话ID
         String session_id = UUID.fastUUID() + "@" + System.currentTimeMillis();
         ConnectionVo connectionVo = null;
         Connection connection = null;
+        boolean newSession = StrUtil.isBlank(sessionId);
         try {
             if (StrUtil.isNotBlank(sessionId)) {
                 connectionVo = getOwnedSession(sessionId);
@@ -1079,7 +1157,7 @@ public class SQLExecutor implements CommandExecutor {
             connection.setAutoCommit(false);
             ValueHandler valueHandler = Chat2DBContext.getMetaData().getValueHandler();
             executeResult = SQLExecutor.getInstance().execute(sql, connection, true, offset, count,
-                    valueHandler);
+                    valueHandler, executionId, queryTimeoutSeconds);
             executeResult.setSessionId(session_id);
             executeResult.setSign(sign);
         } catch (SQLException e) {
@@ -1091,14 +1169,110 @@ public class SQLExecutor implements CommandExecutor {
                 }
             }
             log.warn("事务SQL执行失败（长度={}）", StringUtils.length(sql), e);
-            executeResult = ExecuteResult.builder()
-                    .sql(sql)
-                    .success(Boolean.FALSE)
-                    .message(e.getMessage())
-                    .sessionId(session_id)
-                    .build();
+            executeResult = buildFailureResult(sql, e, executionId, session_id);
+            if (connectionVo != null) {
+                connectionVo.setSign(false);
+            }
+            if (newSession) {
+                closeSession(session_id, connectionVo);
+                executeResult.setSessionId(null);
+            }
         }
         return executeResult;
+    }
+
+    private ExecuteResult buildFailureResult(String sql, SQLException exception, String executionId,
+                                             String sessionId) {
+        boolean cancelled = StrUtil.isNotBlank(executionId) && CANCEL_REQUESTS.contains(executionId);
+        boolean timedOut = !cancelled && isQueryTimeout(exception);
+        String message = cancelled
+                ? "SQL 执行已取消"
+                : timedOut ? "SQL 执行超时，请缩小查询范围或调整超时时间" : exception.getMessage();
+        return ExecuteResult.builder()
+                .sql(sql)
+                .success(Boolean.FALSE)
+                .message(message)
+                .sessionId(sessionId)
+                .cancelled(cancelled)
+                .timedOut(timedOut)
+                .build();
+    }
+
+    private boolean isQueryTimeout(SQLException exception) {
+        if (exception instanceof SQLTimeoutException) {
+            return true;
+        }
+        String message = StringUtils.defaultString(exception.getMessage()).toLowerCase(Locale.ROOT);
+        return message.contains("timeout") || message.contains("timed out") || message.contains("超时");
+    }
+
+    static int normalizePageNo(Integer pageNo) {
+        return pageNo == null || pageNo < 1 ? 1 : pageNo;
+    }
+
+    static int normalizePageSize(Integer pageSize) {
+        if (pageSize == null) {
+            return EasyToolsConstant.MAX_PAGE_SIZE;
+        }
+        return Math.max(1, Math.min(pageSize, EasyToolsConstant.MAX_PAGE_SIZE));
+    }
+
+    static int normalizeQueryTimeout(Integer queryTimeoutSeconds) {
+        if (queryTimeoutSeconds == null) {
+            return QUERY_TIMEOUT_SECONDS;
+        }
+        return Math.max(1, Math.min(queryTimeoutSeconds, MAX_QUERY_TIMEOUT_SECONDS));
+    }
+
+    private void closeSession(String sessionId, ConnectionVo connectionVo) {
+        if (connectionVo == null) {
+            return;
+        }
+        ACTIVE_SESSIONS.remove(sessionId, connectionVo);
+        try {
+            if (connectionVo.getConnection() != null) {
+                connectionVo.getConnection().close();
+            }
+        } catch (SQLException e) {
+            log.warn("关闭失败的 SQL 会话异常", e);
+        }
+    }
+
+    private RunningStatement registerRunningStatement(String executionId, Statement statement) {
+        if (StrUtil.isBlank(executionId)) {
+            return null;
+        }
+        RunningStatement runningStatement = new RunningStatement(statement, Chat2DBContext.getConnectInfo());
+        RunningStatement previous = RUNNING_STATEMENTS.putIfAbsent(executionId, runningStatement);
+        if (previous != null) {
+            throw new BusinessException("执行标识已在使用");
+        }
+        return runningStatement;
+    }
+
+    private void unregisterRunningStatement(String executionId, RunningStatement runningStatement) {
+        if (StrUtil.isNotBlank(executionId) && runningStatement != null) {
+            RUNNING_STATEMENTS.remove(executionId, runningStatement);
+        }
+    }
+
+    @Override
+    public boolean cancel(String executionId) {
+        RunningStatement runningStatement = RUNNING_STATEMENTS.get(executionId);
+        if (runningStatement == null) {
+            return false;
+        }
+        if (!runningStatement.ownedBy(Chat2DBContext.getConnectInfo())) {
+            throw new BusinessException("无权取消该 SQL 执行");
+        }
+        CANCEL_REQUESTS.add(executionId);
+        try {
+            runningStatement.statement.cancel();
+            return true;
+        } catch (SQLException e) {
+            CANCEL_REQUESTS.remove(executionId);
+            throw new BusinessException("取消 SQL 执行失败: " + e.getMessage());
+        }
     }
 
     /**
@@ -1135,9 +1309,13 @@ public class SQLExecutor implements CommandExecutor {
     }
 
     private void configureStatement(Statement statement) throws SQLException {
+        configureStatement(statement, null);
+    }
+
+    private void configureStatement(Statement statement, Integer queryTimeoutSeconds) throws SQLException {
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
         if (connectInfo == null || !DataSourceTypeEnum.MONGODB.getCode().equals(connectInfo.getDbType())) {
-            statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+            statement.setQueryTimeout(normalizeQueryTimeout(queryTimeoutSeconds));
         }
     }
 }

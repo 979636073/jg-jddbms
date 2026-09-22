@@ -131,6 +131,11 @@ public class DlTemplateServiceImpl implements DlTemplateService {
     }
 
     @Override
+    public boolean cancelExecution(String executionId) {
+        return Chat2DBContext.getMetaData().getCommandExecutor().cancel(executionId);
+    }
+
+    @Override
     public String getBlobData(GetBlobRequest request) throws SQLException {
         boolean ref = Boolean.FALSE;
         try {

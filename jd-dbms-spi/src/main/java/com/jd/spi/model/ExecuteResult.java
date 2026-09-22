@@ -86,6 +86,21 @@ public class ExecuteResult implements Serializable {
     private Boolean hasNextPage;
 
     /**
+     * Whether the returned total is exact or only a lower bound.
+     */
+    private Boolean totalExact;
+
+    /**
+     * Whether the execution was cancelled by the user.
+     */
+    private Boolean cancelled;
+
+    /**
+     * Whether the execution reached its configured timeout.
+     */
+    private Boolean timedOut;
+
+    /**
      * 分页编码
      * 只有select语句才有
      */
