@@ -12,6 +12,8 @@ import com.jd.common.tools.base.wrapper.result.web.WebPageResult;
 import com.jd.biz.aspect.ConnectionInfoAspect;
 import com.jd.biz.controller.rdb.request.FunctionDetailRequest;
 import com.jd.biz.controller.rdb.request.FunctionPageRequest;
+import com.jd.biz.controller.rdb.request.FunctionUpdateRequest;
+import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.spi.model.ExecuteResult;
 import com.jd.spi.model.Function;
 
@@ -21,6 +23,8 @@ import javax.validation.Valid;
 import com.jd.spi.model.Sql;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.sql.SQLException;
 
 @ConnectionInfoAspect
 @RequestMapping("/api/rdb/function")
@@ -43,6 +47,15 @@ public class FunctionController {
     @GetMapping("/detail")
     public DataResult<Function> detail(@Valid FunctionDetailRequest request) {
         return functionService.detail(request.getDatabaseName(), request.getSchemaName(), request.getFunctionName());
+    }
+
+    @PostMapping("/update")
+    @Log(title = "创建或更新数据库函数", businessType = BusinessType.UPDATE)
+    public ActionResult update(@Valid @RequestBody FunctionUpdateRequest request) throws SQLException {
+        Function function = new Function();
+        function.setFunctionName(request.getFunctionName());
+        function.setFunctionBody(request.getFunctionBody());
+        return functionService.update(request.getDatabaseName(), request.getSchemaName(), function);
     }
 
 

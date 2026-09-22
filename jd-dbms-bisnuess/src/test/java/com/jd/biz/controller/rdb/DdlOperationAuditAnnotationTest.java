@@ -3,6 +3,7 @@ package com.jd.biz.controller.rdb;
 import com.jd.biz.controller.rdb.request.ConstraintInfoRequest;
 import com.jd.biz.controller.rdb.request.DdlExportRequest;
 import com.jd.biz.controller.rdb.request.FunctionDetailRequest;
+import com.jd.biz.controller.rdb.request.FunctionUpdateRequest;
 import com.jd.biz.controller.rdb.request.ProcedureDetailRequest;
 import com.jd.biz.controller.rdb.request.ProcedureUpdateRequest;
 import com.jd.biz.controller.rdb.request.TableDeleteRequest;
@@ -58,6 +59,7 @@ public class DdlOperationAuditAnnotationTest {
 
         assertAudit(ProcedureController.class, "update", BusinessType.UPDATE, ProcedureUpdateRequest.class);
         assertAudit(ProcedureController.class, "deleteProcedure", BusinessType.DELETE, ProcedureDetailRequest.class);
+        assertAudit(FunctionController.class, "update", BusinessType.UPDATE, FunctionUpdateRequest.class);
         assertAudit(FunctionController.class, "deleteFunction", BusinessType.DELETE, FunctionDetailRequest.class);
         assertAudit(TriggerController.class, "createTriggersWH", BusinessType.INSERT, TriggerDetailRequest.class);
         assertAudit(TriggerController.class, "deleteTriggers", BusinessType.DELETE, TriggerDetailRequest.class);

@@ -12,7 +12,7 @@ export default {
   },
   data() {
     return {
-
+      executing: false
     }
   },
   computed: {
@@ -23,24 +23,51 @@ export default {
       return this.$store.state.workspace.currentConnectionDetails
     },
   },
+  mounted() {
+    this.setViewSql(this.currentConfig?.uniqueData?.ddl || '')
+  },
   methods: {
     // 执行sql
     executeSQL() {
       let { uniqueData } = this.currentConfig
       let sql = this.$refs.MonacoEditor.getSelectValue() || this.$refs.MonacoEditor.getValue()
-      if (!sql) return;
+      if (!sql || this.executing) return;
 
-      let send = {
- 
+      const apiMap = {
+        functions: 'update_function',
+        procedures: 'update_procedure',
+        triggers: 'createTriggersWH'
       }
-      sqlServer.executeJDBCSql(send)
+      const bodyFieldMap = {
+        functions: 'functionBody',
+        procedures: 'procedureBody',
+        triggers: 'sql'
+      }
+      const api = apiMap[uniqueData.objectType]
+      if (!api) {
+        this.$message.error('无法识别当前对象类型')
+        return
+      }
+      let send = {
+        ...uniqueData,
+        ddl: undefined
+      }
+      send[bodyFieldMap[uniqueData.objectType]] = sql
+      this.executing = true
+      sqlServer[api](send)
         .then(res => {
           if (res.success) {
             this.$message.success('运行成功！')
             this.$emit('tableRefresh', this.currentConfig.uniqueData.node)
           } else {
-            this.$message.error(res.errorMessage)
+            this.$message.error(res.errorMessage || '运行失败')
           }
+        })
+        .catch(() => {
+          this.$message.error('运行失败，请检查 SQL 和数据库连接')
+        })
+        .finally(() => {
+          this.executing = false
         })
     },
     // 清空
@@ -62,7 +89,7 @@ export default {
   <div class="sql_execute">
     <div class="sql_search_box">
       <div class="monaco_btn">
-        <el-button size="mini" @click="executeSQL" type="text" class="el-button_before" style="margin-left: 0">
+        <el-button size="mini" @click="executeSQL" :loading="executing" type="text" class="el-button_before" style="margin-left: 0">
           <img src="@/assets/main/1-con-ico01.png" alt="">
           运行
         </el-button>

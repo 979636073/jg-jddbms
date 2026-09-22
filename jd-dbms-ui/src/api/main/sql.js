@@ -381,6 +381,22 @@ function create_function(data) {
   })
 }
 
+function update_function(data) {
+  return request({
+    url: '/api/rdb/function/update',
+    method: 'post',
+    data: data
+  })
+}
+
+function update_procedure(data) {
+  return request({
+    url: '/api/rdb/procedure/update',
+    method: 'post',
+    data: data
+  })
+}
+
 // 删除函数SQL
 function delete_function(data) {
   return request({
@@ -395,6 +411,14 @@ function delete_function(data) {
 function create_triggers(data) {
   return request({
     url: '/api/rdb/trigger/create_triggers',
+    method: 'post',
+    data: data
+  })
+}
+
+function createTriggersWH(data) {
+  return request({
+    url: '/api/rdb/trigger/createTriggersWH',
     method: 'post',
     data: data
   })
@@ -778,8 +802,11 @@ export default {
   create_procedure,
   delete_procedure,
   create_function,
+  update_function,
+  update_procedure,
   delete_function,
   create_triggers,
+  createTriggersWH,
   delete_triggers,
   importCheck,
   exportDmp,

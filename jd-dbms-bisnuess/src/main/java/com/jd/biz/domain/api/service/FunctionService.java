@@ -1,6 +1,7 @@
 package com.jd.biz.domain.api.service;
 
 import com.jd.biz.controller.rdb.request.FunctionDetailRequest;
+import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
@@ -9,6 +10,7 @@ import com.jd.spi.model.Function;
 import com.jd.spi.model.Sql;
 
 import javax.validation.constraints.NotEmpty;
+import java.sql.SQLException;
 
 /**
  * author jipengfei
@@ -32,6 +34,8 @@ public interface FunctionService {
      * @return
      */
     DataResult<Function> detail(String databaseName, String schemaName, String functionName);
+
+    ActionResult update(String databaseName, String schemaName, Function function) throws SQLException;
 
 
     /**

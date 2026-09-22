@@ -3,6 +3,7 @@ package com.jd.biz.controller.rdb.request;
 import com.jd.biz.controller.data.source.request.DataSourceBaseRequestInfo;
 import lombok.Data;
 
+import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 
 @Data
@@ -20,9 +21,13 @@ public class TableSpaceUpdateRequest implements DataSourceBaseRequestInfo {
      */
     private String databaseName;
 
+    @Valid
+    @NotNull
     private TableSpaceCreateRequest newTableSpace;
 
 
+    @Valid
+    @NotNull
     private TableSpaceCreateRequest oldTableSpace;
 
 }

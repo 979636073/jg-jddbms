@@ -81,7 +81,9 @@ export default {
                 type: 'createSql',
                 uniqueData: {
                   ddl: res.data.sql,
-                  ...this.uniqueData
+                  ...this.uniqueData,
+                  ...send,
+                  objectType: this.objectForm.type
                 },
               })
               this.$store.commit('SET_ACTIVECONSOLEID', id)

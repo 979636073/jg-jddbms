@@ -76,7 +76,8 @@ public class TableSpaceServiceImpl implements TableSpaceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ActionResult createTablespace(TableSpaceCreateRequest request) {
-        if (StrUtil.isEmpty(request.getTotalSize())) {
+        if (request == null || StringUtils.isBlank(request.getTableSpace())
+                || StringUtils.isBlank(request.getPath()) || StrUtil.isEmpty(request.getTotalSize())) {
             throw new BusinessException("参数缺失");
         } else {
             if (StrUtil.isEmpty(request.getSizeUnit())) {
@@ -118,9 +119,6 @@ public class TableSpaceServiceImpl implements TableSpaceService {
         }
         String sql = Chat2DBContext.getSqlBuilder().createSpace(request.getPath(), request.getTableSpace(), request.getTotalSize(), StringUtils.isNotBlank(request.getExpandUpperLimit()) ? request.getExpandUpperLimit() : null, StringUtils.isNotBlank(request.getAutoSize()) ? request.getAutoSize() : null);
         try {
-            if (request.getIsUpdate()) {
-                Chat2DBContext.getMetaData().dropTablespace(Chat2DBContext.getConnection(), request.getTableSpace());
-            }
             SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);
         } catch (SQLException e) {
             throw new BusinessException("创建或修改表空间异常:" + e.getMessage());
@@ -186,33 +184,31 @@ public class TableSpaceServiceImpl implements TableSpaceService {
         List<String> sqls = new ArrayList<>();
         TableSpaceCreateRequest newTableSpace = request.getNewTableSpace();
         TableSpaceCreateRequest oldTableSpace = request.getOldTableSpace();
-        if (!StringUtils.equals(newTableSpace.getTableSpace(), oldTableSpace.getTableSpace())) {
-            StringBuilder stringBuilder = new StringBuilder("ALTER TABLESPACE \"").append(oldTableSpace.getTableSpace()).append("\" rename to ").append(newTableSpace.getTableSpace()).append(";");
-            sqls.add(stringBuilder.toString());
-        }
-        if (!StringUtils.equals(newTableSpace.getPath(), oldTableSpace.getPath())) {
-            StringBuilder stringBuilder = new StringBuilder("ALTER TABLESPACE \"").append(newTableSpace.getTableSpace()).append("\" offline;");
-            StringBuilder stringBuilder2 = new StringBuilder("ALTER TABLESPACE \"").append(newTableSpace.getTableSpace()).append("\" rename datafile '").append(oldTableSpace.getPath()).append("' to '").append(newTableSpace.getPath()).append("'").append(";");
-            StringBuilder stringBuilder3 = new StringBuilder("ALTER TABLESPACE \"").append(newTableSpace.getTableSpace()).append("\" online;");
-            sqls.add(stringBuilder.toString());
-            sqls.add(stringBuilder2.toString());
-            sqls.add(stringBuilder3.toString());
-        }
+        validateTablespace(newTableSpace);
         if (StringUtils.isNotBlank(newTableSpace.getAutoSize())) {
-            if (!newTableSpace.getAutoSize().equals(oldTableSpace.getAutoSize()) ||
-                    !newTableSpace.getAutoSizeUnit().equals(oldTableSpace.getAutoSizeUnit()) ||
-                    (StrUtil.isNotBlank(newTableSpace.getExpandUpperLimit()) && !newTableSpace.getExpandUpperLimit().equals(oldTableSpace.getExpandUpperLimit()))) {
+            if (StringUtils.isBlank(newTableSpace.getAutoSizeUnit())) {
+                throw new BusinessException("自增单位缺失");
+            }
+            if (!StringUtils.equals(newTableSpace.getAutoSize(), oldTableSpace.getAutoSize()) ||
+                    !StringUtils.equals(newTableSpace.getAutoSizeUnit(), oldTableSpace.getAutoSizeUnit()) ||
+                    (StrUtil.isNotBlank(newTableSpace.getExpandUpperLimit())
+                            && !StringUtils.equals(newTableSpace.getExpandUpperLimit(), oldTableSpace.getExpandUpperLimit()))) {
                 String maxSize = "";
                 if (DBTypeEnum.DM.name().equals(dbType)) {
-//                    String size = converterUnit(newTableSpace.getAutoSizeUnit(), newTableSpace.getAutoSize());
+                    newTableSpace.setAutoSize(converterUnit(newTableSpace.getAutoSizeUnit(), newTableSpace.getAutoSize()));
                     if (StringUtils.isNotBlank(newTableSpace.getExpandUpperLimit())) {
+                        if (StringUtils.isBlank(newTableSpace.getMaxSizeUnit())) {
+                            throw new BusinessException("最大值单位缺失");
+                        }
                         maxSize = converterUnit(newTableSpace.getMaxSizeUnit(), newTableSpace.getExpandUpperLimit());
                     }
-//                    newTableSpace.setAutoSize(size);
                 } else if (DBTypeEnum.ORACLE.name().equals(dbType)) {
                     newTableSpace.setAutoSize(newTableSpace.getAutoSize() + newTableSpace.getAutoSizeUnit().charAt(0));
                     if (StringUtils.isNotBlank(newTableSpace.getExpandUpperLimit())) {
-                        maxSize = newTableSpace.getExpandUpperLimit() + newTableSpace.getExpandUpperLimit().charAt(0);
+                        if (StringUtils.isBlank(newTableSpace.getMaxSizeUnit())) {
+                            throw new BusinessException("最大值单位缺失");
+                        }
+                        maxSize = newTableSpace.getExpandUpperLimit() + newTableSpace.getMaxSizeUnit().charAt(0);
                     }
                 }
                 String sql = Chat2DBContext.getSqlBuilder().updateAutoSpace(Chat2DBContext.getConnection(), newTableSpace.getPath(), newTableSpace.getAutoSize(), maxSize, newTableSpace.getTableSpace());
@@ -223,7 +219,8 @@ public class TableSpaceServiceImpl implements TableSpaceService {
             sqls.add(sql);
         }
         if (StringUtils.isNotBlank(newTableSpace.getTotalSize())) {
-            if (!newTableSpace.getTotalSize().equals(oldTableSpace.getTotalSize()) || !newTableSpace.getSizeUnit().equals(oldTableSpace.getSizeUnit())) {
+            if (!StringUtils.equals(newTableSpace.getTotalSize(), oldTableSpace.getTotalSize())
+                    || !StringUtils.equals(newTableSpace.getSizeUnit(), oldTableSpace.getSizeUnit())) {
                 if (DBTypeEnum.DM.name().equals(dbType)) {
                     String size = converterUnit(newTableSpace.getSizeUnit(), newTableSpace.getTotalSize());
                     newTableSpace.setTotalSize(size);
@@ -234,14 +231,56 @@ public class TableSpaceServiceImpl implements TableSpaceService {
                 sqls.add(sql);
             }
         }
-        for (String sql : sqls) {
-            try {
-                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, new DefaultValueHandler());
-            } catch (SQLException e) {
-                throw new BusinessException("表空间修改SQL执行失败");
+        try {
+            if (!StringUtils.equals(newTableSpace.getTableSpace(), oldTableSpace.getTableSpace())) {
+                executeTablespaceSql(new StringBuilder("ALTER TABLESPACE \"")
+                        .append(oldTableSpace.getTableSpace()).append("\" rename to ")
+                        .append(newTableSpace.getTableSpace()).append(";").toString());
             }
+            if (!StringUtils.equals(newTableSpace.getPath(), oldTableSpace.getPath())) {
+                executePathChange(newTableSpace.getTableSpace(), oldTableSpace.getPath(), newTableSpace.getPath());
+            }
+            for (String sql : sqls) {
+                executeTablespaceSql(sql);
+            }
+        } catch (SQLException e) {
+            throw new BusinessException("表空间修改SQL执行失败:" + e.getMessage());
         }
         return ActionResult.isSuccess();
+    }
+
+    private void validateTablespace(TableSpaceCreateRequest tableSpace) {
+        if (StringUtils.isBlank(tableSpace.getTableSpace()) || StringUtils.isBlank(tableSpace.getPath())
+                || StringUtils.isBlank(tableSpace.getTotalSize()) || StringUtils.isBlank(tableSpace.getSizeUnit())) {
+            throw new BusinessException("参数缺失");
+        }
+    }
+
+    private void executePathChange(String tableSpace, String oldPath, String newPath) throws SQLException {
+        String prefix = "ALTER TABLESPACE \"" + tableSpace + "\" ";
+        executeTablespaceSql(prefix + "offline;");
+        SQLException failure = null;
+        try {
+            executeTablespaceSql(prefix + "rename datafile '" + oldPath + "' to '" + newPath + "';");
+        } catch (SQLException e) {
+            failure = e;
+        }
+        try {
+            executeTablespaceSql(prefix + "online;");
+        } catch (SQLException e) {
+            if (failure == null) {
+                failure = e;
+            } else {
+                failure.addSuppressed(e);
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    void executeTablespaceSql(String sql) throws SQLException {
+        SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, new DefaultValueHandler());
     }
 
     private String getDbType() {

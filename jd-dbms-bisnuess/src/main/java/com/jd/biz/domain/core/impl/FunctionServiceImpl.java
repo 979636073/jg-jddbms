@@ -5,6 +5,8 @@ import com.jd.biz.domain.api.param.DlExecuteParam;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.DlTemplateService;
 import com.jd.biz.domain.api.service.FunctionService;
+import com.jd.common.tools.base.excption.BusinessException;
+import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.spi.SqlBuilder;
@@ -16,8 +18,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Locale;
 
 @Service
 public class FunctionServiceImpl implements FunctionService {
@@ -32,6 +35,27 @@ public class FunctionServiceImpl implements FunctionService {
     @Override
     public DataResult<Function> detail(String databaseName, String schemaName, String functionName) {
         return DataResult.of(Chat2DBContext.getMetaData().function(Chat2DBContext.getConnection(), databaseName, schemaName, functionName));
+    }
+
+    @Override
+    public ActionResult update(String databaseName, String schemaName, Function function) throws SQLException {
+        if (function == null || org.apache.commons.lang3.StringUtils.isBlank(function.getFunctionName())
+                || org.apache.commons.lang3.StringUtils.isBlank(function.getFunctionBody())) {
+            throw new BusinessException("参数缺失");
+        }
+        String sql = buildCreateOrReplaceSql(function.getFunctionBody());
+        try (Statement statement = Chat2DBContext.getConnection().createStatement()) {
+            statement.execute(sql);
+        }
+        return ActionResult.isSuccess();
+    }
+
+    String buildCreateOrReplaceSql(String functionBody) {
+        String sql = functionBody.trim();
+        if (!sql.toUpperCase(Locale.ROOT).startsWith("CREATE")) {
+            sql = "CREATE OR REPLACE " + sql;
+        }
+        return sql;
     }
 
 
