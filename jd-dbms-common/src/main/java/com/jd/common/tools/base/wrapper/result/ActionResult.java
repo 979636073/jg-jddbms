@@ -1,5 +1,6 @@
 package com.jd.common.tools.base.wrapper.result;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.io.Serializable;
 
 import com.jd.common.tools.base.constant.EasyToolsConstant;
@@ -38,6 +39,7 @@ public class ActionResult implements Serializable, Result {
     /**
      * error detail
      */
+    @JsonIgnore
     private String errorDetail;
 
     /**

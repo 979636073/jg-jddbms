@@ -9,14 +9,15 @@ import com.jd.biz.controller.rdb.request.TableRequest;
 import com.jd.biz.controller.rdb.vo.ExecuteResultVO;
 import com.jd.biz.controller.rdb.vo.TableVO;
 import com.jd.biz.domain.api.service.TableUserService;
+import com.jd.common.annotation.Log;
 import com.jd.common.core.domain.AjaxResult;
-import com.jd.common.tools.base.constant.EasyToolsConstant;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.common.tools.base.wrapper.result.web.WebPageResult;
-import com.jd.spi.jdbc.DefaultValueHandler;
+import com.jd.common.tools.common.util.I18nUtils;
 import com.jd.spi.model.*;
 import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.SQLExecutor;
@@ -74,6 +75,7 @@ public class TableUserController {
      * @param request
      * @return
      */
+    @Log(title = "数据库用户角色授权", businessType = BusinessType.GRANT)
     @PostMapping("/addOrDelUserRole")
     public AjaxResult addOrDelUserRole(@Valid @RequestBody TableBriefQueryRequest request) throws SQLException {
         if (StringUtils.isBlank(request.getUserName())) {
@@ -90,6 +92,8 @@ public class TableUserController {
      * @param request
      * @return
      */
+    @Log(title = "创建数据库用户", businessType = BusinessType.INSERT,
+            excludeParamNames = {"newPassWord"})
     @PostMapping("/createUser")
     public AjaxResult createUser(@Valid @RequestBody TableBriefQueryRequest request) {
         if (StringUtils.isAnyBlank(request.getUserName(), request.getNewPassWord())) {
@@ -107,6 +111,7 @@ public class TableUserController {
      * @param request
      * @return
      */
+    @Log(title = "数据库用户锁定状态", businessType = BusinessType.UPDATE)
     @GetMapping("/lockUser")
     public DataResult<Boolean> lockUser(@Valid TableBriefQueryRequest request) {
         if (StringUtils.isBlank(request.getLockName()) || request.getIsLock() == null) {
@@ -142,6 +147,7 @@ public class TableUserController {
      * 获取全部对象角色列表
      * @return 返回包含表信息的 ListResult 对象
      */
+    @Log(title = "数据库对象权限授权", businessType = BusinessType.GRANT)
     @PostMapping("/addObjectRole")
     public DataResult<Boolean> addObjectRole(@RequestBody @Valid TableBriefQueryRequest request) throws SQLException {
         return DataResult.of(tableUserService.addObjectRole(request));
@@ -154,6 +160,8 @@ public class TableUserController {
      * @param request
      * @return
      */
+    @Log(title = "修改数据库用户密码", businessType = BusinessType.UPDATE,
+            excludeParamNames = {"newPassWord"})
     @PostMapping("/managePassWord")
     public DataResult<ExecuteResult> managePassWord(@RequestBody @Valid TableBriefQueryRequest request) {
         if (StringUtils.isAnyBlank(request.getUserName(), request.getNewPassWord())) {
@@ -178,6 +186,7 @@ public class TableUserController {
      * @param request
      * @return
      */
+    @Log(title = "修改数据库用户", businessType = BusinessType.UPDATE)
     @PostMapping("/modify")
     public AjaxResult modifySql(@Valid @RequestBody TableBriefQueryRequest request) {
         TableSpace tableSpace = new TableSpace();
@@ -190,21 +199,31 @@ public class TableUserController {
      * 删除用户
      * @return
      */
+    @Log(title = "删除数据库用户", businessType = BusinessType.DELETE)
     @PostMapping("/dropUser")
     public ActionResult dropUser(@Valid @RequestBody TableBriefQueryRequest request) {
         if (CollUtil.isEmpty(request.getUserNames())
                 || request.getUserNames().stream().anyMatch(StringUtils::isBlank)) {
             throw new BusinessException("user.drop.nameRequired");
         }
-        try {
-            for (String userName : request.getUserNames()) {
+        List<String> failedUserNames = new ArrayList<>();
+        int successCount = 0;
+        for (String userName : request.getUserNames()) {
+            try {
                 String sql = Chat2DBContext.getSqlBuilder().dropUser(userName);
-                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, new DefaultValueHandler());
+                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);
+                successCount++;
+            } catch (Exception e) {
+                failedUserNames.add(userName);
+                log.warn("删除用户失败,userName:{},error:{}", userName, e.getMessage());
             }
-            return ActionResult.isSuccess();
-        } catch (Exception e) {
-            log.warn("删除用户失败,e:{}", e.getMessage());
-            return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "删除用户失败.", e.getMessage());
         }
+        if (failedUserNames.isEmpty()) {
+            return ActionResult.isSuccess();
+        }
+        String errorCode = "user.drop.partialFailed";
+        String errorMessage = I18nUtils.getMessage(errorCode,
+                new Object[]{successCount, failedUserNames.size(), String.join(", ", failedUserNames)});
+        return ActionResult.fail(errorCode, errorMessage, null);
     }
 }

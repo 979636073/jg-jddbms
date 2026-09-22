@@ -55,11 +55,7 @@ public class TableUserServiceImpl implements TableUserService {
             }
             return ListResult.of(tableUsers);
         } catch (Exception e) {
-            String errorMessage = e.getLocalizedMessage();
-            if (e.getMessage().contains(":")) {
-                errorMessage = e.getMessage().split(":")[1].trim();
-            }
-            throw new BusinessException(errorMessage);
+            throw new BusinessException("user.query.failed", new Object[]{ExceptionUtils.getMessage(e)});
         }
     }
 
@@ -86,7 +82,7 @@ public class TableUserServiceImpl implements TableUserService {
                 return DataResult.of(true);
             }
         } catch (SQLException e) {
-            throw new BusinessException(ExceptionUtils.getMessage(e));
+            throw new BusinessException("user.lock.failed", new Object[]{ExceptionUtils.getMessage(e)});
         }
         return DataResult.of(false);
     }
@@ -98,7 +94,7 @@ public class TableUserServiceImpl implements TableUserService {
             ExecuteResult execute = SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);
             return DataResult.of(execute);
         } catch (SQLException e) {
-            throw new BusinessException("用户密码修改失败");
+            throw new BusinessException("user.password.change.failed", new Object[]{ExceptionUtils.getMessage(e)});
         }
     }
 
@@ -112,7 +108,7 @@ public class TableUserServiceImpl implements TableUserService {
             sb.append("\"").append(tableSpace.getDefaultTableSpace()).append("\"");
             Boolean aBoolean = Chat2DBContext.getMetaData().executeSQL(Chat2DBContext.getConnection(), sb.toString());
             if (!aBoolean) {
-                throw new BusinessException("当前用户无权限修改");
+                throw new BusinessException("user.modify.failed");
             }
         }
         if (StringUtils.isNotBlank(tableSpace.getTempTableSpace())) {
@@ -123,7 +119,7 @@ public class TableUserServiceImpl implements TableUserService {
             sb.append("\"").append(tableSpace.getTempTableSpace()).append("\"");
             Boolean aBoolean = Chat2DBContext.getMetaData().executeSQL(Chat2DBContext.getConnection(), sb.toString());
             if (!aBoolean) {
-                throw new BusinessException("当前用户无权限修改");
+                throw new BusinessException("user.modify.failed");
             }
         }
     }

@@ -3,6 +3,7 @@ package com.jd.framework.aspectj;
 import com.alibaba.fastjson2.JSON;
 import com.jd.common.annotation.Log;
 import com.jd.common.constant.SQLConstants;
+import com.jd.common.core.domain.AjaxResult;
 import com.jd.common.core.domain.entity.SysUser;
 import com.jd.common.core.domain.model.LoginUser;
 import com.jd.common.core.redis.RedisCache;
@@ -13,6 +14,7 @@ import com.jd.common.utils.SecurityUtil;
 import com.jd.common.utils.ServletUtils;
 import com.jd.common.utils.StringUtils;
 import com.jd.common.utils.ip.IpUtils;
+import com.jd.common.tools.base.wrapper.Result;
 import com.jd.framework.manager.AsyncManager;
 import com.jd.framework.manager.factory.AsyncFactory;
 import com.jd.system.domain.SysOperLog;
@@ -121,6 +123,10 @@ public class LogAspect
                 operLog.setStatus(BusinessStatus.FAIL.ordinal());
                 operLog.setErrorMsg(StringUtils.substring(e.getMessage(), 0, 2000));
             }
+            else
+            {
+                updateStatusFromResult(operLog, jsonResult);
+            }
             // 设置方法名称
             String className = joinPoint.getTarget().getClass().getName();
             String methodName = joinPoint.getSignature().getName();
@@ -158,6 +164,28 @@ public class LogAspect
         finally
         {
             TIME_THREADLOCAL.remove();
+        }
+    }
+
+    void updateStatusFromResult(SysOperLog operLog, Object jsonResult)
+    {
+        if (jsonResult instanceof Result)
+        {
+            Result<?> result = (Result<?>) jsonResult;
+            if (!result.success())
+            {
+                operLog.setStatus(BusinessStatus.FAIL.ordinal());
+                operLog.setErrorMsg(StringUtils.substring(result.errorMessage(), 0, 2000));
+            }
+        }
+        else if (jsonResult instanceof AjaxResult)
+        {
+            AjaxResult result = (AjaxResult) jsonResult;
+            if (!result.isSuccess())
+            {
+                operLog.setStatus(BusinessStatus.FAIL.ordinal());
+                operLog.setErrorMsg(StringUtils.substring((String) result.get(AjaxResult.MSG_TAG), 0, 2000));
+            }
         }
     }
 

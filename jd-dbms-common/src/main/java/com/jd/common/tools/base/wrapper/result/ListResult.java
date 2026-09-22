@@ -1,5 +1,6 @@
 package com.jd.common.tools.base.wrapper.result;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -50,6 +51,7 @@ public class ListResult<T> implements Serializable, Result<T> {
     /**
      * error detail
      */
+    @JsonIgnore
     private String errorDetail;
 
     /**

@@ -1,5 +1,7 @@
 package com.jd.common.tools.base.wrapper.result.web;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -52,6 +54,7 @@ public class WebPageResult<T> implements Serializable, Result<List<T>> {
     /**
      * error detail
      */
+    @JsonIgnore
     private String errorDetail;
 
     /**
