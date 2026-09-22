@@ -1,6 +1,7 @@
 package com.jd.biz.controller.rdb.request;
 
 import com.jd.biz.controller.data.source.request.DataSourceBaseRequestInfo;
+import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -25,6 +26,7 @@ public class FunctionDetailRequest implements DataSourceBaseRequestInfo {
     /**
      * function name
      */
+    @NotBlank
     private String functionName;
 
     /**

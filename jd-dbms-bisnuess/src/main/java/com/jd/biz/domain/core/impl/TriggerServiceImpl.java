@@ -10,12 +10,10 @@ import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.spi.SqlBuilder;
-import com.jd.spi.jdbc.DefaultValueHandler;
 import com.jd.spi.model.ExecuteResult;
 import com.jd.spi.model.Sql;
 import com.jd.spi.model.Trigger;
 import com.jd.spi.sql.Chat2DBContext;
-import com.jd.spi.sql.SQLExecutor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 
 @Service
@@ -73,11 +72,12 @@ public class TriggerServiceImpl implements TriggerService {
                 if (StringUtils.isBlank(queryParam.getTriggerName())) {
                     throw new BusinessException("参数缺失");
                 }
-                deleteTriggers(queryParam);
             }
             String replace = queryParam.getSql().replace("\n", " ");
             replace = replace.replace("\r", " ");
-            SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), replace, new DefaultValueHandler());
+            try (Statement statement = Chat2DBContext.getConnection().createStatement()) {
+                statement.execute(replace);
+            }
         } catch (SQLException e) {
             throw new BusinessException(e.getMessage());
         }
@@ -91,7 +91,7 @@ public class TriggerServiceImpl implements TriggerService {
      */
     @Override
     public DataResult<ExecuteResult> deleteTriggers(TriggerDetailRequest queryParam) {
-        if (StringUtils.isAllBlank(queryParam.getSchemaName(), queryParam.getTriggerName())) {
+        if (StringUtils.isBlank(queryParam.getSchemaName()) || StringUtils.isBlank(queryParam.getTriggerName())) {
             throw new BusinessException("参数缺失");
         }
         SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();

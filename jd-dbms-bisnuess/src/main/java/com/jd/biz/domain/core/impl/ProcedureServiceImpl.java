@@ -5,6 +5,7 @@ import com.jd.biz.domain.api.param.DlExecuteParam;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.DlTemplateService;
 import com.jd.biz.domain.api.service.ProcedureService;
+import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
@@ -16,10 +17,13 @@ import com.jd.spi.sql.Chat2DBContext;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.apache.commons.lang3.StringUtils;
 
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class ProcedureServiceImpl implements ProcedureService {
@@ -39,8 +43,28 @@ public class ProcedureServiceImpl implements ProcedureService {
 
     @Override
     public ActionResult update(String databaseName, String schemaName, Procedure procedure) throws SQLException {
-        Chat2DBContext.getDBManage().updateProcedure(Chat2DBContext.getConnection(), databaseName, schemaName, procedure);
+        if (procedure == null || StringUtils.isBlank(procedure.getProcedureName())
+                || StringUtils.isBlank(procedure.getProcedureBody())) {
+            throw new BusinessException("参数缺失");
+        }
+        String dbType = Chat2DBContext.getConnectInfo().getDbType();
+        if ("ORACLE".equalsIgnoreCase(dbType) || "DM".equalsIgnoreCase(dbType)) {
+            String sql = buildCreateOrReplaceSql(procedure.getProcedureBody());
+            try (Statement statement = Chat2DBContext.getConnection().createStatement()) {
+                statement.execute(sql);
+            }
+        } else {
+            Chat2DBContext.getDBManage().updateProcedure(Chat2DBContext.getConnection(), databaseName, schemaName, procedure);
+        }
         return ActionResult.isSuccess();
+    }
+
+    String buildCreateOrReplaceSql(String procedureBody) {
+        String sql = procedureBody.trim();
+        if (!sql.toUpperCase(Locale.ROOT).startsWith("CREATE")) {
+            sql = "CREATE OR REPLACE " + sql;
+        }
+        return sql;
     }
 
 

@@ -1,6 +1,7 @@
 package com.jd.biz.controller.rdb.request;
 
 import com.jd.biz.controller.data.source.request.DataSourceBaseRequestInfo;
+import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -28,6 +29,7 @@ public class TriggerDetailRequest implements DataSourceBaseRequestInfo {
     /**
      * trigger name
      */
+    @NotBlank
     private String triggerName;
 
     private String tableName;
@@ -45,4 +47,3 @@ public class TriggerDetailRequest implements DataSourceBaseRequestInfo {
 
     private Boolean isUpdate;
 }
-

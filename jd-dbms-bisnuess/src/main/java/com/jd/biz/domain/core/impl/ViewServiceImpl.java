@@ -178,7 +178,6 @@ public class ViewServiceImpl implements ViewService {
         request.setViewSql(replace);
         ListResult<ExecuteResult> listResult = new ListResult<>();
         listResult.setSuccess(true);
-        Connection connection = Chat2DBContext.getConnection();
         List<ExecuteResult> executeResults = new ArrayList<>();
 
         String createViewSql = request.getViewSql();
@@ -186,13 +185,9 @@ public class ViewServiceImpl implements ViewService {
 //        if (StringUtils.isNotEmpty(createViewSql)) {
             ExecuteResult executeResult = new ExecuteResult();
 //            ExecuteResult executeResult = ExecuteResult.builder().sql(createViewSql).success(Boolean.TRUE).build();//编译视图
-            Statement statement = null;
-            try {
-                Chat2DBContext.getMetaData().executeSQL(Chat2DBContext.getConnection(), createViewSql);
-                statement = connection.createStatement();
+            try (Statement statement = Chat2DBContext.getConnection().createStatement()) {
                 statement.execute(createViewSql);
                 executeResult.setSuccess(Boolean.TRUE);
-
                 executeResults.add(executeResult);
             } catch (SQLException e) {
                 String message = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
@@ -202,25 +197,9 @@ public class ViewServiceImpl implements ViewService {
                 log.warn("Execute sql: {} exception", createViewSql, e);
                 listResult.setSuccess(false);
                 listResult.setErrorMessage(message);
-            } finally {
-                try {
-                    if (statement != null) {
-                        statement.close();
-                    }
-                } catch (SQLException e) {
-                    log.error("close statement error:{}", e);
-                }
             }
 
 //        }
-
-        try {
-            if (connection != null) {
-                connection.close();
-            }
-        } catch (SQLException e) {
-            log.error("close connection error:{}", e);
-        }
         listResult.setData(executeResults);
         return listResult;
     }
@@ -283,9 +262,7 @@ public class ViewServiceImpl implements ViewService {
             Connection connection = Chat2DBContext.getConnection();
             for (String originalSql : sqlList) {
                 executeResult = ExecuteResult.builder().sql(originalSql).success(Boolean.TRUE).build();
-                Statement statement = null;
-                try {
-                    statement = connection.createStatement();
+                try (Statement statement = connection.createStatement()) {
                     statement.execute(originalSql);
                     executeResult.setSuccess(true);
                     executeResult.setTableName(request.getTableName());
@@ -295,24 +272,8 @@ public class ViewServiceImpl implements ViewService {
                     executeResult.setSuccess(false);
                     executeResult.setTableName(request.getTableName());
                     executeResult.setMessage(request.getTableName() + "编译失败:" + message);
-                } finally {
-                    try {
-                        if (statement != null) {
-                            statement.close();
-                        }
-                    } catch (SQLException e) {
-                        log.error("close statement error:{}", e);
-                    }
                 }
             }
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                log.error("close connection error:{}", e);
-            }
-
         }
         return executeResult;
     }
@@ -328,7 +289,7 @@ public class ViewServiceImpl implements ViewService {
             StringBuffer stringBuffer = new StringBuffer(" CREATE OR REPLACE VIEW ");
             stringBuffer.append(MetaNameUtils.quoteIdentifier(table.getSchemaName())).append(".");
             stringBuffer.append(MetaNameUtils.quoteIdentifier(table.getName()));
-            if (table.getColumnList().size() > 0) {
+            if (CollUtil.isNotEmpty(table.getColumnList())) {
                 stringBuffer.append(getColumnString(table.getColumnList()));
             }
             stringBuffer.append(" AS ");
@@ -480,33 +441,42 @@ public class ViewServiceImpl implements ViewService {
 
     @Override
     public Boolean updateViewTableName(ViewQueryRequest request) {
-        if (StrUtil.isBlank(request.getNewViewName()) && StrUtil.isBlank(request.getOldViewName()) && StrUtil.isNotBlank(request.getSchemaName())) {
+        if (StrUtil.isBlank(request.getNewViewName()) || StrUtil.isBlank(request.getOldViewName()) || StrUtil.isBlank(request.getSchemaName())) {
             throw new BusinessException("参数缺失");
+        }
+        if (request.getOldViewName().equals(request.getNewViewName())) {
+            return Boolean.TRUE;
         }
         ViewRequest viewRequest = new ViewRequest();
         viewRequest.setDataSourceId(request.getDataSourceId());
         viewRequest.setTableName(request.getOldViewName());
         viewRequest.setSchemaName(request.getSchemaName());
         viewRequest.setDatabaseName("");
-        String ddl = "";
         try {
             DataResult<Table> detail = detail("", request.getSchemaName(), request.getOldViewName());
-            ddl = detail.getData().getDdl();
-            drop(viewRequest);
+            if (!DataResult.hasData(detail) || StrUtil.isBlank(detail.getData().getDdl())) {
+                throw new BusinessException("未获取到原视图定义");
+            }
+            String ddl = detail.getData().getDdl();
             String oldValue = "\"" + request.getSchemaName() + "\".\"" + request.getOldViewName() +"\"";
             String newValue = "\"" + request.getSchemaName() + "\".\"" + request.getNewViewName() +"\"";
             String viewSql = ddl.replace(oldValue, newValue);
+            if (ddl.equals(viewSql)) {
+                throw new BusinessException("原视图定义中未找到待修改名称");
+            }
             viewRequest.setViewSql(viewSql);
             ListResult<ExecuteResult> execute = execute(viewRequest);
             if (execute == null || !execute.getSuccess()) {
                 throw new BusinessException("重置视图名失败");
             }
+            viewRequest.setViewSql(null);
+            drop(viewRequest);
             return Boolean.TRUE;
         } catch (BusinessException e) {
-            e.printStackTrace();
-            viewRequest.setViewSql(ddl);
-            execute(viewRequest);
             log.error("修改视图名失败,{}", e.getMessage());
+            return Boolean.FALSE;
+        } catch (RuntimeException e) {
+            log.error("修改视图名失败", e);
             return Boolean.FALSE;
         }
     }
@@ -520,7 +490,8 @@ public class ViewServiceImpl implements ViewService {
     @Override
     public Boolean updateViewColumnName(ViewQueryRequest request) {
         ViewRequest viewRequest = new ViewRequest();
-        if (CollUtil.isEmpty(request.getNewColumns()) && CollUtil.isEmpty(request.getOldColumns())) {
+        if (StrUtil.isBlank(request.getOldViewName()) || StrUtil.isBlank(request.getSchemaName())
+                || CollUtil.isEmpty(request.getNewColumns()) || CollUtil.isEmpty(request.getOldColumns())) {
             throw new BusinessException("参数缺失");
         }
         List<String> oldColumns = request.getOldColumns();
@@ -535,8 +506,10 @@ public class ViewServiceImpl implements ViewService {
             viewRequest.setSchemaName(request.getSchemaName());
             viewRequest.setDatabaseName("");
             DataResult<Table> detail = detail("", request.getSchemaName(), request.getOldViewName());
+            if (!DataResult.hasData(detail) || StrUtil.isBlank(detail.getData().getDdl())) {
+                throw new BusinessException("未获取到原视图定义");
+            }
             ddl = detail.getData().getDdl();
-            drop(viewRequest);
             String sql = ddl;
             String s = KFSqlParser.extractBetweenSelectAndFrom(sql);
             if (StrUtil.isEmpty(s)) {
@@ -577,9 +550,14 @@ public class ViewServiceImpl implements ViewService {
             }
             return Boolean.TRUE;
         } catch (BusinessException e) {
-            viewRequest.setViewSql(ddl);
-            execute(viewRequest);
+            if (StrUtil.isNotBlank(ddl)) {
+                viewRequest.setViewSql(ddl);
+                execute(viewRequest);
+            }
             log.error("修改视图列信息失败,{}", e.getMessage());
+            return Boolean.FALSE;
+        } catch (RuntimeException e) {
+            log.error("修改视图列信息失败", e);
             return Boolean.FALSE;
         }
     }
