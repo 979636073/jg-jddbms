@@ -192,13 +192,13 @@ public class OracleSqlBuilder extends DefaultSqlBuilder {
     public String createFunctionTemplate(String databaseName, String schemaName, String functionName) {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append("CREATE OR REPLACE FUNCTION " + format(schemaName != null ? schemaName : databaseName) +
-                        spot + functionName + " RETURN NUMBER IS tmpVar NUMBER ")
+                        spot + functionName + " RETURN NUMBER IS tmpVar NUMBER; ")
                 .append(" BEGIN \n")
                 .append(" tmpVar := 0; \n")
                 .append(" RETURN tmpVar;\n")
                 .append(" EXCEPTION \n")
                 .append(" WHEN NO_DATA_FOUND THEN \n")
-                .append(" NULL \n")
+                .append(" NULL; \n")
                 .append(" WHEN OTHERS THEN \n")
                 .append(" RAISE; \n")
                 .append(" END " + functionName + ";");

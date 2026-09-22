@@ -239,6 +239,33 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             + "WHERE TYPE = '%s' AND NAME = '%s' and OWNER  = '%s'"
             + "ORDER BY LINE";
 
+    private static final String FUNCTIONS_SQL
+            = "SELECT OWNER, OBJECT_NAME FROM ALL_OBJECTS WHERE OBJECT_TYPE = 'FUNCTION'";
+
+    static String buildFunctionsSql(String schemaName) {
+        String sql = FUNCTIONS_SQL;
+        if (StringUtils.isNotBlank(schemaName)) {
+            sql += " AND OWNER = '" + schemaName.replace("'", "''") + "'";
+        }
+        return sql + " ORDER BY OWNER, OBJECT_NAME";
+    }
+
+    @Override
+    public List<Function> functions(Connection connection, String databaseName, String schemaName) {
+        return SQLExecutor.getInstance().execute(connection, buildFunctionsSql(schemaName), resultSet -> {
+            List<Function> functions = new ArrayList<>();
+            while (resultSet.next()) {
+                Function function = new Function();
+                function.setDatabaseName(databaseName);
+                function.setSchemaName(resultSet.getString("OWNER"));
+                function.setFunctionName(resultSet.getString("OBJECT_NAME"));
+                function.setSpecificName(resultSet.getString("OBJECT_NAME"));
+                functions.add(function);
+            }
+            return functions;
+        });
+    }
+
     @Override
     public Function function(Connection connection, @NotEmpty String databaseName, String schemaName,
                              String functionName) {
