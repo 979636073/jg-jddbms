@@ -234,6 +234,9 @@ export default {
       selectedColumns: [], //复制选中列
       highlightedColumnIndex: [], //高亮列
       materializedViewRefreshing: false,
+      materializedDdlLoading: false,
+      materializedDdlVisible: false,
+      materializedDdl: "",
     };
   },
   watch: {
@@ -360,6 +363,33 @@ export default {
     window.removeEventListener("keyup", this.handleKeyUp);
   },
   methods: {
+    async showMaterializedDdl() {
+      this.materializedDdlLoading = true;
+      try {
+        const res = await viewServer.getViewDetail({
+          dataSourceId: this.queryResultData.uniqueData.dataSourceId,
+          databaseName: this.queryResultData.uniqueData.databaseName,
+          schemaName: this.queryResultData.uniqueData.schemaName,
+          tableName: this.queryResultData.uniqueData.tableName,
+        });
+        if (!res.success || !res.data?.ddl) {
+          this.$message.error(res.errorMessage || "获取物化视图 DDL 失败");
+          return;
+        }
+        this.materializedDdl = res.data.ddl;
+        this.materializedDdlVisible = true;
+      } catch (e) {
+        this.$message.error("获取物化视图 DDL 失败");
+      } finally {
+        this.materializedDdlLoading = false;
+      }
+    },
+    exportMaterializedDdl() {
+      downloadFile(process.env.VUE_APP_BASE_API + "/api/rdb/table/exportViewDDL", {
+        dataSourceId: this.queryResultData.uniqueData.dataSourceId,
+        sql: this.materializedDdl,
+      });
+    },
     async refreshMaterializedView() {
       this.materializedViewRefreshing = true;
       try {
@@ -2597,6 +2627,13 @@ export default {
         :loading="materializedViewRefreshing"
         @click="refreshMaterializedView"
       >刷新物化视图</el-button>
+      <el-button
+        v-if="isMaterializedView"
+        size="mini"
+        plain
+        :loading="materializedDdlLoading"
+        @click="showMaterializedDdl"
+      >查看 DDL</el-button>
       <el-popover
         placement="bottom"
         width="280"
@@ -3539,6 +3576,13 @@ export default {
         >
       </span>
     </el-dialog>
+    <el-dialog title="物化视图 DDL" :visible.sync="materializedDdlVisible" width="70%">
+      <pre class="materialized-ddl">{{ materializedDdl }}</pre>
+      <span slot="footer">
+        <el-button @click="materializedDdlVisible = false">关闭</el-button>
+        <el-button type="primary" @click="exportMaterializedDdl">导出 DDL</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -3600,6 +3644,11 @@ export default {
       }
     }
   }
+}
+.materialized-ddl {
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 .left_right_title {
   display: flex;

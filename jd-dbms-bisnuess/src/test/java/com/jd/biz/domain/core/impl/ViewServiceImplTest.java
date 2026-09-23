@@ -7,6 +7,7 @@ import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.spi.config.DriverConfig;
 import com.jd.spi.model.ExecuteResult;
 import com.jd.spi.model.Table;
+import com.jd.spi.model.TableColumn;
 import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.ConnectInfo;
 import org.junit.After;
@@ -97,6 +98,41 @@ public class ViewServiceImplTest {
                 ViewServiceImpl.buildRefreshMaterializedViewSql("ORACLE", "SYSTEM", "MV_TEST"));
     }
 
+    @Test
+    public void shouldRenameOnlyRequestedColumnWithoutParsingSelectBody() {
+        RecordingViewService service = new RecordingViewService(true, false,
+                "SELECT 1 OLD_ID, (SELECT 2 FROM DUAL) OTHER_ID FROM DUAL");
+
+        assertTrue(service.updateViewColumnName(columnRenameRequest("OLD_ID", "NEW_ID")));
+        assertEquals(Arrays.asList("execute:CREATE OR REPLACE VIEW \"SYSTEM\".\"V_OLD\" ( \"NEW_ID\",\"OTHER_ID\" )  AS SELECT 1 OLD_ID, (SELECT 2 FROM DUAL) OTHER_ID FROM DUAL"), service.steps);
+    }
+
+    @Test
+    public void shouldNotReplayOldDdlWhenColumnRenameFails() {
+        RecordingViewService service = new RecordingViewService(false, false,
+                "SELECT 1 OLD_ID, (SELECT 2 FROM DUAL) OTHER_ID FROM DUAL");
+
+        assertFalse(service.updateViewColumnName(columnRenameRequest("OLD_ID", "NEW_ID")));
+        assertEquals(1, service.steps.size());
+    }
+
+    @Test
+    public void shouldRejectUnknownOrDuplicateColumnNameBeforeExecuting() {
+        RecordingViewService service = new RecordingViewService(true, false,
+                "SELECT 1 OLD_ID, (SELECT 2 FROM DUAL) OTHER_ID FROM DUAL");
+
+        assertFalse(service.updateViewColumnName(columnRenameRequest("MISSING", "NEW_ID")));
+        assertFalse(service.updateViewColumnName(columnRenameRequest("OLD_ID", "OTHER_ID")));
+        assertTrue(service.steps.isEmpty());
+    }
+
+    private ViewQueryRequest columnRenameRequest(String oldName, String newName) {
+        ViewQueryRequest request = renameRequest();
+        request.setOldColumns(Arrays.asList(oldName));
+        request.setNewColumns(Arrays.asList(newName));
+        return request;
+    }
+
     private ViewQueryRequest renameRequest() {
         ViewQueryRequest request = new ViewQueryRequest();
         request.setDataSourceId(1L);
@@ -155,6 +191,7 @@ public class ViewServiceImplTest {
     private static class RecordingViewService extends ViewServiceImpl {
         private final boolean executeSuccess;
         private final boolean failOriginalDrop;
+        private final String viewSql;
         private final List<String> steps = new ArrayList<>();
 
         private RecordingViewService(boolean executeSuccess) {
@@ -162,15 +199,27 @@ public class ViewServiceImplTest {
         }
 
         private RecordingViewService(boolean executeSuccess, boolean failOriginalDrop) {
+            this(executeSuccess, failOriginalDrop, "SELECT 1 FROM DUAL");
+        }
+
+        private RecordingViewService(boolean executeSuccess, boolean failOriginalDrop, String viewSql) {
             this.executeSuccess = executeSuccess;
             this.failOriginalDrop = failOriginalDrop;
+            this.viewSql = viewSql;
         }
 
         @Override
         public DataResult<Table> detail(String databaseName, String schemaName, String tableName) {
             Table table = new Table();
             table.setDdl("CREATE OR REPLACE VIEW \"SYSTEM\".\"V_OLD\" AS SELECT 1 FROM DUAL");
-            table.setViewSql("SELECT 1 FROM DUAL");
+            table.setViewSql(viewSql);
+            if (viewSql.contains("OLD_ID")) {
+                TableColumn first = new TableColumn();
+                first.setName("OLD_ID");
+                TableColumn second = new TableColumn();
+                second.setName("OTHER_ID");
+                table.setColumnList(Arrays.asList(first, second));
+            }
             return DataResult.of(table);
         }
 

@@ -5,7 +5,6 @@
       size="mini"
       :data="tableData"
       :cell-class-name="getRowCloumn"
-      @cell-click="getCell"
       row-key="key"
       border
       height="700"
@@ -13,7 +12,7 @@
     <el-table-column prop="name" label="列名称">
       <template slot-scope="scope">
           <template>
-            <el-input size="mini" v-model="scope.row.name" @blur="inputBlur(scope.row)" maxlength="50" show-word-limit></el-input>
+            <el-input size="mini" v-model="scope.row.name" @focus="startEdit(scope.row)" @blur="inputBlur(scope.row)" maxlength="50" show-word-limit></el-input>
           </template>
         </template>
        </el-table-column>
@@ -80,7 +79,7 @@ export default {
       tabRowindex: null,
       tabColumnIndex: null,
       newRowData: {},
-      oldRowData: {}
+      oldRowData: null
     };
   },
   methods: {
@@ -91,33 +90,37 @@ export default {
       row.index = rowIndex;
       column.index = columnIndex;
     },
-    getCell(row, column, cell, event) {
-      this.oldRowData = JSON.parse(JSON.stringify(row.name));
-
-      // if (column.label == "列名称") {
-      //   this.tabRowindex = row.index;
-      //   this.tabColumnIndex = column.index;
-      //   this.newRowData = row.name;
-      //   this.oldRowData = JSON.parse(JSON.stringify(row.name));
-      // }
+    startEdit(row) {
+      this.oldRowData = row.name;
     },
     inputBlur(row) {
       this.tabRowindex = null;
       this.tabColumnIndex = null;
+      const oldName = this.oldRowData;
+      if (oldName === null || oldName === row.name) return;
+      if (!row.name.trim()) {
+        row.name = oldName;
+        this.$message.error("列名不能为空");
+        return;
+      }
       const params = {
         dataSourceId: this.queryResultData.uniqueData.dataSourceId,
         schemaName: this.queryResultData.uniqueData.schemaName,
         oldViewName: this.queryResultData.uniqueData.tableName,
-        oldColumns: [this.oldRowData],
+        oldColumns: [oldName],
         newColumns: [row.name]
       };
       viewServer.updateColumnName(params).then(res => {
         if (res.data) {
-          this.initData();
+          this.initData(true);
           this.$message.success("修改成功!");
         } else {
-          this.$message.error("修改失败!");
+          row.name = oldName;
+          this.$message.error(res.errorMessage || "修改失败!");
         }
+      }).catch(() => {
+        row.name = oldName;
+        this.$message.error("修改失败!");
       });
     }
   }

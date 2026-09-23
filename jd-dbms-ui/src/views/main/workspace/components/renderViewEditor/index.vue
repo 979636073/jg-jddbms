@@ -7,6 +7,7 @@ import ColumnViewList from "../renderViewEditor/ColumnViewList.vue";
 import DataInfoView from "../renderViewEditor/DataInfoView.vue";
 import DespUses from "../renderViewEditor/DepsUsersView.vue";
 import DespUsedBy from "../renderViewEditor/DepsUsedByView.vue";
+import GrantList from "../renderTableEditor/GrantList.vue";
 import SqlPreview from "@/views/main/workspace/components/DataSource/SqlPreview.vue";
 import renderSearchResult from "../../components/renderSearchResult/index.vue";
 import { downloadFile } from "@/utils/file";
@@ -29,6 +30,7 @@ export default {
     DataInfoView,
     DespUses,
     DespUsedBy,
+    GrantList,
     renderSearchResult
   },
   data() {
@@ -50,6 +52,8 @@ export default {
       viewDependentData: [],
       viewDependentByData: [],
       dependencyLoading: { deps: false, depsBy: false },
+      grantList: [],
+      grantLoading: false,
       databaseSupportField: {
         columnTypes: [],
         charsets: [],
@@ -113,16 +117,18 @@ export default {
           this.viewDependentFn("depsBy");
         } else if (newVal == "info") {
           this.viewName = this.basicForm.tableName;
+        } else if (newVal == "grant") {
+          this.queryGrantList();
         }
       }
     }
   },
   methods: {
-    initData() {
+    initData(force = false) {
       return new Promise(resolve => {
         this.currentConfig = this.queryResultData;
         this.basicForm = this.currentConfig?.uniqueData;
-        if (this.currentConfig?.columnList) {
+        if (this.currentConfig?.columnList && !force) {
           this.columnList = this.currentConfig?.columnList;
         } else {
           if (this.currentConfig?.title !== "新建视图") {
@@ -154,6 +160,8 @@ export default {
               this.viewDependentFn("depsBy");
             } else if (this.activeTab == "info") {
               this.viewName = this.basicForm.tableName;
+            } else if (this.activeTab == "grant") {
+              this.queryGrantList();
             }
           } else {
             this.basicForm = {
@@ -199,6 +207,23 @@ export default {
         }
       }).catch(() => this.$message.error("获取依赖关系失败"))
         .finally(() => { this.dependencyLoading[type] = false; });
+    },
+    queryGrantList() {
+      if (!this.currentConfig?.uniqueData?.tableName || this.grantLoading) return;
+      const params = {
+        dataSourceId: this.currentConfig.uniqueData.dataSourceId,
+        schemaName: this.currentConfig.uniqueData.schemaName,
+        tableName: this.currentConfig.uniqueData.tableName
+      };
+      this.grantLoading = true;
+      tableServer.getGrantList(params).then(res => {
+        if (res.success) {
+          this.grantList = res.data || [];
+        } else {
+          this.$message.error(res.errorMessage || "获取授权信息失败");
+        }
+      }).catch(() => this.$message.error("获取授权信息失败"))
+        .finally(() => { this.grantLoading = false; });
     },
     // 获取依赖关系
     getExecuteSQL() {
@@ -401,6 +426,9 @@ export default {
       </el-tab-pane>
       <el-tab-pane label="被依赖" name="deps">
         <DespUsedBy v-loading="dependencyLoading.depsBy" :viewDependentData="viewDependentByData" />
+      </el-tab-pane>
+      <el-tab-pane label="授权" name="grant">
+        <GrantList v-loading="grantLoading" :tableData="grantList" />
       </el-tab-pane>
     </el-tabs>
   </div>

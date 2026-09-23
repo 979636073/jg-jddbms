@@ -15,7 +15,6 @@ import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.DlTemplateService;
 import com.jd.biz.domain.api.service.ViewService;
 import com.jd.biz.domain.core.util.MetaNameUtils;
-import com.jd.biz.util.KFSqlParser;
 import com.jd.common.tools.base.constant.EasyToolsConstant;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.DataResult;
@@ -50,14 +49,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -78,8 +80,46 @@ public class ViewServiceImpl implements ViewService {
     @Override
     public DataResult<Table> detail(String databaseName, String schemaName, String tableName) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        Table table = metaSchema.view(Chat2DBContext.getConnection(), databaseName, schemaName, tableName);
-        return DataResult.of(table);
+        Connection connection = Chat2DBContext.getConnection();
+        String dbType = Chat2DBContext.getConnectInfo().getDbType();
+        if (("DM".equalsIgnoreCase(dbType) || "ORACLE".equalsIgnoreCase(dbType))
+                && isMaterializedViewObject(connection, schemaName, tableName)) {
+            Table table = new Table();
+            table.setDatabaseName(databaseName);
+            table.setSchemaName(schemaName);
+            table.setName(tableName);
+            table.setDdl(materializedViewDdl(connection, schemaName, tableName));
+            table.setColumnList(metaSchema.columns(connection, databaseName, schemaName, tableName));
+            table.setType("MATERIALIZED VIEW");
+            return DataResult.of(table);
+        }
+        return DataResult.of(metaSchema.view(connection, databaseName, schemaName, tableName));
+    }
+
+    private boolean isMaterializedViewObject(Connection connection, String schemaName, String viewName) {
+        String sql = "SELECT 1 FROM SYS.ALL_OBJECTS WHERE OWNER = ? AND OBJECT_NAME = ? AND OBJECT_TYPE = 'MATERIALIZED VIEW'";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, schemaName);
+            statement.setString(2, viewName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        } catch (SQLException e) {
+            throw new BusinessException("查询视图类型失败: " + e.getMessage());
+        }
+    }
+
+    private String materializedViewDdl(Connection connection, String schemaName, String viewName) {
+        String sql = "SELECT DBMS_METADATA.GET_DDL('MATERIALIZED_VIEW', ?, ?) FROM DUAL";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, viewName);
+            statement.setString(2, schemaName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getString(1) : null;
+            }
+        } catch (SQLException e) {
+            throw new BusinessException("获取物化视图 DDL 失败: " + e.getMessage());
+        }
     }
 
     @Override
@@ -562,14 +602,8 @@ public class ViewServiceImpl implements ViewService {
     }
 
 
-    /**
-     * 代码不要轻易改动
-     * @param request
-     * @return
-     */
     @Override
     public Boolean updateViewColumnName(ViewQueryRequest request) {
-        ViewRequest viewRequest = new ViewRequest();
         if (StrUtil.isBlank(request.getOldViewName()) || StrUtil.isBlank(request.getSchemaName())
                 || CollUtil.isEmpty(request.getNewColumns()) || CollUtil.isEmpty(request.getOldColumns())) {
             throw new BusinessException("参数缺失");
@@ -579,61 +613,52 @@ public class ViewServiceImpl implements ViewService {
         if (oldColumns.size() != newColumns.size()) {
             throw new BusinessException("新旧类字段信息数量不一致");
         }
-        String ddl = "";
         try {
+            DataResult<Table> detail = detail("", request.getSchemaName(), request.getOldViewName());
+            if (!DataResult.hasData(detail) || StrUtil.isBlank(detail.getData().getViewSql())
+                    || CollUtil.isEmpty(detail.getData().getColumnList())) {
+                throw new BusinessException("未获取到原视图定义");
+            }
+            Table original = detail.getData();
+            Map<String, String> renames = new HashMap<>();
+            for (int i = 0; i < oldColumns.size(); i++) {
+                if (StrUtil.isBlank(oldColumns.get(i)) || StrUtil.isBlank(newColumns.get(i))
+                        || renames.put(oldColumns.get(i), newColumns.get(i)) != null) {
+                    throw new BusinessException("列名不能为空或重复");
+                }
+            }
+            List<TableColumn> columns = new ArrayList<>();
+            Set<String> names = new HashSet<>();
+            boolean changed = false;
+            for (TableColumn column : original.getColumnList()) {
+                String name = renames.containsKey(column.getName()) ? renames.remove(column.getName()) : column.getName();
+                changed |= !name.equals(column.getName());
+                if (!names.add(name)) {
+                    throw new BusinessException("视图列名重复");
+                }
+                TableColumn renamed = new TableColumn();
+                renamed.setName(name);
+                columns.add(renamed);
+            }
+            if (!renames.isEmpty()) {
+                throw new BusinessException("原列名不存在");
+            }
+            if (!changed) {
+                return Boolean.TRUE;
+            }
+            ViewRequest viewRequest = new ViewRequest();
             viewRequest.setDataSourceId(request.getDataSourceId());
             viewRequest.setTableName(request.getOldViewName());
             viewRequest.setSchemaName(request.getSchemaName());
             viewRequest.setDatabaseName("");
-            DataResult<Table> detail = detail("", request.getSchemaName(), request.getOldViewName());
-            if (!DataResult.hasData(detail) || StrUtil.isBlank(detail.getData().getDdl())) {
-                throw new BusinessException("未获取到原视图定义");
-            }
-            ddl = detail.getData().getDdl();
-            String sql = ddl;
-            String s = KFSqlParser.extractBetweenSelectAndFrom(sql);
-            if (StrUtil.isEmpty(s)) {
-                throw new BusinessException("视图表字段信息解析异常");
-            }
-            String where = "";
-            // 截取 WHERE之前的SQL
-            if (sql.toUpperCase(Locale.ROOT).contains("WHERE")) {
-                int i = sql.toUpperCase(Locale.ROOT).indexOf("WHERE");
-                where = sql.substring(i);
-                sql = sql.substring(0, i);
-            }
-            String[] arrays = s.split(",");
-            for (int i = 0; i < oldColumns.size(); i++) {
-                if (!oldColumns.get(i).equals(newColumns.get(i))) {
-                    StringBuilder oldValue = new StringBuilder();
-                    StringBuilder value = new StringBuilder("AS \"" + newColumns.get(i) + "\"");
-                    for (String array : arrays) {
-                        if (array.contains(oldColumns.get(i))) {
-                            if (array.contains("AS")) {
-                                oldValue.append("AS  ").append("\"").append(oldColumns.get(i)).append("\"");
-                            } else {
-                                value.insert(0, array + " ");
-                                oldValue.append(array);
-                            }
-                        }
-                    }
-                    sql = sql.replace(oldValue.toString(), value.toString());
-                }
-            }
-            if (StrUtil.isNotBlank(where)) {
-                sql = sql + " " + where;
-            }
-            viewRequest.setViewSql(sql);
+            viewRequest.setViewSql("CREATE OR REPLACE VIEW " + qualifiedName(request.getSchemaName(), request.getOldViewName())
+                    + getColumnString(columns) + " AS " + original.getViewSql());
             ListResult<ExecuteResult> execute = execute(viewRequest);
             if (execute == null || !execute.getSuccess()) {
                 throw new BusinessException("修改视图列名失败");
             }
             return Boolean.TRUE;
         } catch (BusinessException e) {
-            if (StrUtil.isNotBlank(ddl)) {
-                viewRequest.setViewSql(ddl);
-                execute(viewRequest);
-            }
             log.error("修改视图列信息失败,{}", e.getMessage());
             return Boolean.FALSE;
         } catch (RuntimeException e) {

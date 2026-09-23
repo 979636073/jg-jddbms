@@ -317,9 +317,13 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 table.setSchemaName(schemaName);
                 table.setName(viewName);
                 table.setViewSql(resultSet.getString("TEXT"));
-                String str = "CREATE OR REPLACE VIEW " + format(schemaName) + "." + format(viewName) + " AS \n\t" + resultSet.getString("TEXT") + ";\n";
                 final List<TableColumn> columns = this.columns(connection, databaseName, schemaName, viewName);
                 table.setColumnList(columns);
+                String columnNames = CollUtil.isEmpty(columns) ? "" : columns.stream()
+                        .map(column -> format(column.getName()))
+                        .collect(Collectors.joining(", ", " (", ")"));
+                String str = "CREATE OR REPLACE VIEW " + format(schemaName) + "." + format(viewName)
+                        + columnNames + " AS \n\t" + resultSet.getString("TEXT") + ";\n";
                 for (TableColumn column : columns) {
                     if (StrUtil.isNotEmpty(column.getComment())) {
                         str += "\n\tCOMMENT ON COLUMN " + format(schemaName) + "." + format(viewName) + "." + format(column.getName()) + " IS '" + column.getComment() + "';";
