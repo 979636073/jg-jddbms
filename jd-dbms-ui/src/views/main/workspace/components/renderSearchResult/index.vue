@@ -773,7 +773,17 @@ export default {
     async executeUpdateDataSql() {
       this.commitActiveEdit();
       this.syncPendingOperations();
-      if (this.isFile) {
+      if (!this.sqlInfo.length) {
+        this.$notify.error({
+          title: "提醒",
+          message: "表数据未做修改",
+        });
+        return;
+      }
+      const hasContentColumn = this.queryResultData.headerList.some(
+        (item) => item.dataType === "CONTENT"
+      );
+      if (this.isFile || hasContentColumn) {
         this.executeBlobData();
       } else {
         console.log(this.sqlInfo, "this.sqlInfo");

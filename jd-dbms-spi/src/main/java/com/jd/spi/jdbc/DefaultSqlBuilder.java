@@ -138,6 +138,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         List<String> keyColumns = getPrimaryColumns(headerList);
         BlobSqlResult blobSqlResult1 = new BlobSqlResult();
         List<String> blobValues = new ArrayList<>();
+        List<String> parameterTypes = new ArrayList<>();
         for (int i = 0; i < operations.size(); i++) {
             ResultOperation operation = operations.get(i);
             List<String> row = operation.getDataList();
@@ -147,17 +148,22 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
                 if (null != blobSqlResult && StrUtil.isNotBlank(blobSqlResult.getDataSql())) {
                     stringBuilder.append(blobSqlResult.getDataSql()).append(";\n");
                     blobValues.addAll(blobSqlResult.getBlobValues());
+                    parameterTypes.addAll(blobSqlResult.getParameterTypes());
                 }
             } else if ("CREATE".equalsIgnoreCase(operation.getType())) {
                 BlobSqlResult blobSqlResult = getInsertBlobSql(tableName, headerList, row, metaSchema, queryResult.getIsView());
                 if (null != blobSqlResult && StrUtil.isNotBlank(blobSqlResult.getDataSql())) {
                     stringBuilder.append(blobSqlResult.getDataSql()).append(";\n");
                     blobValues.addAll(blobSqlResult.getBlobValues());
+                    parameterTypes.addAll(blobSqlResult.getParameterTypes());
                 }
+            } else if ("DELETE".equalsIgnoreCase(operation.getType())) {
+                stringBuilder.append(getDeleteSql(tableName, headerList, odlRow, metaSchema, keyColumns)).append(";\n");
             }
         }
         blobSqlResult1.setDataSql(stringBuilder.toString());
         blobSqlResult1.setBlobValues(blobValues);
+        blobSqlResult1.setParameterTypes(parameterTypes);
         return blobSqlResult1;
     }
 
@@ -485,6 +491,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         }
         BlobSqlResult blobSqlResult = new BlobSqlResult();
         List<String> blobValues = new ArrayList<>();
+        List<String> parameterTypes = new ArrayList<>();
         script.append("UPDATE ").append(tableName).append(" set ");
         boolean changed = false;
         for (int i = 1; i < row.size(); i++) {
@@ -497,9 +504,10 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
             if (Constants.ROW_ID.equals(header.getName())) {
                 continue;
             }
-            String newSqlValue = SqlUtils.getSqlValue(newValue, header.getDataType());
+            String newSqlValue = getLobSqlValue(newValue, header.getDataType());
             if ("?".equals(newSqlValue)) {
                 blobValues.add(newValue);
+                parameterTypes.add(header.getDataType());
                 script.append(metaSchema.getMetaDataName(header.getName())).append(" = ").append(" ? ,");
             } else {
                 script.append(metaSchema.getMetaDataName(header.getName()))
@@ -517,6 +525,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         String sql = script.toString();
         blobSqlResult.setDataSql(sql);
         blobSqlResult.setBlobValues(blobValues);
+        blobSqlResult.setParameterTypes(parameterTypes);
         return blobSqlResult;
     }
 
@@ -528,6 +537,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         }
         BlobSqlResult blobSqlResult = new BlobSqlResult();
         List<String> blobValues = new ArrayList<>();
+        List<String> parameterTypes = new ArrayList<>();
         StringBuilder script = new StringBuilder();
         script.append("INSERT INTO ").append(tableName)
                 .append(" (");
@@ -564,9 +574,10 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
             if (Boolean.TRUE.equals(isView) && i == 1) {
                 continue;
             }
-            String value = SqlUtils.getSqlValue(newValue, header.getDataType());
+            String value = getLobSqlValue(newValue, header.getDataType());
             if ("?".equals(value)) {
                 blobValues.add(newValue);
+                parameterTypes.add(header.getDataType());
                 script.append(" ? ,");
             } else {
                 script.append(value)
@@ -578,8 +589,17 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         String sql = script.toString();
         blobSqlResult.setDataSql(sql);
         blobSqlResult.setBlobValues(blobValues);
+        blobSqlResult.setParameterTypes(parameterTypes);
         return blobSqlResult;
 
+    }
+
+    private String getLobSqlValue(String value, String dataType) {
+        DataTypeEnum type = DataTypeEnum.getByCode(dataType);
+        if (type == DataTypeEnum.BYTE || type == DataTypeEnum.CONTENT) {
+            return "?";
+        }
+        return SqlUtils.getSqlValue(value, dataType);
     }
 
     @Override

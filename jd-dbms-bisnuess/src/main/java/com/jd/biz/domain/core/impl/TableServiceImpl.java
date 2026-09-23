@@ -1839,12 +1839,14 @@ public class TableServiceImpl implements TableService {
                     connection.commit();
                 }
             } catch (Exception e) {
+                rollbackImport(connection, request);
                 vo.setStatus(TaskStatusEnum.ERROR.name());
                 vo.setMessage(Arrays.asList(e.getMessage()));
                 redisCache.setCacheObject(key, vo);
                 return;
             }
         } catch (SQLException e) {
+            rollbackImport(connection, request);
             vo.setStatus(TaskStatusEnum.ERROR.name());
             vo.setMessage(Arrays.asList(e.getMessage()));
             redisCache.setCacheObject(key, vo);
@@ -2028,12 +2030,14 @@ public class TableServiceImpl implements TableService {
                     connection.commit();
                 }
             } catch (Exception e) {
+                rollbackImport(connection, request);
                 vo.setStatus(TaskStatusEnum.ERROR.name());
                 vo.setMessage(Arrays.asList(e.getMessage()));
                 redisCache.setCacheObject(key, vo);
                 return;
             }
         } catch (SQLException e) {
+            rollbackImport(connection, request);
             vo.setStatus(TaskStatusEnum.ERROR.name());
             vo.setMessage(Arrays.asList(e.getMessage()));
             redisCache.setCacheObject(key, vo);
@@ -2387,6 +2391,7 @@ public class TableServiceImpl implements TableService {
                             continue;
                         }
                         validLine = 0;
+                        sqlStatement = sqlStatement.substring(0, sqlStatement.length() - 1).trim();
                         // 执行SQL语句
                         if (StrUtil.startWithIgnoreCase(sqlStatement, "INSERT")) {
                             if (vo.getMessage().size() > 50) {
@@ -2410,11 +2415,10 @@ public class TableServiceImpl implements TableService {
                             break;
                         }
                     }
-                    if (sql.length() > 0) {
-                        String sqlStatement = sql.toString().trim();
-                        errorNum = executeUpdate(request, vo, statement, logFormat, errorNum, printWriter, sqlStatement);
-                    }
-
+                }
+                if (sql.length() > 0) {
+                    String sqlStatement = sql.toString().trim();
+                    errorNum = executeUpdate(request, vo, statement, logFormat, errorNum, printWriter, sqlStatement);
                 }
                 if (errorNum > 0 && request.getErrorRollback()) {
                     connection.rollback();
@@ -2423,12 +2427,14 @@ public class TableServiceImpl implements TableService {
                     connection.commit();
                 }
             } catch (Exception e) {
+                rollbackImport(connection, request);
                 vo.setStatus(TaskStatusEnum.ERROR.name());
                 vo.setMessage(Arrays.asList(e.getMessage()));
                 redisCache.setCacheObject(key, vo);
                 return;
             }
         } catch (SQLException e) {
+            rollbackImport(connection, request);
             vo.setStatus(TaskStatusEnum.ERROR.name());
             vo.setMessage(Arrays.asList(e.getMessage()));
             redisCache.setCacheObject(key, vo);
@@ -2515,6 +2521,17 @@ public class TableServiceImpl implements TableService {
         request.setErrorStop(Optional.ofNullable(request.getErrorStop()).orElse(false));
         //默认错误不回滚
         request.setErrorRollback(Optional.ofNullable(request.getErrorRollback()).orElse(false));
+    }
+
+    private void rollbackImport(Connection connection, TableImportRequest request) {
+        if (connection == null || !Boolean.TRUE.equals(request.getErrorRollback())) {
+            return;
+        }
+        try {
+            connection.rollback();
+        } catch (SQLException rollbackException) {
+            log.error("导入失败后回滚事务失败", rollbackException);
+        }
     }
 
     public List<TableColumn> getTableKeyDataList(TableQueryParam param){

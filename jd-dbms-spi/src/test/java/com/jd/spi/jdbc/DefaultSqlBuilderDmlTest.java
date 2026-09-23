@@ -5,6 +5,7 @@ import com.jd.spi.Plugin;
 import com.jd.spi.config.DriverConfig;
 import com.jd.spi.enums.DataTypeEnum;
 import com.jd.spi.model.Header;
+import com.jd.spi.model.BlobSqlResult;
 import com.jd.spi.model.QueryResult;
 import com.jd.spi.model.ResultOperation;
 import com.jd.spi.sql.Chat2DBContext;
@@ -95,6 +96,32 @@ public class DefaultSqlBuilderDmlTest {
                         header("ID", DataTypeEnum.NUMERIC, true)), operation);
 
         assertEquals("", new DefaultSqlBuilder().buildSqlByQuery(query));
+    }
+
+    @Test
+    public void shouldBuildMixedLobStatementsWithParameterTypesAndDelete() {
+        java.util.List<Header> headers = Arrays.asList(
+                header("行号", DataTypeEnum.CHAT2DB_ROW_NUMBER, false),
+                header("ID", DataTypeEnum.NUMERIC, true),
+                header("PAYLOAD", DataTypeEnum.BYTE, false),
+                header("NOTE", DataTypeEnum.CONTENT, false));
+        ResultOperation update = operation("UPDATE",
+                Arrays.asList("1", "10", "AQID", "new text"),
+                Arrays.asList("1", "10", "old", "old text"));
+        ResultOperation delete = operation("DELETE", null,
+                Arrays.asList("2", "11", null, "delete text"));
+        QueryResult query = new QueryResult();
+        query.setTableName("TEST_TABLE");
+        query.setHeaderList(headers);
+        query.setOperations(Arrays.asList(update, delete));
+
+        BlobSqlResult result = new DefaultSqlBuilder().buildBlobSql(query);
+
+        assertTrue(result.getDataSql().contains("UPDATE TEST_TABLE set \"PAYLOAD\" =  ? ,\"NOTE\" =  ?"));
+        assertTrue(result.getDataSql().contains("DELETE FROM TEST_TABLE where \"ID\" = 11"));
+        assertEquals(Arrays.asList("AQID", "new text"), result.getBlobValues());
+        assertEquals(Arrays.asList(DataTypeEnum.BYTE.getCode(), DataTypeEnum.CONTENT.getCode()),
+                result.getParameterTypes());
     }
 
     private QueryResult queryResult(java.util.List<Header> headers, ResultOperation operation) {

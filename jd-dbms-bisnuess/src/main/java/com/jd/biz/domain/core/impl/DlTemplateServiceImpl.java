@@ -405,17 +405,38 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         QueryResult queryResult = new QueryResult();
         BeanUtils.copyProperties(param, queryResult);
         BlobSqlResult blobSqlResult = sqlBuilder.buildBlobSql(queryResult);
-        boolean status = Boolean.FALSE;
-        try {
-            ExecuteResult executeResult = SQLExecutor.getInstance().executeBlob(Chat2DBContext.getConnection(), blobSqlResult.getDataSql(), blobSqlResult.getBlobValues());
-            if (null != executeResult && executeResult.getSuccess()) {
-                status = Boolean.TRUE;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            log.warn("执行BLOB数据修改或新增失败,数据:{}, blob数:{}", JSONObject.toJSONString(blobSqlResult.getDataSql()), blobSqlResult.getBlobValues().size());
+        if (blobSqlResult == null || StringUtils.isBlank(blobSqlResult.getDataSql())) {
+            return DataResult.error("execute error", "没有可保存的数据变更");
         }
-        return DataResult.of(status);
+
+        Connection connection = Chat2DBContext.getConnection();
+        try {
+            connection.setAutoCommit(false);
+            ExecuteResult executeResult = SQLExecutor.getInstance().executeBlob(connection, blobSqlResult.getDataSql(),
+                    blobSqlResult.getBlobValues(), blobSqlResult.getParameterTypes());
+            if (executeResult == null || !Boolean.TRUE.equals(executeResult.getSuccess())) {
+                connection.rollback();
+                return DataResult.error("execute error",
+                        executeResult == null ? "未返回执行结果" : executeResult.getMessage());
+            }
+            connection.commit();
+            return DataResult.of(Boolean.TRUE);
+        } catch (Exception e) {
+            log.warn("执行大字段数据保存失败, SQL长度:{}, 参数数:{}",
+                    StringUtils.length(blobSqlResult.getDataSql()), blobSqlResult.getBlobValues().size(), e);
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackException) {
+                log.error("回滚大字段数据保存失败", rollbackException);
+            }
+            return DataResult.error("execute error", e.getMessage());
+        } finally {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                log.error("close connection error:{}", e.getMessage());
+            }
+        }
     }
 
     @Override

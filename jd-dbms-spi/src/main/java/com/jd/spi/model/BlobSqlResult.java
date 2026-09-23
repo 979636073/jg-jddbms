@@ -10,4 +10,9 @@ public class BlobSqlResult {
     private String dataSql;
 
     private List<String> blobValues;
+
+    /**
+     * Parameter data types, in the same order as {@link #blobValues}.
+     */
+    private List<String> parameterTypes;
 }

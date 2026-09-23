@@ -137,27 +137,83 @@ public class SQLExecutor implements CommandExecutor {
      * @return ExecuteResult
      */
     public ExecuteResult executeBlob(Connection connection, String sql, @NotEmpty List<String> blobValues) {
-        // 注意 PreparedStatement中的SQL的VALUE 设置只支持对占位符[?]设置替换
-        log.debug("Executing BLOB SQL (length={})", StringUtils.length(sql));
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            configureStatement(stmt);
-            for (int i = 0; i < blobValues.size(); i++) {
-                if (StrUtil.isNotBlank(blobValues.get(i))) {
-                    stmt.setBytes(i + 1, Base64.getDecoder().decode(blobValues.get(i)));
-                } else {
-                    stmt.setBytes(i + 1, null);
+        return executeBlob(connection, sql, blobValues,
+                Collections.nCopies(blobValues.size(), DataTypeEnum.BYTE.getCode()));
+    }
+
+    /**
+     * Executes generated LOB statements on the caller-managed transaction.
+     */
+    public ExecuteResult executeBlob(Connection connection, String sql, @NotEmpty List<String> values,
+                                     List<String> parameterTypes) {
+        log.debug("Executing LOB SQL (length={}, statement parameters={})", StringUtils.length(sql), values.size());
+        DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
+        List<String> sqlList = SqlUtils.parse(sql, dbType);
+        ExecuteResult executeResult = ExecuteResult.builder().sql(sql).success(Boolean.TRUE).build();
+        if (CollectionUtils.isEmpty(sqlList)) {
+            executeResult.setSuccess(false);
+            executeResult.setMessage("没有可执行的大字段数据变更");
+            return executeResult;
+        }
+
+        int valueIndex = 0;
+        try {
+            for (String statementSql : sqlList) {
+                try (PreparedStatement stmt = connection.prepareStatement(statementSql)) {
+                    configureStatement(stmt);
+                    int parameterCount = countParameters(statementSql);
+                    if (valueIndex + parameterCount > values.size()) {
+                        throw new IllegalArgumentException("大字段参数数量与 SQL 占位符不匹配");
+                    }
+                    for (int i = 0; i < parameterCount; i++) {
+                        String value = values.get(valueIndex);
+                        String parameterType = parameterTypes != null && valueIndex < parameterTypes.size()
+                                ? parameterTypes.get(valueIndex) : DataTypeEnum.BYTE.getCode();
+                        if (DataTypeEnum.CONTENT.getCode().equals(parameterType)) {
+                            stmt.setString(i + 1, value);
+                        } else if (StrUtil.isNotBlank(value)) {
+                            stmt.setBytes(i + 1, Base64.getDecoder().decode(value));
+                        } else {
+                            stmt.setBytes(i + 1, null);
+                        }
+                        valueIndex++;
+                    }
+                    int affectedRows = stmt.executeUpdate();
+                    if (affectedRows != 1) {
+                        executeResult.setSuccess(false);
+                        executeResult.setMessage("大字段数据保存影响了 " + affectedRows + " 行，预期为 1 行");
+                        return executeResult;
+                    }
                 }
             }
-            ExecuteResult executeResult = ExecuteResult.builder().sql(sql).success(Boolean.TRUE).build();
-            int i = stmt.executeUpdate();
-            // Represents the query
-            if (i < 0) {
-                executeResult.setSuccess(false);
+            if (valueIndex != values.size()) {
+                throw new IllegalArgumentException("大字段参数数量与 SQL 占位符不匹配");
             }
             return executeResult;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private int countParameters(String sql) {
+        int count = 0;
+        boolean singleQuoted = false;
+        boolean doubleQuoted = false;
+        for (int i = 0; i < sql.length(); i++) {
+            char current = sql.charAt(i);
+            if (current == '\'' && !doubleQuoted) {
+                if (singleQuoted && i + 1 < sql.length() && sql.charAt(i + 1) == '\'') {
+                    i++;
+                } else {
+                    singleQuoted = !singleQuoted;
+                }
+            } else if (current == '"' && !singleQuoted) {
+                doubleQuoted = !doubleQuoted;
+            } else if (current == '?' && !singleQuoted && !doubleQuoted) {
+                count++;
+            }
+        }
+        return count;
     }
 
 
