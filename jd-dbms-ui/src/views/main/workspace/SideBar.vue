@@ -260,6 +260,9 @@ export default {
         this.openIndex =  this.openIndex == index ? null : index
       }
     },
+    isMaterializedView(item) {
+      return String(item?.tableDetails?.type || item?.viewType || item?.type || "").toUpperCase() === "MATERIALIZED VIEW";
+    },
     changeCopy(val) {
       //  console.log(val,this.copyschemaName,this.openIndex,this.openIndex == 1);
       let status = this.openIndex !== 1
@@ -471,7 +474,9 @@ export default {
                 extraParams: {
                   ...nodeData.extraParams,
                   tableName: item.name,
+                  viewType: item.tableDetails?.type,
                 },
+                viewType: item.tableDetails?.type,
                 leaf: true,
               }))
             );
@@ -582,7 +587,7 @@ export default {
           if (data.treeNodeType === "table" || data.treeNodeType === "view") {
             let { extraParams } = data;
             let send = {
-              isDataView: this.data.treeNodeType === "view" ? false : true,
+              isDataView: data.treeNodeType === "view" ? false : true,
               dataSourceId: extraParams.dataSourceId,
               databaseType: extraParams.databaseType,
               databaseName: extraParams?.databaseName,
@@ -811,7 +816,7 @@ export default {
     },
     async getTableDataList(val, isRefreshCache) {
       clearTimeout(this.tableSearchTimer);
-      this.tableSearchRequestId += 1;
+      const requestId = ++this.tableSearchRequestId;
       this.filterName = "";
       this.$emit("filterChange", "");
       // this.title = this.dataBaseInfo.url
@@ -845,7 +850,7 @@ export default {
         // 模式切换只加载表名列表；表详情在点击具体表时再按需加载
         refresh: false,
         // 默认表列表需要展示注释、行数、创建时间和最后结构变化时间。
-        requestType: this.type == "tables" ? 2 : 1,
+        requestType: this.type == "tables" || this.type == "views" ? 2 : 1,
         pageNo: 1,
         // 首屏只加载一页名称，避免达梦返回数万条对象后阻塞浏览器渲染。
         pageSize: 200,
@@ -866,6 +871,7 @@ export default {
         } else if (this.type == "tableSpace") {
           res = await tableSpaceServer.getTableSpaceList(params);
         }
+        if (requestId !== this.tableSearchRequestId) return;
         if (!res || !res.success) {
           this.$message.error(res?.errorCode || res?.errorMessage || "加载失败");
           return;
@@ -882,6 +888,7 @@ export default {
             tableSpace: details.tableSpace,
             valid: details.valid,
             path: details.path,
+            type: details.type,
           };
           if (
             this.$route.query.tableName &&
@@ -897,6 +904,7 @@ export default {
             numRows: details.numRows,
             created: details.created,
             lastDDL: details.lastDDL,
+            type: details.type,
           });
           return {
             name: item.name,
@@ -921,14 +929,23 @@ export default {
         }
         this.$emit("queryDetailTable", this.detailDataSource, res.data.total || 0);
       } catch (e) {
-        this.$message.error("加载对象失败，请稍后重试");
+        if (requestId === this.tableSearchRequestId) {
+          this.$message.error("加载对象失败，请稍后重试");
+        }
       } finally {
-        this.styleLoading = false;
+        if (requestId === this.tableSearchRequestId) this.styleLoading = false;
       }
     },
     // 视图编译
     viewExecute(type) {
-      // console.log(type);
+      const includesMaterializedView = this.seleCtrlKet.some((name) => {
+        const item = this.dataTreeList.find((view) => view.name === name);
+        return this.isMaterializedView(item);
+      });
+      if (type !== "all" && includesMaterializedView) {
+        this.$message.warning("物化视图不支持普通视图编译，请仅选择普通视图");
+        return;
+      }
       this.styleLoading = true;
       const params = {
         dataSourceId: this.dataInfo.dataSource.id,
@@ -994,6 +1011,15 @@ export default {
               : ""
           }`
         );
+      }
+      if (
+        this.type == "views" &&
+        this.seleCtrlKet.some((name) => {
+          const item = this.dataTreeList.find((view) => view.name === name);
+          return this.isMaterializedView(item);
+        })
+      ) {
+        return this.$message.warning("物化视图暂不支持在此处批量删除");
       }
       const count = this.seleCtrlKet.length;
       const message = this.type == "tables"
@@ -1149,6 +1175,7 @@ export default {
             tableSpace: (item.tableDetails || {}).tableSpace,
             valid: (item.tableDetails || {}).valid,
             path: (item.tableDetails || {}).path,
+            type: (item.tableDetails || {}).type,
           },
         })));
         this.detailDataSource = this.detailDataSource.concat(data.map((item) => {
@@ -1161,6 +1188,7 @@ export default {
             numRows: details.numRows,
             created: details.created,
             lastDDL: details.lastDDL,
+            type: details.type,
           };
         }));
         this.tableListPageNo += 1;
@@ -1219,6 +1247,7 @@ export default {
         this.nameTbale = items.name;
         this.activeClass = index;
         let type = "";
+        const materializedView = this.type == "views" && this.isMaterializedView(items);
         this.$store.dispatch("jdTagsView/changeView", {
           title: items.name || items.tableDetails.tableSpace,
           id: this.$route.params.id,
@@ -1230,7 +1259,7 @@ export default {
         if (this.type == "tables") {
           type = "editTable";
         } else if (this.type == "views") {
-          type = "editView";
+          type = materializedView ? "editTableData" : "editView";
         } else if (this.type == "users") {
           type = "editUser";
         } else if (this.type == "tableSpace") {
@@ -1253,12 +1282,18 @@ export default {
             isDataView: this.type == "views" ? false : true,
           };
           await sqlServer.executeSql(send).then((res) => {
-            if (res.data[0].success) {
+            const result = res?.data?.[0];
+            if (!res?.success || !result) {
+              this.$message.error(res?.errorMessage || "打开对象失败");
+              return;
+            }
+            if (result.success) {
               this.$store.dispatch("workspaceData/setDataCurrentData", {
                 pageId: this.pageId,
                 title: items.name,
                 type: type,
-                ...res.data[0],
+                ...result,
+                canEdit: materializedView ? false : result.canEdit,
                 params: send,
                 uniqueData: {
                   dataSourceId: this.dataInfo.dataSource.id,
@@ -1268,12 +1303,13 @@ export default {
                   databaseType: this.dataInfo.dataSource.type,
                   schemaName: this.schema,
                   tableName: items.name,
+                  viewType: items.tableDetails?.type,
                   isLoading: true,
                   dataType: this.type,
                 },
               });
             } else {
-              this.$message.error(res.data[0].message);
+              this.$message.error(result.message || "打开对象失败");
               this.$store.dispatch("workspaceData/setDataCurrentData", {
                 pageId: this.pageId,
                 params: {},
@@ -1283,11 +1319,12 @@ export default {
                   dataSourceId: this.dataInfo.dataSource.id,
                   schemaName: this.schema,
                   tableName: items.name,
+                  viewType: items.tableDetails?.type,
                   sqlInfo: null,
                 },
               });
             }
-            res.data[0].success
+            result.success
               ? (items.checkStyle = 1)
               : (items.checkStyle = 2);
             this.$emit("load", false);
@@ -1539,6 +1576,7 @@ export default {
               tableSpace: details.tableSpace,
               valid: details.valid,
               path: details.path,
+              type: details.type,
             },
           };
         });
@@ -1552,6 +1590,7 @@ export default {
             numRows: details.numRows,
             created: details.created,
             lastDDL: details.lastDDL,
+            type: details.type,
           };
         });
         this.tableListPageNo = 1;
@@ -1734,7 +1773,7 @@ export default {
       <div class="isopen" @click="isopenFn">
         <img src="@/assets/main/1-1-sub侧边.png" alt />
       </div>
-      <el-scrollbar style="height: calc(100% - 40px)" v-loading="styleLoading" :element-loading-text="loadingText">
+      <el-scrollbar class="object-list-scrollbar" style="height: calc(100% - 40px)" v-loading="styleLoading" :element-loading-text="loadingText">
         <draggable
           class="components-draggable"
           :list="filterDataTreeList"
@@ -1781,6 +1820,11 @@ export default {
               />
               <img v-else src="@/assets/main/subico02.png" alt />
             </span>
+            <span
+              v-if="type == 'views'"
+              class="view-type-badge"
+              :class="{ materialized: isMaterializedView(item) }"
+            >{{ isMaterializedView(item) ? '物化' : '普通' }}</span>
             <span class="table_img" v-if="type == 'users'">
               <img
                 v-if="index == activeClass"
@@ -1854,6 +1898,11 @@ export default {
             />
             <img v-else src="@/assets/main/subico02.png" alt />
           </span>
+          <span
+            v-if="type == 'views'"
+            class="view-type-badge"
+            :class="{ materialized: isMaterializedView(item) }"
+          >{{ isMaterializedView(item) ? '物化' : '普通' }}</span>
           <span class="table_img" v-if="type == 'users'">
             <img
               v-if="index == activeClass"
@@ -2087,7 +2136,8 @@ export default {
   // }
 }
 .itemWrap {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   height: 25px;
   display: flex;
   align-items: center;
@@ -2098,11 +2148,8 @@ export default {
   .table_name {
     padding-left: 5px;
     font-size: 12px;
-    overflow: hidden;
     flex-shrink: 0;
-    max-width: 52%;
     white-space: nowrap;
-    text-overflow: ellipsis;
   }
   .table_comment {
     margin-left: 6px;
@@ -2118,7 +2165,8 @@ export default {
   }
 }
 .dargitemWrap {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   height: 25px;
   display: flex;
   align-items: center;
@@ -2129,11 +2177,8 @@ export default {
   .table_name {
     padding-left: 5px;
     font-size: 12px;
-    overflow: hidden;
     flex-shrink: 0;
-    max-width: 52%;
     white-space: nowrap;
-    text-overflow: ellipsis;
   }
   .table_comment {
     margin-left: 6px;
@@ -2291,6 +2336,25 @@ export default {
 }
 .table-name-clickable {
   cursor: pointer;
+}
+.view-type-badge {
+  flex: 0 0 auto;
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid #b8c6dc;
+  border-radius: 3px;
+  color: #68728c;
+  font-size: 10px;
+  line-height: 16px;
+  background: #f6f8fc;
+}
+.view-type-badge.materialized {
+  border-color: #9dbcf5;
+  color: #006fff;
+  background: #f0f5ff;
+}
+::v-deep .object-list-scrollbar .el-scrollbar__view {
+  min-width: max-content;
 }
 .selected {
   background: #f0f5ff;

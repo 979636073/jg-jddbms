@@ -1,6 +1,9 @@
 <template>
   <div class="bodyBox">
-    <el-aside width="280px" :class="[opened ? 'show' : 'hide']">
+    <el-aside
+      :style="{ width: sideBarWidth + 'px' }"
+      :class="[opened ? 'show' : 'hide', { resizing: resizingSideBar }]"
+    >
       <!-- @refreshScheam="refreshScheam" -->
       <SideBar
         :dataBaseInfo="dataBaseInfo"
@@ -14,6 +17,11 @@
         ref="databaseTree"
         @setDetailsObj="setDetailsObj"
       />
+      <div
+        class="sidebar-resizer"
+        title="拖动调整左侧宽度"
+        @mousedown.prevent="startResizeSideBar"
+      ></div>
     </el-aside>
     <div v-if="!opened" class="isOpen" @click="openSideBar">
       <img src="@/assets/main/1-1-sub侧边.png" alt />
@@ -75,6 +83,10 @@ export default {
       detailDataSourceTotal: 0,
       tableFilterName: "",
       opened: true,
+      sideBarWidth: 280,
+      resizingSideBar: false,
+      resizeStartX: 0,
+      resizeStartWidth: 280,
       detailsObj: {}
     };
   },
@@ -96,7 +108,27 @@ export default {
     if (!this.pageId) return;
     // this.getDataBaseTree();
   },
+  beforeDestroy() {
+    this.stopResizeSideBar();
+  },
   methods: {
+    startResizeSideBar(event) {
+      this.resizingSideBar = true;
+      this.resizeStartX = event.clientX;
+      this.resizeStartWidth = this.sideBarWidth;
+      window.addEventListener("mousemove", this.resizeSideBar);
+      window.addEventListener("mouseup", this.stopResizeSideBar);
+    },
+    resizeSideBar(event) {
+      if (!this.resizingSideBar) return;
+      const width = this.resizeStartWidth + event.clientX - this.resizeStartX;
+      this.sideBarWidth = Math.min(Math.max(width, 260), 720);
+    },
+    stopResizeSideBar() {
+      this.resizingSideBar = false;
+      window.removeEventListener("mousemove", this.resizeSideBar);
+      window.removeEventListener("mouseup", this.stopResizeSideBar);
+    },
     setDetailsObj(val) {
       this.detailsObj = val;
     },
@@ -163,6 +195,24 @@ export default {
   flex: 1;
   display: flex;
   height: 0;
+}
+.el-aside {
+  position: relative;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.sidebar-resizer {
+  position: absolute;
+  z-index: 100;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+}
+.sidebar-resizer:hover,
+.resizing .sidebar-resizer {
+  background: rgba(0, 111, 255, 0.14);
 }
 .show {
   display: block;

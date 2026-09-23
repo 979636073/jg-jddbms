@@ -190,6 +190,10 @@ public class ViewController {
         if (StringUtils.isEmpty(request.getTableName())) {
             List<Table> tableList = viewService.getViewList(request.getDatabaseName(), request.getSchemaName());
             for (Table table : tableList) {
+                if (table.getTableDetails() != null
+                        && "MATERIALIZED VIEW".equalsIgnoreCase(table.getTableDetails().getType())) {
+                    continue;
+                }
                 request.setTableName(table.getName());
                 data.add(viewService.allExecute(request));
             }

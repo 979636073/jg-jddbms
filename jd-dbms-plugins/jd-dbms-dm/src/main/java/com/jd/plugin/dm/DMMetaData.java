@@ -1126,7 +1126,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     }
 
 
-    private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time from sys.all_objects o where o.object_type = 'VIEW' and o.owner = '%s'";
+    private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type from sys.all_objects o where o.object_type in ('VIEW', 'MATERIALIZED VIEW') and o.owner = '%s'";
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {
@@ -1140,6 +1140,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 tableDetails.setValid(resultSet.getString("status"));
                 tableDetails.setCreated(resultSet.getString("created"));
                 tableDetails.setLastDDL(resultSet.getString("last_ddl_time"));
+                tableDetails.setType(resultSet.getString("object_type"));
                 tableDetails.setDataBaseName(databaseName);
                 tableSpace.setName(resultSet.getString("object_name"));
                 tableSpace.setTableDetails(tableDetails);

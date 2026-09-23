@@ -99,7 +99,14 @@ export default {
     },
     activeTab: {
       handler(newVal) {
-        if (newVal == "fourth") {
+        if (newVal == "first") {
+          this.$nextTick(() => {
+            if (this.$refs.MonacoEditor) {
+              this.$refs.MonacoEditor.setValue(this.sql || "");
+              this.formatSql();
+            }
+          });
+        } else if (newVal == "fourth") {
           this.viewDependentFn("deps");
         } else if (newVal == "deps") {
           this.viewDependentFn("depsBy");
@@ -125,11 +132,21 @@ export default {
               tableName: this.currentConfig?.uniqueData.tableName
             };
             viewServer.getViewDetail(send).then(res => {
-              this.sql = res.data.ddl;
-              this.$refs.MonacoEditor.setValue(res.data.ddl);
-              this.formatSql();
-              this.columnList = res.data.columnList;
-            });
+              if (!res.success || !res.data) {
+                this.$message.error(res.errorMessage || "获取视图详情失败");
+                return;
+              }
+              this.sql = res.data.ddl || "";
+              this.columnList = res.data.columnList || [];
+              if (this.activeTab == "first") {
+                this.$nextTick(() => {
+                  if (this.$refs.MonacoEditor) {
+                    this.$refs.MonacoEditor.setValue(this.sql);
+                    this.formatSql();
+                  }
+                });
+              }
+            }).catch(() => this.$message.error("获取视图详情失败，请稍后重试"));
             if (this.activeTab == "fourth") {
               this.viewDependentFn("deps");
             } else if (this.activeTab == "deps") {
