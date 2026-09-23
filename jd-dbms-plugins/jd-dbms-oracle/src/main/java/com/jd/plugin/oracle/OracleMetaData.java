@@ -1080,18 +1080,35 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
         return Arrays.stream(names).filter(name -> StringUtils.isNotBlank(name)).map(name -> "\"" + name + "\"").collect(Collectors.joining("."));
     }
 
-    private static String beiForeGnKey = "SELECT fk.CONSTRAINT_NAME AS \"CONSTRAINT_NAME\", fk.TABLE_NAME AS \"forTableName\", fk.OWNER AS \"forSchema\",  fk_col.COLUMN_NAME as \"forTableColumn\",\n" +
-            "pk.TABLE_NAME AS \"table\", pk_col.COLUMN_NAME as \"tableColumn\" , pk_col.OWNER as \"schema\", pk.status\n" +
-            "FROM ALL_CONS_COLUMNS fk_col\n" +
-            "JOIN ALL_CONSTRAINTS fk on fk_col.CONSTRAINT_NAME = fk.CONSTRAINT_NAME\n" +
-            "JOIN ALL_CONSTRAINTS pk on fk.R_CONSTRAINT_NAME = pk.CONSTRAINT_NAME\n" +
-            "JOIN ALL_CONS_COLUMNS pk_col ON pk.CONSTRAINT_NAME = pk_col.CONSTRAINT_NAME\n" +
-            "where fk.CONSTRAINT_TYPE = 'R'and pk.table_name = '%s' and pk.owner = '%s' order by fk.TABLE_NAME asc";
+    private static final String REFERENCED_FOREIGN_KEY_SQL =
+            "WITH target_keys AS (" +
+                    "SELECT /*+ MATERIALIZE */ OWNER, CONSTRAINT_NAME, TABLE_NAME " +
+                    "FROM ALL_CONSTRAINTS " +
+                    "WHERE OWNER = '%s' AND TABLE_NAME = '%s' AND CONSTRAINT_TYPE IN ('P', 'U')" +
+                    ") " +
+                    "SELECT /*+ LEADING(pk) USE_NL(fk fk_col pk_col) */ " +
+                    "fk.CONSTRAINT_NAME AS \"CONSTRAINT_NAME\", " +
+                    "fk.TABLE_NAME AS \"forTableName\", fk.OWNER AS \"forSchema\", " +
+                    "fk_col.COLUMN_NAME AS \"forTableColumn\", pk.TABLE_NAME AS \"table\", " +
+                    "pk_col.COLUMN_NAME AS \"tableColumn\", pk.OWNER AS \"schema\", fk.STATUS AS \"status\" " +
+                    "FROM target_keys pk " +
+                    "JOIN ALL_CONSTRAINTS fk ON fk.R_OWNER = pk.OWNER " +
+                    "AND fk.R_CONSTRAINT_NAME = pk.CONSTRAINT_NAME AND fk.CONSTRAINT_TYPE = 'R' " +
+                    "JOIN ALL_CONS_COLUMNS fk_col ON fk_col.OWNER = fk.OWNER " +
+                    "AND fk_col.CONSTRAINT_NAME = fk.CONSTRAINT_NAME AND fk_col.TABLE_NAME = fk.TABLE_NAME " +
+                    "JOIN ALL_CONS_COLUMNS pk_col ON pk_col.OWNER = pk.OWNER " +
+                    "AND pk_col.CONSTRAINT_NAME = pk.CONSTRAINT_NAME AND pk_col.TABLE_NAME = pk.TABLE_NAME " +
+                    "AND pk_col.POSITION = fk_col.POSITION ORDER BY fk.TABLE_NAME ASC";
+
+    static String buildReferencedForeignKeySql(String schemaName, String tableName) {
+        return String.format(REFERENCED_FOREIGN_KEY_SQL,
+                schemaName.replace("'", "''"), tableName.replace("'", "''"));
+    }
 
     @Override
     public List<ForeignData> beiForeGnKey(Connection connection, String schemaName, String tableName) {
         Set<ForeignData> set = new HashSet<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(beiForeGnKey, tableName, schemaName), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, buildReferencedForeignKeySql(schemaName, tableName), resultSet -> {
             while (resultSet.next()) {
                 ForeignData foreignData = new ForeignData();
                 foreignData.setSchemaName(resultSet.getString("schema"));
