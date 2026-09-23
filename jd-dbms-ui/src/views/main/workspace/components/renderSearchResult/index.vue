@@ -8,6 +8,7 @@ import { copyText } from "@/utils";
 import { getToken } from "@/utils/auth";
 import Filedialog from "./filedialog.vue";
 import tableServer from "@/api/main/table";
+import viewServer from "@/api/main/view";
 import importDataDialog from "./importDataDialog";
 
 export default {
@@ -34,6 +35,9 @@ export default {
     },
   },
   computed: {
+    isMaterializedView() {
+      return String(this.queryResultData?.uniqueData?.viewType || "").toUpperCase() === "MATERIALIZED VIEW";
+    },
     headerList() {
       if (
         this.queryResultData.headerList &&
@@ -229,6 +233,7 @@ export default {
       ctrlPressed: false, //是否按下ctrl
       selectedColumns: [], //复制选中列
       highlightedColumnIndex: [], //高亮列
+      materializedViewRefreshing: false,
     };
   },
   watch: {
@@ -355,6 +360,28 @@ export default {
     window.removeEventListener("keyup", this.handleKeyUp);
   },
   methods: {
+    async refreshMaterializedView() {
+      this.materializedViewRefreshing = true;
+      try {
+        const res = await viewServer.refreshMaterialized({
+          dataSourceId: this.queryResultData.uniqueData.dataSourceId,
+          databaseName: this.queryResultData.uniqueData.databaseName,
+          schemaName: this.queryResultData.uniqueData.schemaName,
+          tableName: this.queryResultData.uniqueData.tableName,
+          viewType: this.queryResultData.uniqueData.viewType,
+        });
+        if (!res.success) {
+          this.$message.error(res.errorMessage || "物化视图刷新失败");
+          return;
+        }
+        this.$message.success("物化视图刷新成功");
+        this.refresh();
+      } catch (e) {
+        this.$message.error("物化视图刷新失败，请稍后重试");
+      } finally {
+        this.materializedViewRefreshing = false;
+      }
+    },
     changeSort(order, column) {
       // console.log(order,column);
       this.sort = {
@@ -2559,6 +2586,17 @@ export default {
     :style="{ marginTop: readonly ? '5px' : 0 }"
   >
     <div class="table_btn_list" v-if="!readonly">
+      <el-tag v-if="isMaterializedView" size="mini" type="info" class="materialized-readonly-tag">
+        物化视图 · 只读
+      </el-tag>
+      <el-button
+        v-if="isMaterializedView"
+        size="mini"
+        type="primary"
+        plain
+        :loading="materializedViewRefreshing"
+        @click="refreshMaterializedView"
+      >刷新物化视图</el-button>
       <el-popover
         placement="bottom"
         width="280"
@@ -3523,6 +3561,10 @@ export default {
     display: flex;
     align-items: center;
     padding: 10px 0;
+
+    .materialized-readonly-tag {
+      margin-right: 10px;
+    }
 
     ::v-deep .el-button {
       & > span {

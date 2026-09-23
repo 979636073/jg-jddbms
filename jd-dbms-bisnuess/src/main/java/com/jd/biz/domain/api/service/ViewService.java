@@ -74,6 +74,8 @@ public interface ViewService {
 
     void drop(ViewRequest request);
 
+    void refreshMaterialized(ViewRequest request);
+
     List<Table> getViewList(String databaseName, String schemaName);
 
     ExecuteResult allExecute( ViewRequest request);

@@ -63,6 +63,14 @@ function viewDelete(data) {
   })
 }
 
+function refreshMaterialized(data) {
+  return request({
+    url: '/api/rdb/view/refreshMaterialized',
+    method: 'post',
+    data
+  })
+}
+
 // 视图编译
 function viewAllExecute(data) {
   return request({
@@ -134,6 +142,7 @@ export default {
   allExecute,
   getExecuteSQL,
   viewDelete,
+  refreshMaterialized,
   viewAllExecute,
   addViewFn,
   deleteViewFn,

@@ -53,8 +53,10 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -208,27 +210,94 @@ public class ViewServiceImpl implements ViewService {
     public void dropSelect(ViewNewRequest request) {
         try{
             List<String> viewNames = request.getViewNames();
-            viewNames.forEach(viewName -> {
+            Map<String, String> viewTypes = new HashMap<>();
+            getViewList(request.getDatabaseName(), request.getSchemaName()).forEach(view -> {
+                if (view.getTableDetails() != null) {
+                    viewTypes.put(view.getName(), view.getTableDetails().getType());
+                }
+            });
+            for (String viewName : viewNames) {
                 ViewRequest viewRequest = new ViewRequest();
                 viewRequest.setDataSourceId(request.getDataSourceId());
                 viewRequest.setTableName(viewName);
                 viewRequest.setSchemaName(request.getSchemaName());
-                this.drop(viewRequest);
-            });
+                viewRequest.setDatabaseName(request.getDatabaseName());
+                viewRequest.setViewType(viewTypes.get(viewName));
+                dropByType(viewRequest, viewRequest.getViewType());
+            }
         }catch (Exception e){
-            throw new RuntimeException("视图删除出错: 错误信息：{}",e);
+            throw new RuntimeException("视图删除出错: " + e.getMessage(), e);
         }
     }
 
     @Override
     public void drop(ViewRequest request) {
         try{
-            DBManage metaSchema = Chat2DBContext.getDBManage();
-            metaSchema.dropView(Chat2DBContext.getConnection(), request.getDatabaseName(), request.getSchemaName(), request.getTableName());
+            dropByType(request, resolveViewType(request));
         }catch (Exception e){
-            throw new RuntimeException("视图删除出错: 错误信息：{}",e);
+            throw new RuntimeException("视图删除出错: " + e.getMessage(), e);
         }
 
+    }
+
+    private void dropByType(ViewRequest request, String viewType) throws Exception {
+        if (isMaterializedView(viewType)) {
+            executeStatement(buildDropMaterializedViewSql(request.getSchemaName(), request.getTableName()));
+            return;
+        }
+        DBManage metaSchema = Chat2DBContext.getDBManage();
+        metaSchema.dropView(Chat2DBContext.getConnection(), request.getDatabaseName(), request.getSchemaName(), request.getTableName());
+    }
+
+    @Override
+    public void refreshMaterialized(ViewRequest request) {
+        String viewType = resolveViewType(request);
+        if (!isMaterializedView(viewType)) {
+            throw new BusinessException("指定对象不是物化视图");
+        }
+        executeStatement(buildRefreshMaterializedViewSql(
+                Chat2DBContext.getConnectInfo().getDbType(), request.getSchemaName(), request.getTableName()));
+    }
+
+    private String resolveViewType(ViewRequest request) {
+        String metadataType = getViewList(request.getDatabaseName(), request.getSchemaName()).stream()
+                .filter(view -> request.getTableName().equals(view.getName()))
+                .filter(view -> view.getTableDetails() != null)
+                .map(view -> view.getTableDetails().getType())
+                .findFirst()
+                .orElse(null);
+        return StrUtil.isNotBlank(metadataType) ? metadataType : request.getViewType();
+    }
+
+    private void executeStatement(String sql) {
+        try (Statement statement = Chat2DBContext.getConnection().createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            throw new BusinessException(e.getMessage());
+        }
+    }
+
+    private static boolean isMaterializedView(String viewType) {
+        return "MATERIALIZED VIEW".equalsIgnoreCase(viewType);
+    }
+
+    static String buildDropMaterializedViewSql(String schemaName, String viewName) {
+        return "DROP MATERIALIZED VIEW " + qualifiedName(schemaName, viewName);
+    }
+
+    static String buildRefreshMaterializedViewSql(String dbType, String schemaName, String viewName) {
+        String qualifiedName = qualifiedName(schemaName, viewName);
+        if ("DM".equalsIgnoreCase(dbType)) {
+            return "REFRESH MATERIALIZED VIEW " + qualifiedName;
+        }
+        if ("ORACLE".equalsIgnoreCase(dbType)) {
+            return "BEGIN DBMS_MVIEW.REFRESH('" + qualifiedName.replace("'", "''") + "', 'C'); END;";
+        }
+        throw new BusinessException("当前数据库不支持物化视图刷新");
+    }
+
+    private static String qualifiedName(String schemaName, String viewName) {
+        return MetaNameUtils.quoteIdentifier(schemaName) + "." + MetaNameUtils.quoteIdentifier(viewName);
     }
 
     /**

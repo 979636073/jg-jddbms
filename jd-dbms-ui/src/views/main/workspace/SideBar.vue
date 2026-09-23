@@ -1012,18 +1012,11 @@ export default {
           }`
         );
       }
-      if (
-        this.type == "views" &&
-        this.seleCtrlKet.some((name) => {
-          const item = this.dataTreeList.find((view) => view.name === name);
-          return this.isMaterializedView(item);
-        })
-      ) {
-        return this.$message.warning("物化视图暂不支持在此处批量删除");
-      }
       const count = this.seleCtrlKet.length;
       const message = this.type == "tables"
         ? `确定要删除已选的 ${count} 张表吗？此操作不可恢复。`
+        : this.type == "views"
+        ? `确定要删除已选的 ${count} 个视图吗？普通视图和物化视图将按实际类型删除，此操作不可恢复。`
         : "确定要删除吗?";
       this.$confirm(message, "提示", {
         confirmButtonText: "确定",
@@ -1077,7 +1070,9 @@ export default {
             params.viewNames = this.seleCtrlKet;
             viewServer.deleteViewFn(params).then((res) => {
               if (res.success) {
-                this.getTableDataList(this.schema);
+                this.seleCtrlKet = [];
+                this.getTableDataList(this.schema, true);
+                this.$message.success("删除成功");
               } else {
                 this.$message.error(res.errorMessage);
               }

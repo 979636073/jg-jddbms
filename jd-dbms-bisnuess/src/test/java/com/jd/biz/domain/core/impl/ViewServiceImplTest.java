@@ -64,6 +64,20 @@ public class ViewServiceImplTest {
         assertTrue(service.steps.get(0).startsWith("execute:"));
     }
 
+    @Test
+    public void shouldBuildDmMaterializedViewStatements() {
+        assertEquals("REFRESH MATERIALIZED VIEW \"SYSDBA\".\"MV_TEST\"",
+                ViewServiceImpl.buildRefreshMaterializedViewSql("DM", "SYSDBA", "MV_TEST"));
+        assertEquals("DROP MATERIALIZED VIEW \"SYSDBA\".\"MV_TEST\"",
+                ViewServiceImpl.buildDropMaterializedViewSql("SYSDBA", "MV_TEST"));
+    }
+
+    @Test
+    public void shouldBuildOracleMaterializedViewRefreshStatement() {
+        assertEquals("BEGIN DBMS_MVIEW.REFRESH('\"SYSTEM\".\"MV_TEST\"', 'C'); END;",
+                ViewServiceImpl.buildRefreshMaterializedViewSql("ORACLE", "SYSTEM", "MV_TEST"));
+    }
+
     private ViewQueryRequest renameRequest() {
         ViewQueryRequest request = new ViewQueryRequest();
         request.setDataSourceId(1L);

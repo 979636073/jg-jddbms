@@ -4,7 +4,6 @@ import com.jd.biz.controller.data.source.request.DataSourceBaseRequest;
 import com.jd.spi.model.TableColumn;
 import lombok.Data;
 
-import javax.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -18,7 +17,6 @@ public class ViewNewRequest extends DataSourceBaseRequest {
     /**
      * 表名称
      */
-    @NotNull
     private String name;
 
     /**
@@ -32,5 +30,10 @@ public class ViewNewRequest extends DataSourceBaseRequest {
     private List<TableColumn> columnList;
 
     private List<String> viewNames;
+
+    /**
+     * 视图类型：VIEW 或 MATERIALIZED VIEW
+     */
+    private String viewType;
 
 }

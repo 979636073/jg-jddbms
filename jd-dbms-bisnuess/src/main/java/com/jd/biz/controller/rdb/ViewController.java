@@ -130,12 +130,30 @@ public class ViewController {
             viewRequest.setDataSourceId(request.getDataSourceId());
             viewRequest.setTableName(request.getName());
             viewRequest.setSchemaName(request.getSchemaName());
+            viewRequest.setViewType(request.getViewType());
             viewService.drop(viewRequest);
             return ActionResult.isSuccess();
         } catch (Exception e) {
             return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "视图删除出错", null);
         }
 
+    }
+
+    /**
+     * 刷新物化视图
+     *
+     * @param request 物化视图信息
+     * @return 刷新结果
+     */
+    @PostMapping("/refreshMaterialized")
+    @Log(title = "刷新数据库物化视图", businessType = BusinessType.EXECUTE_DATA)
+    public ActionResult refreshMaterialized(@Valid @RequestBody ViewRequest request) {
+        try {
+            viewService.refreshMaterialized(request);
+            return ActionResult.isSuccess();
+        } catch (Exception e) {
+            return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "物化视图刷新失败", null);
+        }
     }
 
     /**

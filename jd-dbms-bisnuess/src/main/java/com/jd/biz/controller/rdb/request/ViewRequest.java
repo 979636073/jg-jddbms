@@ -31,4 +31,9 @@ public class ViewRequest extends DataSourceBaseRequest {
      */
     private List<TableColumn> columnList;
 
+    /**
+     * 视图类型：VIEW 或 MATERIALIZED VIEW
+     */
+    private String viewType;
+
 }
