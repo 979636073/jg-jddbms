@@ -51,7 +51,7 @@ public class ViewServiceImplTest {
         RecordingViewService service = new RecordingViewService(true);
 
         assertTrue(service.updateViewTableName(renameRequest()));
-        assertEquals(Arrays.asList("execute:CREATE OR REPLACE VIEW \"SYSTEM\".\"V_NEW\" AS SELECT 1 FROM DUAL",
+        assertEquals(Arrays.asList("execute:CREATE VIEW \"SYSTEM\".\"V_NEW\" AS SELECT 1 FROM DUAL",
                 "drop:V_OLD"), service.steps);
     }
 
@@ -62,6 +62,25 @@ public class ViewServiceImplTest {
         assertFalse(service.updateViewTableName(renameRequest()));
         assertEquals(1, service.steps.size());
         assertTrue(service.steps.get(0).startsWith("execute:"));
+    }
+
+    @Test
+    public void shouldRemoveNewViewWhenDroppingOriginalFails() {
+        RecordingViewService service = new RecordingViewService(true, true);
+
+        assertFalse(service.updateViewTableName(renameRequest()));
+        assertEquals(Arrays.asList("execute:CREATE VIEW \"SYSTEM\".\"V_NEW\" AS SELECT 1 FROM DUAL",
+                "drop:V_OLD", "drop:V_NEW"), service.steps);
+    }
+
+    @Test
+    public void shouldReturnStoredViewDdlForExport() {
+        ViewRequest request = new ViewRequest();
+        request.setSchemaName("SYSTEM");
+        request.setTableName("V_OLD");
+
+        assertEquals("CREATE OR REPLACE VIEW \"SYSTEM\".\"V_OLD\" AS SELECT 1 FROM DUAL",
+                new RecordingViewService(true).getViewSql(request).getData().getSql());
     }
 
     @Test
@@ -135,16 +154,23 @@ public class ViewServiceImplTest {
 
     private static class RecordingViewService extends ViewServiceImpl {
         private final boolean executeSuccess;
+        private final boolean failOriginalDrop;
         private final List<String> steps = new ArrayList<>();
 
         private RecordingViewService(boolean executeSuccess) {
+            this(executeSuccess, false);
+        }
+
+        private RecordingViewService(boolean executeSuccess, boolean failOriginalDrop) {
             this.executeSuccess = executeSuccess;
+            this.failOriginalDrop = failOriginalDrop;
         }
 
         @Override
         public DataResult<Table> detail(String databaseName, String schemaName, String tableName) {
             Table table = new Table();
             table.setDdl("CREATE OR REPLACE VIEW \"SYSTEM\".\"V_OLD\" AS SELECT 1 FROM DUAL");
+            table.setViewSql("SELECT 1 FROM DUAL");
             return DataResult.of(table);
         }
 
@@ -159,6 +185,9 @@ public class ViewServiceImplTest {
         @Override
         public void drop(ViewRequest request) {
             steps.add("drop:" + request.getTableName());
+            if (failOriginalDrop && "V_OLD".equals(request.getTableName())) {
+                throw new RuntimeException("old view is referenced");
+            }
         }
     }
 }

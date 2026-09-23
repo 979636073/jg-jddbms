@@ -23,7 +23,7 @@ export default {
   props: {
     viewDependentData: {
       type: Array,
-      default: ()=>[],
+      default: () => [],
     },
   },
   data() {
@@ -33,7 +33,7 @@ export default {
   },
   methods:{
     getKey(row) {
-      return row.id + Math.random()
+      return row.id || [row.schemaName, row.tableName, row.type].join('.')
     }
   }
 };

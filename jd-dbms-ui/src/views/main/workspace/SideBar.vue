@@ -953,37 +953,21 @@ export default {
         tableName: type == "all" ? "" : JSON.stringify(this.seleCtrlKet),
       };
       viewServer.viewAllExecute(params).then((res) => {
-        if (this.seleCtrlKet.length > 0 && type !== "all") {
-          this.filterDataTreeList.forEach((val) => {
-            val.checkStyle = 1;
-            this.seleCtrlKet.forEach((v, i) => {
-              if (v === val.name) {
-                if (res.data[i].success) {
-                  val.checkStyle = 1;
-                } else {
-                  val.checkStyle = 2;
-                }
-              }
-            });
-          });
+        const results = res.data || [];
+        this.filterDataTreeList.forEach((view) => {
+          const result = results.find((item) => item.tableName === view.name);
+          if (result) view.checkStyle = result.success ? 1 : 2;
+        });
+        const failures = results.filter((item) => !item.success);
+        if (failures.length) {
+          this.$message.warning(res.errorMessage || failures.map((item) => item.message).join("; "));
+        } else if (!res.success) {
+          this.$message.error(res.errorMessage || "视图编译失败");
         } else {
-          this.filterDataTreeList.forEach((val) => {
-            res.data.forEach((v) => {
-              if (val.name === v.tableName && v.success) {
-                val.checkStyle = 1;
-              } else if (val.name === v.tableName) {
-                val.checkStyle = 2;
-              }
-            });
-          });
+          this.$message.success(res.errorMessage || "视图编译成功");
         }
-        if (!res.success) {
-          this.$message.error(res.errorCode || res.errorMessage);
-        } else {
-          this.$message.success(res.errorCode || res.errorMessage);
-        }
-        this.styleLoading = false;
-      });
+      }).catch(() => this.$message.error("视图编译失败"))
+        .finally(() => { this.styleLoading = false; });
     },
     addSideBar() {
       if (this.type == "tableSpace") {

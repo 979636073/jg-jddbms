@@ -103,10 +103,11 @@ public class ViewServiceImpl implements ViewService {
      */
     @Override
     public DataResult<Sql> getViewSql(ViewRequest request) {
-        MetaData metaSchema = Chat2DBContext.getMetaData();
-        Table table = metaSchema.view(Chat2DBContext.getConnection(), request.getDatabaseName(), request.getSchemaName(), request.getTableName());
-        String sql = getViewSql(table);
-        return DataResult.of(new Sql(sql));
+        Table table = detail(request.getDatabaseName(), request.getSchemaName(), request.getTableName()).getData();
+        if (table == null || StrUtil.isBlank(table.getDdl())) {
+            return DataResult.error(EasyToolsConstant.ERROR_CODE, "未获取到视图 DDL");
+        }
+        return DataResult.of(new Sql(table.getDdl()));
     }
 
     @Override
@@ -523,23 +524,33 @@ public class ViewServiceImpl implements ViewService {
         viewRequest.setDatabaseName("");
         try {
             DataResult<Table> detail = detail("", request.getSchemaName(), request.getOldViewName());
-            if (!DataResult.hasData(detail) || StrUtil.isBlank(detail.getData().getDdl())) {
+            if (!DataResult.hasData(detail) || StrUtil.isBlank(detail.getData().getViewSql())) {
                 throw new BusinessException("未获取到原视图定义");
             }
-            String ddl = detail.getData().getDdl();
-            String oldValue = "\"" + request.getSchemaName() + "\".\"" + request.getOldViewName() +"\"";
-            String newValue = "\"" + request.getSchemaName() + "\".\"" + request.getNewViewName() +"\"";
-            String viewSql = ddl.replace(oldValue, newValue);
-            if (ddl.equals(viewSql)) {
-                throw new BusinessException("原视图定义中未找到待修改名称");
+            Table original = detail.getData();
+            StringBuilder createSql = new StringBuilder("CREATE VIEW ")
+                    .append(qualifiedName(request.getSchemaName(), request.getNewViewName()));
+            if (CollUtil.isNotEmpty(original.getColumnList())) {
+                createSql.append(getColumnString(original.getColumnList()));
             }
-            viewRequest.setViewSql(viewSql);
+            createSql.append(" AS ").append(original.getViewSql());
+            viewRequest.setViewSql(createSql.toString());
             ListResult<ExecuteResult> execute = execute(viewRequest);
             if (execute == null || !execute.getSuccess()) {
-                throw new BusinessException("重置视图名失败");
+                throw new BusinessException("创建新视图失败: " + (execute == null ? "无执行结果" : execute.getErrorMessage()));
             }
             viewRequest.setViewSql(null);
-            drop(viewRequest);
+            try {
+                drop(viewRequest);
+            } catch (RuntimeException e) {
+                viewRequest.setTableName(request.getNewViewName());
+                try {
+                    drop(viewRequest);
+                } catch (RuntimeException cleanupError) {
+                    log.error("清理新视图失败: {}", request.getNewViewName(), cleanupError);
+                }
+                throw e;
+            }
             return Boolean.TRUE;
         } catch (BusinessException e) {
             log.error("修改视图名失败,{}", e.getMessage());

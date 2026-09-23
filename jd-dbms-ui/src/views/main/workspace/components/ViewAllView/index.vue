@@ -43,14 +43,12 @@ export default {
   methods: {
     getTable(params = {}) {
       this.tableLoading = true
-      debugger
       viewServer.getViewList({
         ...this.uniqueData,
         ...this.queryParams,
         ...params,
       })
         .then((res) => {
-          debugger
           this.tableDataTotal = res.data.total
           const data = res.data.data.map((t) => {
             const key = uuidv4();
@@ -86,63 +84,23 @@ export default {
 
     submit() {
       if (this.multipleSelection.length>0){
-        let viewSql = ''
-        let name=''
-        for (let i = 0; i <this.multipleSelection.length ; i++) {
-          if (this.multipleSelection.length>1&&i<this.multipleSelection.length-1){
-            if (i==0){
-              name=this.multipleSelection[i].name+','
-            }else{
-              name +=this.multipleSelection[i].name+','
-            }
-          }else{
-            name +=this.multipleSelection[i].name
-          }
-        };
-
         let send = {
           dataSourceId: this.dataSourceId,
           databaseName: this.databaseName,
           schemaName: this.schemaName,
-          tableName: name,
-          viewSql: viewSql,
-          columnList: this.columnList
+          tableName: this.multipleSelection.map(item => item.name).join(',')
         }
         viewServer.allExecute(send)
           .then(res => {
-              if (res.data){
-                res.data.forEach(obj=>{
-                  if (obj[0].success){
-                    this.tableData.forEach(item =>{
-                      if (item.name==obj[0].tableName){
-                        item.comment="编译成功"
-                      }
-                    })
-                    setTimeout(() => {
-                      // 休眠结束后的操作
-                      this.$notify({
-                        title: '成功',
-                        message: obj[0].message,
-                        type: 'success'
-                      });
-                    }, 1000);
-                  }else{
-                    setTimeout(() => {
-                      // 休眠结束后的操作
-                      this.$notify({
-                        title: '失败',
-                        message: obj[0].message,
-                        type: 'warning'
-                      });
-                      this.tableData.forEach(item =>{
-                        if (item.name==obj[0].tableName){
-                          item.comment="编译失败"
-                        }
-                      })
-                    }, 1000);
-                  }
-                })
-              }
+            (res.data || []).forEach(result => {
+              const row = this.tableData.find(item => item.name === result.tableName)
+              if (row) row.comment = result.success ? '编译成功' : '编译失败'
+              this.$notify({
+                title: result.success ? '成功' : '失败',
+                message: result.message,
+                type: result.success ? 'success' : 'warning'
+              })
+            })
           })
       }else{
         this.$message.error("未选择编译数据")

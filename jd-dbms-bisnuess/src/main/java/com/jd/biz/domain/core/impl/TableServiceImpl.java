@@ -1364,28 +1364,27 @@ public class TableServiceImpl implements TableService {
         }
         List<ViewReferencedData> viewReferenced = new ArrayList<>(referencedData);
         List<AssociationTree> list = new ArrayList<>();
+        boolean uses = "1".equals(request.getCheck());
         for (ViewReferencedData viewReferencedData : viewReferenced) {
+            String childSchema = uses ? viewReferencedData.getReferencedSchemaName() : viewReferencedData.getSchemaName();
+            String childName = uses ? viewReferencedData.getReferencedViewName() : viewReferencedData.getViewName();
+            String childType = uses ? viewReferencedData.getReferencedViewType() : viewReferencedData.getViewType();
             AssociationTree associationTree = AssociationTree.builder()
-                    .id(System.currentTimeMillis() * 1000 + new Random().nextInt(10000) + "")
-                    .tableName(viewReferencedData.getReferencedViewName())
-                    .schemaName(viewReferencedData.getReferencedSchemaName())
+                    .id("child:" + childSchema + "." + childName + ":" + childType)
+                    .tableName(childName)
+                    .schemaName(childSchema)
                     .status(viewReferencedData.getStatus())
-                    .type(viewReferencedData.getReferencedViewType())
+                    .type(childType)
                     .build();
             list.add(associationTree);
-            TypeQueryRequest pream = new TypeQueryRequest();
-            pream.setDataSourceId(request.getDataSourceId());
-            pream.setCheck(request.getCheck());
-            pream.setSchemaName(viewReferencedData.getReferencedSchemaName());
-            pream.setTableName(viewReferencedData.getReferencedViewName());
-            queryViewReferenced(pream);
         }
+        ViewReferencedData first = viewReferenced.get(0);
         return AssociationTree.builder()
-                .id(System.currentTimeMillis() * 1000 + new Random().nextInt(10000) + "")
-                .tableName(viewReferenced.get(0).getViewName())
-                .schemaName(viewReferenced.get(0).getSchemaName())
-                .type(viewReferenced.get(0).getViewType())
-                .status(viewReferenced.get(0).getStatus())
+                .id("root:" + request.getSchemaName() + "." + request.getTableName())
+                .tableName(request.getTableName())
+                .schemaName(request.getSchemaName())
+                .type(uses ? first.getViewType() : first.getReferencedViewType())
+                .status(uses ? first.getStatus() : null)
                 .children(list)
                 .build();
     }

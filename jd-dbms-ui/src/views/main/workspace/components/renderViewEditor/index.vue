@@ -49,6 +49,7 @@ export default {
       dataTable: [],
       viewDependentData: [],
       viewDependentByData: [],
+      dependencyLoading: { deps: false, depsBy: false },
       databaseSupportField: {
         columnTypes: [],
         charsets: [],
@@ -178,23 +179,26 @@ export default {
       }
     },
     viewDependentFn(type) {
+      if (this.dependencyLoading[type]) return;
       const params = {
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
         tableName: this.currentConfig?.uniqueData.tableName,
         schemaName: this.currentConfig?.uniqueData.schemaName,
         check: type == "deps" ? "1" : "0"
       };
+      this.dependencyLoading[type] = true;
       tableServer.viewDependent(params).then(res => {
         if (res.success) {
-          this.viewDependentData = [];
-          this.viewDependentByData = [];
           if (type == "deps") {
-            this.viewDependentData.push(res.data);
+            this.viewDependentData = res.data ? [res.data] : [];
           } else {
-            this.viewDependentByData.push(res.data);
+            this.viewDependentByData = res.data ? [res.data] : [];
           }
+        } else {
+          this.$message.error(res.errorMessage || "获取依赖关系失败");
         }
-      });
+      }).catch(() => this.$message.error("获取依赖关系失败"))
+        .finally(() => { this.dependencyLoading[type] = false; });
     },
     // 获取依赖关系
     getExecuteSQL() {
@@ -393,10 +397,10 @@ export default {
         />
       </el-tab-pane>
       <el-tab-pane label="依赖" name="fourth">
-        <DespUses :viewDependentData="viewDependentData" />
+        <DespUses v-loading="dependencyLoading.deps" :viewDependentData="viewDependentData" />
       </el-tab-pane>
       <el-tab-pane label="被依赖" name="deps">
-        <DespUsedBy :viewDependentByData="viewDependentByData" />
+        <DespUsedBy v-loading="dependencyLoading.depsBy" :viewDependentData="viewDependentByData" />
       </el-tab-pane>
     </el-tabs>
   </div>
