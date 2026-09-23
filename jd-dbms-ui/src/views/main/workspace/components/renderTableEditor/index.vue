@@ -15,6 +15,7 @@ import renderSearchResult from "../../components/renderSearchResult/index.vue";
 import MonacoEditor from "@/components/MonacoEditor/index.vue";
 import { v4 as uuidv4 } from "uuid";
 import { downloadFile } from "@/utils/file";
+import axios from "axios";
 export default {
   props: {
     queryResultData: {
@@ -63,6 +64,7 @@ export default {
       relationRequestId: 0,
       relationLoadingKey: "",
       relationLoadedKey: "",
+      relationCancelSource: null,
       isLoading: false,
       databaseSupportField: {
         columnTypes: [],
@@ -325,6 +327,8 @@ export default {
         return;
       }
       const requestId = ++this.relationRequestId;
+      if (this.relationCancelSource) this.relationCancelSource.cancel("关联关系查询已取消");
+      this.relationCancelSource = axios.CancelToken.source();
       this.relationLoadingKey = relationKey;
       this.isLoading = true;
       const params = {
@@ -334,9 +338,13 @@ export default {
         schemaName: this.currentConfig?.uniqueData.schemaName,
         tableName: this.currentConfig?.uniqueData.tableName
       };
+      const requestConfig = {
+        cancelToken: this.relationCancelSource.token,
+        timeout: 15000,
+      };
       const query = type === "view"
-        ? tableServer.viewDependent({ ...params, check: "1" })
-        : tableServer.getQueryRefer(params);
+        ? tableServer.viewDependent({ ...params, check: "1" }, requestConfig)
+        : tableServer.getQueryRefer(params, requestConfig);
       query
         .then(res => {
           if (requestId !== this.relationRequestId) return;
@@ -347,11 +355,13 @@ export default {
           }
           this.relationLoadedKey = relationKey;
         })
-        .catch(() => {
+        .catch(error => {
+          if (axios.isCancel(error)) return;
           if (requestId === this.relationRequestId) this.ReferencedList = [];
         })
         .finally(() => {
           if (requestId !== this.relationRequestId) return;
+          this.relationCancelSource = null;
           this.relationLoadingKey = "";
           this.isLoading = false;
         });
@@ -366,11 +376,21 @@ export default {
       this.relationType = type;
       this.queryReferencedList(false, type);
     },
+    cancelRelationQuery(showMessage = true) {
+      if (!this.relationCancelSource) return;
+      this.relationRequestId += 1;
+      this.relationCancelSource.cancel("关联关系查询已取消");
+      this.relationCancelSource = null;
+      this.relationLoadingKey = "";
+      this.isLoading = false;
+      if (showMessage) this.$message.info("已取消关联关系查询");
+    },
     // 格式化sql代码
     formatSql() {
       this.$refs.MonacoEditor?.formatSql(this.$refs.MonacoEditor.getValue());
     },
     handleClick() {
+      if (this.activeName !== "ninth") this.cancelRelationQuery(false);
       if (this.activeName == "ninth") {
         this.queryReferencedList(false);
       } else if (this.activeName == "eigth") {
@@ -507,6 +527,9 @@ export default {
         params
       );
     }
+  },
+  beforeDestroy() {
+    this.cancelRelationQuery(false);
   }
 };
 </script>
@@ -589,6 +612,7 @@ export default {
           :relationType="relationType"
           @refreshForKe="refreshForKe"
           @changeRelationType="changeRelationType"
+          @cancelRelationQuery="cancelRelationQuery"
         />
       </el-tab-pane>
     </el-tabs>

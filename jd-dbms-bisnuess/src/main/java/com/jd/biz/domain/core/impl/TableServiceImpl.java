@@ -1231,7 +1231,7 @@ public class TableServiceImpl implements TableService {
 
     @Override
     public AssociationTree queryReferencedList(TypeQueryRequest request) {
-        String key = CacheConstants.TABLE_UN_REFERENCED_ + "v2_" + request.getDataSourceId() + request.getSchemaName() + request.getTableName();
+        String key = CacheConstants.TABLE_UN_REFERENCED_ + "v3_" + request.getDataSourceId() + request.getSchemaName() + request.getTableName();
         if (!request.getIsRefreshCache() && redisCache.hasKey(key)) {
             return redisCache.getCacheObject(key);
         }
@@ -1240,32 +1240,7 @@ public class TableServiceImpl implements TableService {
             return null;
         }
 
-        Set<ForeignData> foreignKeySet = new HashSet<>();
-        for (ForeignData foreignKey : foreignKeys) {
-            ForeignData foreignData = new ForeignData();
-            foreignData.setForeignTableName(foreignKey.getForeignTableName());
-            foreignData.setForeignSchemaName(foreignKey.getForeignSchemaName());
-            foreignData.setColumn(foreignKey.getColumn());
-            foreignData.setForeignColumnName(foreignKey.getForeignColumnName());
-            foreignData.setConstraintName(foreignKey.getConstraintName());
-            foreignData.setStatus(foreignKey.getStatus());
-            foreignKeySet.add(foreignData);
-        }
-        List<AssociationTree> list = new ArrayList<>();
-        for (ForeignData foreignKey : foreignKeySet) {
-            AssociationTree associationTree = AssociationTree.builder()
-                    .id(System.currentTimeMillis() * 1000 + new Random().nextInt(10000) + "")
-                    .tableName(foreignKey.getForeignTableName())
-                    .schemaName(foreignKey.getForeignSchemaName())
-                    .column(foreignKey.getColumn())
-                    .foreignColumnName(foreignKey.getForeignColumnName())
-                    .constraintName(foreignKey.getConstraintName())
-                    .status(foreignKey.getStatus())
-                    .type("TABLE")
-                    .build();
-            list.add(associationTree);
-        }
-        list = list.stream().sorted(Comparator.comparing(AssociationTree::getTableName)).collect(Collectors.toList());
+        List<AssociationTree> list = buildReferencedAssociations(foreignKeys);
         AssociationTree associationTree = AssociationTree.builder()
                 .id(System.currentTimeMillis() * 1000 + new Random().nextInt(10000) + "")
                 .tableName(request.getTableName())
@@ -1278,6 +1253,48 @@ public class TableServiceImpl implements TableService {
         redisCache.expire(key, 1, TimeUnit.DAYS);
         log.info("被引用情况数:" + list.size());
         return associationTree;
+    }
+
+    static List<AssociationTree> buildReferencedAssociations(List<ForeignData> foreignKeys) {
+        Map<String, AssociationTree> relations = new LinkedHashMap<>();
+        for (ForeignData foreignKey : foreignKeys) {
+            String relationKey = String.join("\u0000",
+                    StringUtils.defaultString(foreignKey.getForeignSchemaName()),
+                    StringUtils.defaultString(foreignKey.getForeignTableName()),
+                    StringUtils.defaultString(foreignKey.getConstraintName()));
+            AssociationTree relation = relations.get(relationKey);
+            if (relation == null) {
+                relation = AssociationTree.builder()
+                        .id(UUID.randomUUID().toString())
+                        .tableName(foreignKey.getForeignTableName())
+                        .schemaName(foreignKey.getForeignSchemaName())
+                        .column(foreignKey.getColumn())
+                        .foreignColumnName(foreignKey.getForeignColumnName())
+                        .constraintName(foreignKey.getConstraintName())
+                        .status(foreignKey.getStatus())
+                        .type("TABLE")
+                        .build();
+                relations.put(relationKey, relation);
+            } else {
+                relation.setColumn(appendRelationColumn(relation.getColumn(), foreignKey.getColumn()));
+                relation.setForeignColumnName(appendRelationColumn(
+                        relation.getForeignColumnName(), foreignKey.getForeignColumnName()));
+            }
+        }
+        return relations.values().stream()
+                .sorted(Comparator.comparing(AssociationTree::getTableName)
+                        .thenComparing(AssociationTree::getConstraintName))
+                .collect(Collectors.toList());
+    }
+
+    private static String appendRelationColumn(String columns, String column) {
+        if (StringUtils.isBlank(columns)) {
+            return column;
+        }
+        if (StringUtils.isBlank(column) || Arrays.asList(columns.split(", ")).contains(column)) {
+            return columns;
+        }
+        return columns + ", " + column;
     }
 
     @Override

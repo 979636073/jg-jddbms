@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     private static final String TABLE_DDL_SQL = "select dbms_metadata.get_ddl('TABLE','%s','%s') as sql from dual";
+    private static final int RELATION_QUERY_TIMEOUT_SECONDS = 15;
 
     private List<String> systemSchemas = Arrays.asList("ANONYMOUS", "APEX_030200", "APEX_PUBLIC_USER", "APPQOSSYS", "BI", "CTXSYS", "DBSNMP", "DIP", "EXFSYS", "FLOWS_FILES", "HR", "IX", "MDDATA", "MDSYS", "MGMT_VIEW", "OE", "OLAPSYS", "ORACLE_OCM", "ORDDATA", "ORDPLUGINS", "ORDSYS", "OUTLN", "OWBSYS", "OWBSYS_AUDIT", "PM", "SCOTT", "SH", "SI_INFORMTN_SCHEMA", "SPATIAL_CSW_ADMIN_USR", "SPATIAL_WFS_ADMIN_USR", "SYS", "SYSMAN", "SYSTEM", "WMSYS", "XDB", "XS$NULL");
 
@@ -489,7 +490,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             "          AND CONS_R.CONSTRAINT_NAME(+) = CONS.R_CONSTRAINT_NAME\n" +
             "          AND CONS.OWNER = '%s'\n" +
             "          AND CONS.TABLE_NAME = '%s'\n" +
-            "          AND CONS.CONSTRAINT_TYPE = 'R'";
+            "          AND CONS.CONSTRAINT_TYPE = 'R'\n" +
+            "        ORDER BY CONS.CONSTRAINT_NAME, COLS.POSITION";
 
     /**
      * 获取外键信息
@@ -501,8 +503,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
      */
     @Override
     public List<ForeignData> getForeignKey(Connection connection, String tableName, String schemaName) {
-        Set<ForeignData> set = new HashSet<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(SQL_FOREIGN_KEY_SQL, schemaName, tableName), resultSet -> {
+        List<ForeignData> foreignKeys = new ArrayList<>();
+        return SQLExecutor.getInstance().execute(connection, String.format(SQL_FOREIGN_KEY_SQL, schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
             while (resultSet.next()) {
                 ForeignData foreignData = new ForeignData();
                 foreignData.setSchemaName(resultSet.getString("forSchema"));
@@ -514,9 +516,9 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                 foreignData.setColumn(resultSet.getString("forTableColumn"));
                 foreignData.setForeignColumnName(resultSet.getString("tableColumn"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
-                set.add(foreignData);
+                foreignKeys.add(foreignData);
             }
-            return Lists.newArrayList(set);
+            return foreignKeys;
         });
     }
 
@@ -543,8 +545,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
      */
     @Override
     public List<ForeignData> getUnForeignKey(Connection connection, String schemaName, String tableName) {
-        Set<ForeignData> set = new HashSet<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(SQL_FOREIGN_KEY_SQL, schemaName, tableName), resultSet -> {
+        List<ForeignData> foreignKeys = new ArrayList<>();
+        return SQLExecutor.getInstance().execute(connection, String.format(SQL_FOREIGN_KEY_SQL, schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
             while (resultSet.next()) {
                 ForeignData foreignData = new ForeignData();
                 foreignData.setSchemaName(resultSet.getString("schema"));
@@ -555,9 +557,9 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                 foreignData.setColumn(resultSet.getString("tableColumn"));
                 foreignData.setForeignColumnName(resultSet.getString("forTableColumn"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
-                set.add(foreignData);
+                foreignKeys.add(foreignData);
             }
-            return Lists.newArrayList(set);
+            return foreignKeys;
         });
     }
 
@@ -1098,7 +1100,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                     "AND fk_col.CONSTRAINT_NAME = fk.CONSTRAINT_NAME AND fk_col.TABLE_NAME = fk.TABLE_NAME " +
                     "JOIN ALL_CONS_COLUMNS pk_col ON pk_col.OWNER = pk.OWNER " +
                     "AND pk_col.CONSTRAINT_NAME = pk.CONSTRAINT_NAME AND pk_col.TABLE_NAME = pk.TABLE_NAME " +
-                    "AND pk_col.POSITION = fk_col.POSITION ORDER BY fk.TABLE_NAME ASC";
+                    "AND pk_col.POSITION = fk_col.POSITION " +
+                    "ORDER BY fk.TABLE_NAME, fk.CONSTRAINT_NAME, fk_col.POSITION";
 
     static String buildReferencedForeignKeySql(String schemaName, String tableName) {
         return String.format(REFERENCED_FOREIGN_KEY_SQL,
@@ -1107,8 +1110,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     @Override
     public List<ForeignData> beiForeGnKey(Connection connection, String schemaName, String tableName) {
-        Set<ForeignData> set = new HashSet<>();
-        return SQLExecutor.getInstance().execute(connection, buildReferencedForeignKeySql(schemaName, tableName), resultSet -> {
+        List<ForeignData> foreignKeys = new ArrayList<>();
+        return SQLExecutor.getInstance().execute(connection, buildReferencedForeignKeySql(schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
             while (resultSet.next()) {
                 ForeignData foreignData = new ForeignData();
                 foreignData.setSchemaName(resultSet.getString("schema"));
@@ -1119,9 +1122,9 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                 foreignData.setColumn(resultSet.getString("tableColumn"));
                 foreignData.setForeignColumnName(resultSet.getString("forTableColumn"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
-                set.add(foreignData);
+                foreignKeys.add(foreignData);
             }
-            return Lists.newArrayList(set);
+            return foreignKeys;
         });
     }
 

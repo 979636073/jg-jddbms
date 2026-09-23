@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
  * @version : DefaultMetaService.java
  */
 public class DefaultMetaService implements MetaData {
+
+    private static final int RELATION_QUERY_TIMEOUT_SECONDS = 15;
     @Override
     public List<Database> databases(Connection connection) {
         return SQLExecutor.getInstance().databases(connection);
@@ -154,7 +156,7 @@ public class DefaultMetaService implements MetaData {
     @Override
     public List<ViewReferencedData> getViewReferenced(Connection connection, String schemaName, String tableName) {
         List<ViewReferencedData> list = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_REFERENCED_SQL, schemaName, tableName), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_REFERENCED_SQL, schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
             while (resultSet.next()) {
                 ViewReferencedData viewReferencedData = new ViewReferencedData();
                 viewReferencedData.setSchemaName(resultSet.getString("OWNER"));
@@ -175,7 +177,7 @@ public class DefaultMetaService implements MetaData {
     @Override
     public List<ViewReferencedData> getViewUponReferenced(Connection connection, String schemaName, String tableName) {
         List<ViewReferencedData> list = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_UPON_REFERENCED_SQL, schemaName, tableName), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_UPON_REFERENCED_SQL, schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
             while (resultSet.next()) {
                 ViewReferencedData viewReferencedData = new ViewReferencedData();
                 viewReferencedData.setSchemaName(resultSet.getString("OWNER"));

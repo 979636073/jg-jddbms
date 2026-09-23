@@ -100,11 +100,12 @@ function getGrantList(data) {
   })
 }
 //被引用情况
-function getQueryRefer(data) {
+function getQueryRefer(data, config = {}) {
   return request({
     url: '/api/rdb/table/queryReferenced',
     method: 'get',
-    params: data
+    params: data,
+    ...config
   })
 }
 
@@ -148,11 +149,12 @@ function deleteTableDataTask(data) {
 }
 
 // 视图依赖
-function viewDependent(data) {
+function viewDependent(data, config = {}) {
   return request({
     url: '/api/rdb/table/queryViewReferenced',
     method: 'get',
-    params: data
+    params: data,
+    ...config
   })
 }
 

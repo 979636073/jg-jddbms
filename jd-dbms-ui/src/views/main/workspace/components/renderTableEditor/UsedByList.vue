@@ -4,6 +4,7 @@
         <img src="@/assets/main/5-ico3.png" alt="" />
         刷新
       </el-button>
+    <el-button v-if="isLoading" size="mini" type="danger" plain @click="cancelQuery">取消查询</el-button>
     <el-select v-model="relationTypeValue" size="mini" style="width: 130px; margin-left: 12px" @change="changeRelationType">
       <el-option label="外键关联" value="table" />
       <el-option label="视图依赖" value="view" />
@@ -200,6 +201,9 @@ export default {
     },
     refreshFn() {
       this.$emit("refreshForKe");
+    },
+    cancelQuery() {
+      this.$emit("cancelRelationQuery");
     },
   },
   beforeDestroy() {

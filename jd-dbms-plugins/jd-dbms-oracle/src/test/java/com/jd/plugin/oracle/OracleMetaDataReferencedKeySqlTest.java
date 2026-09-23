@@ -14,6 +14,7 @@ public class OracleMetaDataReferencedKeySqlTest {
         Assert.assertTrue(sql.contains("fk.R_OWNER = pk.OWNER"));
         Assert.assertTrue(sql.contains("fk_col.OWNER = fk.OWNER"));
         Assert.assertTrue(sql.contains("pk_col.POSITION = fk_col.POSITION"));
+        Assert.assertTrue(sql.contains("ORDER BY fk.TABLE_NAME, fk.CONSTRAINT_NAME, fk_col.POSITION"));
     }
 
     @Test

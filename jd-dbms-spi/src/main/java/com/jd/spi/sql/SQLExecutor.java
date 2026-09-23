@@ -108,9 +108,13 @@ public class SQLExecutor implements CommandExecutor {
 
 
     public <R> R execute(Connection connection, String sql, ResultSetFunction<R> function) {
+        return execute(connection, sql, null, function);
+    }
+
+    public <R> R execute(Connection connection, String sql, Integer queryTimeoutSeconds, ResultSetFunction<R> function) {
         log.debug("Executing SQL (length={})", StringUtils.length(sql));
         try (Statement stmt = connection.createStatement();) {
-            configureStatement(stmt);
+            configureStatement(stmt, queryTimeoutSeconds);
             boolean query = stmt.execute(sql);
             // Represents the query
             if (query) {
