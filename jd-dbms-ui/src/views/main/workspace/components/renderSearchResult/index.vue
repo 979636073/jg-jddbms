@@ -295,9 +295,9 @@ export default {
             }
           }
           console.log(this.checkList,'checkList');
-          if (tableData && tableData.length) {
-            this.oldTableData = JSON.parse(JSON.stringify(tableData));
-          }
+          this.oldTableData = tableData && tableData.length
+            ? JSON.parse(JSON.stringify(tableData))
+            : [];
           this.sqlInfo = [];
         }
         this.total = Number(newVal?.fuzzyTotal || 0);
@@ -559,8 +559,8 @@ export default {
           sqlInfo = {
             type: "CREATE",
             rowId: row["行号"],
-            dataList: this.newArr.map((item) => {
-              return row[item.name] || null;
+            dataList: this.queryResultData.headerList.map((item) => {
+              return this.cellValue(row, item, true);
             }),
           };
         } else {
@@ -568,10 +568,10 @@ export default {
             type: "UPDATE",
             rowId: row["行号"],
             oldDataList: this.queryResultData.headerList.map((item) => {
-              return this.oldRow[item.name] || null;
+              return this.cellValue(this.oldRow, item);
             }),
             dataList: this.queryResultData.headerList.map((item) => {
-              return row[item.name] || null;
+              return this.cellValue(row, item);
             }),
           };
         }
@@ -746,9 +746,7 @@ export default {
     executeBlobData() {
       let send = {
         dataSourceId: this.queryResultData.uniqueData.dataSourceId,
-        headerList: this.isCreate
-          ? this.newArr
-          : this.queryResultData.headerList,
+        headerList: this.queryResultData.headerList,
         operations: this.sqlInfo,
         schemaName: this.queryResultData.uniqueData.schemaName,
         tableName: this.queryResultData.tableName,
@@ -774,11 +772,21 @@ export default {
 
     async executeUpdateDataSql() {
       this.commitActiveEdit();
+      this.syncPendingOperations();
       if (this.isFile) {
         this.executeBlobData();
       } else {
         console.log(this.sqlInfo, "this.sqlInfo");
-        let sql = await this.getExecuteUpdateSql(this.sqlInfo);
+        let sql;
+        try {
+          sql = await this.getExecuteUpdateSql(this.sqlInfo);
+        } catch (error) {
+          this.$notify.error({
+            title: "生成保存语句失败",
+            message: error.message || "请检查表结构和待保存数据",
+          });
+          return;
+        }
         if (sql == "" || sql == null) {
           this.$notify.error({
             title: "提醒",
@@ -830,9 +838,8 @@ export default {
     async getExecuteUpdateSql(operations) {
       let send = {
         dataSourceId: this.queryResultData.uniqueData.dataSourceId,
-        headerList: this.isCreate
-          ? this.newArr
-          : this.queryResultData.headerList,
+        databaseName: this.queryResultData.uniqueData?.databaseName,
+        headerList: this.queryResultData.headerList,
         operations: operations,
         schemaName: this.queryResultData.uniqueData.schemaName,
         tableName: this.queryResultData.tableName,
@@ -840,6 +847,9 @@ export default {
         isView: this.typeView == "views" ? true : undefined,
       };
       let res = await sqlServer.getExecuteUpdateSql(send);
+      if (!res.success) {
+        throw new Error(res.errorMessage || res.errorCode || "生成保存语句失败");
+      }
       return res.data;
     },
     // 撤销按钮是否可用
@@ -966,6 +976,65 @@ export default {
       return useDefault && header.defaultValue
         ? "CHAT2DB_DEFAULT_VALUE"
         : null;
+    },
+    sameCellValue(left, right) {
+      if (left === null || left === undefined) {
+        return right === null || right === undefined;
+      }
+      if (right === null || right === undefined) return false;
+      return String(left) === String(right);
+    },
+    syncPendingOperations() {
+      const headers = this.queryResultData.headerList || [];
+      const rowsById = new Map(
+        this.dataTable.map((row) => [String(row["行号"]), row])
+      );
+      const originalById = new Map(
+        (this.oldTableData || []).map((row) => [String(row["行号"]), row])
+      );
+      const operations = [];
+      const fixedRowIds = new Set();
+
+      this.sqlInfo.forEach((operation) => {
+        const rowId = String(operation.rowId);
+        const row = rowsById.get(rowId);
+        if (operation.type === "CREATE" && row) {
+          operations.push({
+            type: "CREATE",
+            rowId: operation.rowId,
+            dataList: headers.map((header) => this.cellValue(row, header, true)),
+          });
+          fixedRowIds.add(rowId);
+        } else if (operation.type === "DELETE") {
+          const originalRow = originalById.get(rowId) || row;
+          operations.push({
+            type: "DELETE",
+            rowId: operation.rowId,
+            oldDataList: operation.oldDataList || headers.map(
+              (header) => this.cellValue(originalRow, header)
+            ),
+          });
+          fixedRowIds.add(rowId);
+        }
+      });
+
+      this.dataTable.forEach((row) => {
+        const rowId = String(row["行号"]);
+        if (fixedRowIds.has(rowId)) return;
+        const originalRow = originalById.get(rowId);
+        if (!originalRow) return;
+        const oldDataList = headers.map((header) => this.cellValue(originalRow, header));
+        const dataList = headers.map((header) => this.cellValue(row, header));
+        if (dataList.some((value, index) => !this.sameCellValue(value, oldDataList[index]))) {
+          operations.push({
+            type: "UPDATE",
+            rowId: row["行号"],
+            oldDataList,
+            dataList,
+          });
+        }
+      });
+      this.sqlInfo = operations;
     },
     commitActiveEdit() {
       if (this.clickRow === null || !this.editingHeader) return;
@@ -1145,8 +1214,14 @@ export default {
     // 预览sql
     async sqlPreview() {
       this.sqlPreviewType = "execute";
-      let sql = await this.getExecuteUpdateSql(this.sqlInfo);
-      this.$refs.sqlPreview.init(sql);
+      this.commitActiveEdit();
+      this.syncPendingOperations();
+      try {
+        let sql = await this.getExecuteUpdateSql(this.sqlInfo);
+        this.$refs.sqlPreview.init(sql);
+      } catch (error) {
+        this.$notify.error({ title: "生成保存语句失败", message: error.message });
+      }
     },
     // 添加行
     addRow(pasteObj) {
@@ -1176,7 +1251,7 @@ export default {
       this.sqlInfo.push({
         type: "CREATE",
         rowId: row["行号"],
-        dataList: this.newArr.map((item) => {
+        dataList: this.queryResultData.headerList.map((item) => {
           return this.cellValue(row, item, true);
         }),
       });
@@ -1232,7 +1307,7 @@ export default {
             type: "DELETE",
             rowId: row["行号"],
             oldDataList: this.queryResultData.headerList.map((item) => {
-              return row[item.name] || null;
+              return this.cellValue(row, item);
             }),
           });
         }
@@ -1253,8 +1328,8 @@ export default {
       this.sqlInfo.push({
         type: "CREATE",
         rowId: copyRow["行号"],
-        dataList: this.newArr.map(
-          (item) => item.defaultValue || copyRow[item.name] || null
+        dataList: this.queryResultData.headerList.map((item) =>
+          this.cellValue(copyRow, item, true)
         ),
       });
       this.$nextTick(() => {
@@ -1290,13 +1365,12 @@ export default {
         this.clickRow = row.index;
         this.clickCell = column.index;
         this.$nextTick(() => {
-          this.$refs.ref_table.$el
-            .querySelector(
+          const input = this.$refs.ref_table.$el.querySelector(
               `.el-table__body tbody tr:nth-child(${
                 this.clickRow + 1
               }) td:nth-child(${this.clickCell + 1}) .focusInput input`
-            )
-            .focus();
+            );
+          if (input) input.focus();
           // this.$nextTick(() =>{
           //    let inputref = `focusInput${row.index}__${column.property}`
           // console.log(this.$refs[inputref]);
@@ -1621,8 +1695,11 @@ export default {
                 return item.rowId === row["行号"];
               });
               if (!flag.length) this.oldRow = JSON.parse(JSON.stringify(row));
+              const header = this.queryResultData.headerList.find(
+                (item) => item.name === column.property
+              );
               row[column.label] = null;
-              this.inputBlur(row);
+              this.inputBlur(row, header);
             },
           },
           {

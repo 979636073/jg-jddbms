@@ -133,13 +133,18 @@ public class SqlUtils {
     private static final String DEFAULT_VALUE = "CHAT2DB_DEFAULT_VALUE";
 
     public static String getSqlValue(String value, String dataType) {
-        if (value == null || value.equals("")) {
+        if (value == null) {
             return null;
         }
         if (DEFAULT_VALUE.equals(value)) {
             return "DEFAULT";
         }
         DataTypeEnum dataTypeEnum = DataTypeEnum.getByCode(dataType);
+        if (value.isEmpty() && dataTypeEnum != DataTypeEnum.STRING
+                && dataTypeEnum != DataTypeEnum.CONTENT
+                && dataTypeEnum != DataTypeEnum.DOCUMENT) {
+            return null;
+        }
         return dataTypeEnum.getSqlValue(value);
     }
 

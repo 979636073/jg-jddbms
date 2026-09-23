@@ -6,6 +6,7 @@ import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.spi.MetaData;
 import com.jd.spi.SqlBuilder;
 import com.jd.spi.enums.ConstraintTypeEnum;
+import com.jd.spi.enums.DataTypeEnum;
 import com.jd.spi.enums.DmlType;
 import com.jd.spi.model.*;
 import com.jd.spi.sql.Chat2DBContext;
@@ -119,7 +120,9 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
                 sql = getUpdateSql(tableName, headerList, row, row, metaSchema, keyColumns, true);
             }
 
-            stringBuilder.append(sql + ";\n");
+            if (StringUtils.isNotBlank(sql)) {
+                stringBuilder.append(sql).append(";\n");
+            }
         }
         return stringBuilder.toString();
     }
@@ -330,143 +333,60 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
     }
 
     private String buildBlobWhere(List<String> blobValues, List<Header> headerList, List<String> row, MetaData metaSchema, List<String> keyColumns) {
-        // todo 物理数据行ID
-        int index = 0;
-        for (int i = 0; i < headerList.size(); i++) {
-            Header header = headerList.get(i);
-            if (Constants.ROW_ID.equals(header.getName())) {
-                index = i;
-            }
-        }
-        if (0 == index) {
-            throw new BusinessException("数据解析失败");
-        }
-        String value = null;
-        try {
-            value = row.get(index);
-        } catch (Exception e) {
-            throw new BusinessException("数据解析失败");
-        }
-        boolean ref = Boolean.FALSE;
-        try {
-            Integer.parseInt(value);
-            ref = Boolean.TRUE;
-        } catch (Exception ignored) {}
-        if (ref) {
-            return String.format(" where " + Constants.ROW_ID + " = %s", value);
-        } else {
-            return String.format(" where " + Constants.ROW_ID + " = '%s'", value);
-        }
-//        if (CollectionUtils.isEmpty(keyColumns)) {
-//            for (int i = 1; i < row.size(); i++) {
-//                String oldValue = row.get(i);
-//                Header header = headerList.get(i);
-//                String value = SqlUtils.getSqlValue(oldValue, header.getDataType());
-//                if (value == null) {
-//                    script.append(metaSchema.getMetaDataName(header.getName()))
-//                            .append(" is null and ");
-//                } else if ("?".equals(value)) {
-//                    continue;
-////                    blobValues.add(oldValue);
-////                    script.append(metaSchema.getMetaDataName(header.getName())).append(" = ").append("? and ");
-//                } else {
-//                    script.append(metaSchema.getMetaDataName(header.getName()))
-//                            .append(" = ")
-//                            .append(value)
-//                            .append(" and ");
-//                }
-//            }
-//        } else {
-//            for (int i = 1; i < row.size(); i++) {
-//                String oldValue = row.get(i);
-//                Header header = headerList.get(i);
-//                String columnName = header.getName();
-//                if (keyColumns.contains(columnName)) {
-//                    String value = SqlUtils.getSqlValue(oldValue, header.getDataType());
-//                    if (value == null) {
-//                        script.append(metaSchema.getMetaDataName(columnName))
-//                                .append(" is null and ");
-//                    } else if ("?".equals(value)) {
-//                        blobValues.add(oldValue);
-//                        script.append(metaSchema.getMetaDataName(columnName)).append(" = ").append("? and");
-//                    } else {
-//                        script.append(metaSchema.getMetaDataName(columnName))
-//                                .append(" = ")
-//                                .append(value)
-//                                .append(" and ");
-//                    }
-//                }
-//            }
-//        }
-//        script.delete(script.length() - 4, script.length());
-//        return script.toString();
+        return buildWhere(headerList, row, metaSchema, keyColumns);
     }
 
     private String buildWhere(List<Header> headerList, List<String> row, MetaData metaSchema, List<String> keyColumns) {
-        // todo!!!!!! 物理数据行ID
-        int index = 0;
-        for (int i = 0; i < headerList.size(); i++) {
+        if (CollectionUtils.isEmpty(headerList) || CollectionUtils.isEmpty(row)) {
+            throw new BusinessException("无法定位要修改的数据行");
+        }
+        for (int i = 1; i < headerList.size() && i < row.size(); i++) {
             Header header = headerList.get(i);
-            if (Constants.ROW_ID.equals(header.getName())) {
-                index = i;
+            if (Constants.ROW_ID.equalsIgnoreCase(header.getName()) && row.get(i) != null) {
+                return " where " + Constants.ROW_ID + " = "
+                        + SqlUtils.getSqlValue(row.get(i), DataTypeEnum.ROWID.getCode());
             }
         }
-        if (0 == index) {
-            throw new BusinessException("数据解析失败");
-        }
-        String value = null;
-        try {
-            value = row.get(index);
-        } catch (Exception e) {
-            throw new BusinessException("数据解析失败");
-        }
-        boolean ref = Boolean.FALSE;
-        try {
-            Integer.parseInt(value);
-            ref = Boolean.TRUE;
-        } catch (Exception ignored) {}
-        if (ref) {
-            return String.format(" where " + Constants.ROW_ID + " = %s", value);
+
+        List<Integer> predicateIndexes = new ArrayList<>();
+        if (CollectionUtils.isNotEmpty(keyColumns)) {
+            for (int i = 1; i < headerList.size() && i < row.size(); i++) {
+                if (keyColumns.contains(headerList.get(i).getName())) {
+                    predicateIndexes.add(i);
+                }
+            }
         } else {
-            return String.format(" where " + Constants.ROW_ID + " = '%s'", value);
+            for (int i = 1; i < headerList.size() && i < row.size(); i++) {
+                if (isComparablePredicate(headerList.get(i))) {
+                    predicateIndexes.add(i);
+                }
+            }
+        }
+        if (predicateIndexes.isEmpty()) {
+            throw new BusinessException("无法定位要修改的数据行，请为表设置主键");
         }
 
-//        if (CollectionUtils.isEmpty(keyColumns)) {
-//            for (int i = 1; i < row.size(); i++) {
-//                String oldValue = row.get(i);
-//                Header header = headerList.get(i);
-//                String value = SqlUtils.getSqlValue(oldValue, header.getDataType());
-//                if (value == null) {
-//                    script.append(metaSchema.getMetaDataName(header.getName()))
-//                            .append(" is null and ");
-//                } else {
-//                    script.append(metaSchema.getMetaDataName(header.getName()))
-//                            .append(" = ")
-//                            .append(value)
-//                            .append(" and ");
-//                }
-//            }
-//        } else {
-//            for (int i = 1; i < row.size(); i++) {
-//                String oldValue = row.get(i);
-//                Header header = headerList.get(i);
-//                String columnName = header.getName();
-//                if (keyColumns.contains(columnName)) {
-//                    String value = SqlUtils.getSqlValue(oldValue, header.getDataType());
-//                    if (value == null) {
-//                        script.append(metaSchema.getMetaDataName(columnName))
-//                                .append(" is null and ");
-//                    } else {
-//                        script.append(metaSchema.getMetaDataName(columnName))
-//                                .append(" = ")
-//                                .append(value)
-//                                .append(" and ");
-//                    }
-//                }
-//            }
-//        }
-//        script.delete(script.length() - 4, script.length());
-//        return script.toString();
+        StringBuilder where = new StringBuilder(" where ");
+        for (Integer index : predicateIndexes) {
+            Header header = headerList.get(index);
+            String value = SqlUtils.getSqlValue(row.get(index), header.getDataType());
+            where.append(metaSchema.getMetaDataName(header.getName()));
+            if (value == null) {
+                where.append(" is null");
+            } else {
+                where.append(" = ").append(value);
+            }
+            where.append(" and ");
+        }
+        where.delete(where.length() - 5, where.length());
+        return where.toString();
+    }
+
+    private boolean isComparablePredicate(Header header) {
+        DataTypeEnum type = DataTypeEnum.getByCode(header.getDataType());
+        return type != DataTypeEnum.BYTE && type != DataTypeEnum.BINARY
+                && type != DataTypeEnum.CONTENT && type != DataTypeEnum.STRUCT
+                && type != DataTypeEnum.ARRAY && type != DataTypeEnum.OBJECT;
     }
 
     private String getInsertSql(String tableName, List<Header> headerList, List<String> row, MetaData metaSchema, Boolean isView) {
@@ -487,7 +407,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
             if(Objects.nonNull(header.getAutoIncrement()) && header.getAutoIncrement().equals(1)){
                 continue;
             }
-            if (isView && i == 1) {
+            if (Boolean.TRUE.equals(isView) && i == 1) {
                 continue;
             }
             script.append(metaSchema.getMetaDataName(header.getName()))
@@ -507,7 +427,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
             if (Constants.ROW_ID.equals(header.getName())) {
                 continue;
             }
-            if (isView && i == 1) {
+            if (Boolean.TRUE.equals(isView) && i == 1) {
                 continue;
             }
             script.append(SqlUtils.getSqlValue(newValue, header.getDataType()))
@@ -528,6 +448,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
             return "";
         }
         script.append("UPDATE ").append(tableName).append(" set ");
+        boolean changed = false;
         for (int i = 1; i < row.size(); i++) {
             String newValue = row.get(i);
             String oldValue = odlRow.get(i);
@@ -543,6 +464,10 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
                     .append(" = ")
                     .append(newSqlValue)
                     .append(",");
+            changed = true;
+        }
+        if (!changed) {
+            return "";
         }
         script.deleteCharAt(script.length() - 1);
         script.append(buildWhere(headerList, odlRow, metaSchema, keyColumns));
@@ -561,6 +486,7 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         BlobSqlResult blobSqlResult = new BlobSqlResult();
         List<String> blobValues = new ArrayList<>();
         script.append("UPDATE ").append(tableName).append(" set ");
+        boolean changed = false;
         for (int i = 1; i < row.size(); i++) {
             String newValue = row.get(i);
             String oldValue = odlRow.get(i);
@@ -568,6 +494,9 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
                 continue;
             }
             Header header = headerList.get(i);
+            if (Constants.ROW_ID.equals(header.getName())) {
+                continue;
+            }
             String newSqlValue = SqlUtils.getSqlValue(newValue, header.getDataType());
             if ("?".equals(newSqlValue)) {
                 blobValues.add(newValue);
@@ -578,6 +507,10 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
                         .append(newSqlValue)
                         .append(",");
             }
+            changed = true;
+        }
+        if (!changed) {
+            return null;
         }
         script.deleteCharAt(script.length() - 1);
         script.append(buildBlobWhere(blobValues, headerList, odlRow, metaSchema, keyColumns));
@@ -603,10 +536,13 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
             //String newValue = row.get(i);
             //if (newValue != null) {
             //解决达梦自增序列问题
-            if(header.getAutoIncrement().equals(1)){
+            if (Constants.ROW_ID.equals(header.getName())) {
                 continue;
             }
-            if (isView && i == 1) {
+            if(Objects.nonNull(header.getAutoIncrement()) && header.getAutoIncrement().equals(1)){
+                continue;
+            }
+            if (Boolean.TRUE.equals(isView) && i == 1) {
                 continue;
             }
             script.append(metaSchema.getMetaDataName(header.getName()))
@@ -619,10 +555,13 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
             String newValue = row.get(i);
             Header header = headerList.get(i);
             //解决达梦自增序列问题
-            if(header.getAutoIncrement().equals(1)){
+            if (Constants.ROW_ID.equals(header.getName())) {
                 continue;
             }
-            if (isView && i == 1) {
+            if(Objects.nonNull(header.getAutoIncrement()) && header.getAutoIncrement().equals(1)){
+                continue;
+            }
+            if (Boolean.TRUE.equals(isView) && i == 1) {
                 continue;
             }
             String value = SqlUtils.getSqlValue(newValue, header.getDataType());

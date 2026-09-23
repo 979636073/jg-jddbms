@@ -120,7 +120,7 @@ public enum DataTypeEnum implements BaseEnum<String> {
                     return "0";
                 }
             } else {
-                return "'" + value + "'";
+                return quote(value);
             }
 //            if("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)){
 //                return value;
@@ -132,44 +132,48 @@ public enum DataTypeEnum implements BaseEnum<String> {
             return value;
         }
         if (this == DataTypeEnum.STRING) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.DATETIME) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.BINARY) {
             return "''";
         }
         if (this == DataTypeEnum.CONTENT) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.BYTE) {
             return "?";
         }
         if (this == DataTypeEnum.STRUCT) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.DOCUMENT) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.ARRAY) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.OBJECT) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.REFERENCE) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.ROWID) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.ANY) {
-            return "'" + value + "'";
+            return quote(value);
         }
         if (this == DataTypeEnum.UNKNOWN) {
-            return "'" + value + "'";
+            return quote(value);
         }
-        return "'" + value + "'";
+        return quote(value);
+    }
+
+    private static String quote(String value) {
+        return "'" + value.replace("'", "''") + "'";
     }
 }
