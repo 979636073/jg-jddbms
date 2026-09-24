@@ -8,6 +8,7 @@ import com.jd.biz.controller.rdb.vo.TableVO;
 import com.jd.biz.domain.api.param.TableQueryParam;
 import com.jd.biz.domain.api.service.TableService;
 import com.jd.biz.domain.api.service.ViewService;
+import com.jd.biz.domain.core.util.SqlAuditUtils;
 import com.jd.common.annotation.Log;
 import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.constant.EasyToolsConstant;
@@ -152,7 +153,9 @@ public class ViewController {
             viewService.refreshMaterialized(request);
             return ActionResult.isSuccess();
         } catch (Exception e) {
-            return ActionResult.fail(EasyToolsConstant.ERROR_CODE, "物化视图刷新失败", null);
+            String reason = SqlAuditUtils.sanitizeErrorMessage(e.getMessage());
+            return ActionResult.fail(EasyToolsConstant.ERROR_CODE,
+                    "物化视图刷新失败" + (StringUtils.isEmpty(reason) ? "" : "：" + reason), null);
         }
     }
 

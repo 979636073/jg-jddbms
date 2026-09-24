@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ViewControllerTest {
@@ -37,6 +38,25 @@ public class ViewControllerTest {
 
         assertTrue(result.getSuccess());
         assertEquals(1, refreshCount.get());
+    }
+
+    @Test
+    public void shouldExposeSanitizedMaterializedRefreshFailure() throws Exception {
+        ViewService viewService = (ViewService) Proxy.newProxyInstance(
+                ViewService.class.getClassLoader(),
+                new Class[]{ViewService.class},
+                (proxy, method, args) -> {
+                    if ("refreshMaterialized".equals(method.getName())) {
+                        throw new IllegalStateException("权限不足\npassword=secret");
+                    }
+                    return null;
+                });
+
+        ActionResult result = controller(viewService).refreshMaterialized(new ViewRequest());
+
+        assertFalse(result.getSuccess());
+        assertTrue(result.getErrorMessage().contains("权限不足"));
+        assertFalse(result.getErrorMessage().contains("secret"));
     }
 
     @Test

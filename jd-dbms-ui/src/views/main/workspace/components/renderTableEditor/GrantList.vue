@@ -6,6 +6,14 @@ export default {
       type: Array,
       default:()=>[]
     },
+    allowRevoke: {
+      type: Boolean,
+      default: false
+    },
+    revokeDisabled: {
+      type: Boolean,
+      default: false
+    },
   },
   data() {
     return {
@@ -52,6 +60,11 @@ export default {
         :fixed="item.fixed"
         :formatter="item.formatter"
       >
+      </el-table-column>
+      <el-table-column v-if="allowRevoke" label="操作" width="110">
+        <template slot-scope="scope">
+          <el-button v-if="scope.row.privilege === 'SELECT'" type="text" :disabled="revokeDisabled" @click="$emit('revoke', scope.row)">撤销 SELECT</el-button>
+        </template>
       </el-table-column>
     </el-table>
   </div>

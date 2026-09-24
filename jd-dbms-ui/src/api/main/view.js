@@ -71,6 +71,22 @@ function refreshMaterialized(data) {
   })
 }
 
+function grantViewSelect(data) {
+  return request({
+    url: '/api/rdb/grant/grantSql',
+    method: 'post',
+    params: data
+  })
+}
+
+function revokeViewSelect(data) {
+  return request({
+    url: '/api/rdb/grant/deleteGrant',
+    method: 'post',
+    params: data
+  })
+}
+
 // 视图编译
 function viewAllExecute(data) {
   return request({
@@ -143,6 +159,8 @@ export default {
   getExecuteSQL,
   viewDelete,
   refreshMaterialized,
+  grantViewSelect,
+  revokeViewSelect,
   viewAllExecute,
   addViewFn,
   deleteViewFn,
