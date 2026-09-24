@@ -1898,7 +1898,7 @@ export default {
             />
             <img v-else src="@/assets/main/1-sub-ico03.png" alt />
           </span>
-          <span class="table_name" :class="{ 'table-name-clickable': type == 'tables' }" @click.stop="type == 'tables' && handelClickItem(item, index, $event)">
+          <span class="table_name" :class="{ 'table-name-clickable': type == 'tables' }" @click="type == 'tables' && handelClickItem(item, index, $event)">
             {{ item.name || item.tableDetails.tableSpace }}
           </span>
           <span
