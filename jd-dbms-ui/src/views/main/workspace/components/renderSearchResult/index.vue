@@ -9,6 +9,7 @@ import { getToken } from "@/utils/auth";
 import Filedialog from "./filedialog.vue";
 import tableServer from "@/api/main/table";
 import viewServer from "@/api/main/view";
+import ViewGrantPanel from "../renderViewEditor/ViewGrantPanel.vue";
 import importDataDialog from "./importDataDialog";
 
 export default {
@@ -19,6 +20,7 @@ export default {
     MonacoEditor,
     Filedialog,
     importDataDialog,
+    ViewGrantPanel,
   },
   props: {
     queryResultData: {
@@ -237,6 +239,7 @@ export default {
       materializedDdlLoading: false,
       materializedDdlVisible: false,
       materializedDdl: "",
+      materializedGrantVisible: false,
     };
   },
   watch: {
@@ -2634,6 +2637,7 @@ export default {
         :loading="materializedDdlLoading"
         @click="showMaterializedDdl"
       >查看 DDL</el-button>
+      <el-button v-if="isMaterializedView" size="mini" plain @click="materializedGrantVisible = true">授权</el-button>
       <el-popover
         placement="bottom"
         width="280"
@@ -3582,6 +3586,9 @@ export default {
         <el-button @click="materializedDdlVisible = false">关闭</el-button>
         <el-button type="primary" @click="exportMaterializedDdl">导出 DDL</el-button>
       </span>
+    </el-dialog>
+    <el-dialog title="物化视图授权" :visible.sync="materializedGrantVisible" width="800px" append-to-body>
+      <ViewGrantPanel v-if="materializedGrantVisible" :query-result-data="queryResultData" />
     </el-dialog>
   </div>
 </template>

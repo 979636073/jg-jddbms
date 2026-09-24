@@ -7,7 +7,7 @@ import ColumnViewList from "../renderViewEditor/ColumnViewList.vue";
 import DataInfoView from "../renderViewEditor/DataInfoView.vue";
 import DespUses from "../renderViewEditor/DepsUsersView.vue";
 import DespUsedBy from "../renderViewEditor/DepsUsedByView.vue";
-import GrantList from "../renderTableEditor/GrantList.vue";
+import ViewGrantPanel from "./ViewGrantPanel.vue";
 import SqlPreview from "@/views/main/workspace/components/DataSource/SqlPreview.vue";
 import renderSearchResult from "../../components/renderSearchResult/index.vue";
 import { downloadFile } from "@/utils/file";
@@ -30,7 +30,7 @@ export default {
     DataInfoView,
     DespUses,
     DespUsedBy,
-    GrantList,
+    ViewGrantPanel,
     renderSearchResult
   },
   data() {
@@ -52,11 +52,6 @@ export default {
       viewDependentData: [],
       viewDependentByData: [],
       dependencyLoading: { deps: false, depsBy: false },
-      grantList: [],
-      grantLoading: false,
-      grantDialogVisible: false,
-      grantUser: "",
-      grantSubmitting: false,
       databaseSupportField: {
         columnTypes: [],
         charsets: [],
@@ -120,8 +115,6 @@ export default {
           this.viewDependentFn("depsBy");
         } else if (newVal == "info") {
           this.viewName = this.basicForm.tableName;
-        } else if (newVal == "grant") {
-          this.queryGrantList();
         }
       }
     }
@@ -163,8 +156,6 @@ export default {
               this.viewDependentFn("depsBy");
             } else if (this.activeTab == "info") {
               this.viewName = this.basicForm.tableName;
-            } else if (this.activeTab == "grant") {
-              this.queryGrantList();
             }
           } else {
             this.basicForm = {
@@ -210,78 +201,6 @@ export default {
         }
       }).catch(() => this.$message.error("获取依赖关系失败"))
         .finally(() => { this.dependencyLoading[type] = false; });
-    },
-    queryGrantList() {
-      if (!this.currentConfig?.uniqueData?.tableName || this.grantLoading) return;
-      const params = {
-        dataSourceId: this.currentConfig.uniqueData.dataSourceId,
-        schemaName: this.currentConfig.uniqueData.schemaName,
-        tableName: this.currentConfig.uniqueData.tableName
-      };
-      this.grantLoading = true;
-      tableServer.getGrantList(params).then(res => {
-        if (res.success) {
-          this.grantList = res.data || [];
-        } else {
-          this.$message.error(res.errorMessage || "获取授权信息失败");
-        }
-      }).catch(() => this.$message.error("获取授权信息失败"))
-        .finally(() => { this.grantLoading = false; });
-    },
-    grantParams(user) {
-      return {
-        dataSourceId: this.currentConfig.uniqueData.dataSourceId,
-        databaseName: this.currentConfig.uniqueData.databaseName,
-        schemaName: this.currentConfig.uniqueData.schemaName,
-        tableName: this.currentConfig.uniqueData.tableName,
-        toGrantUser: user
-      };
-    },
-    async grantViewSelect() {
-      const user = this.grantUser.trim();
-      if (!user) {
-        this.$message.warning("请输入被授权用户");
-        return;
-      }
-      this.grantSubmitting = true;
-      try {
-        const res = await viewServer.grantViewSelect(this.grantParams(user));
-        if (!res.success) {
-          this.$message.error(res.errorMessage || "授权失败");
-          return;
-        }
-        this.$message.success("SELECT 授权成功");
-        this.grantDialogVisible = false;
-        this.grantUser = "";
-        this.queryGrantList();
-      } catch (e) {
-        this.$message.error("授权失败，请稍后重试");
-      } finally {
-        this.grantSubmitting = false;
-      }
-    },
-    async revokeViewSelect(row) {
-      try {
-        await this.$confirm(`确定撤销 ${row.grantee} 的 SELECT 权限吗？`, "撤销授权", {
-          type: "warning"
-        });
-      } catch (e) {
-        return;
-      }
-      this.grantSubmitting = true;
-      try {
-        const res = await viewServer.revokeViewSelect(this.grantParams(row.grantee));
-        if (!res.success) {
-          this.$message.error(res.errorMessage || "撤销授权失败");
-          return;
-        }
-        this.$message.success("SELECT 权限已撤销");
-        this.queryGrantList();
-      } catch (e) {
-        this.$message.error("撤销授权失败，请稍后重试");
-      } finally {
-        this.grantSubmitting = false;
-      }
     },
     // 获取依赖关系
     getExecuteSQL() {
@@ -486,17 +405,9 @@ export default {
         <DespUsedBy v-loading="dependencyLoading.depsBy" :viewDependentData="viewDependentByData" />
       </el-tab-pane>
       <el-tab-pane label="授权" name="grant">
-        <el-button type="primary" size="mini" style="margin-bottom:10px" :disabled="currentConfig && currentConfig.title === '新建视图'" @click="grantDialogVisible = true">授予 SELECT</el-button>
-        <GrantList v-loading="grantLoading" :tableData="grantList" :allow-revoke="true" :revoke-disabled="grantSubmitting" @revoke="revokeViewSelect" />
+        <ViewGrantPanel v-if="activeTab === 'grant'" :key="queryResultData.uniqueData && [queryResultData.uniqueData.dataSourceId, queryResultData.uniqueData.schemaName, queryResultData.uniqueData.tableName].join(':')" :query-result-data="queryResultData" :disabled="currentConfig && currentConfig.title === '新建视图'" />
       </el-tab-pane>
     </el-tabs>
-    <el-dialog title="授予视图 SELECT 权限" :visible.sync="grantDialogVisible" width="420px" append-to-body>
-      <el-input v-model="grantUser" placeholder="被授权用户名" maxlength="128" />
-      <span slot="footer">
-        <el-button @click="grantDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="grantSubmitting" @click="grantViewSelect">确定</el-button>
-      </span>
-    </el-dialog>
   </div>
 </template>
 
