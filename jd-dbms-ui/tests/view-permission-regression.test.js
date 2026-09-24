@@ -46,6 +46,11 @@ async function main() {
         assert.strictEqual(params.dataSourceId, 42)
         assert.strictEqual(params.tableName, 'TEST_MV')
         return { success: false, errorMessage: 'Grantor no granted privilege' }
+      },
+      revokeViewSelect: async params => {
+        assert.strictEqual(params.dataSourceId, 42)
+        assert.strictEqual(params.toGrantUser, 'JDDBMS')
+        return { success: false, errorMessage: 'ORA-01031: insufficient privileges' }
       }
     },
     GrantList: {}
@@ -68,7 +73,15 @@ async function main() {
   assert.strictEqual(state.grantDialogVisible, true)
   assert.strictEqual(state.grantSubmitting, false)
   assert.strictEqual(listReloaded, false)
-  console.log('视图点击与权限不足反馈回归测试通过')
+  state.$confirm = async () => {}
+  await component.methods.revokeViewSelect.call(state, { grantee: 'JDDBMS' })
+  assert.deepStrictEqual(messages, [
+    'Grantor no granted privilege',
+    'ORA-01031: insufficient privileges'
+  ])
+  assert.strictEqual(state.grantSubmitting, false)
+  assert.strictEqual(listReloaded, false)
+  console.log('视图点击及授权/撤销权限不足反馈回归测试通过')
 }
 
 main().catch(error => {

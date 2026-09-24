@@ -1003,8 +1003,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
     }
 
 
-    public static String QUERY_ROLES_SQL = "SELECT GRANTEE, PRIVILEGE, GRANTABLE, GRANTOR, OWNER, TABLE_NAME FROM DBA_TAB_PRIVS \n" +
-            "WHERE OWNER = '%s' AND TABLE_NAME = '%s'";
+    public static String QUERY_ROLES_SQL = "SELECT GRANTEE, PRIVILEGE, GRANTABLE, GRANTOR, TABLE_SCHEMA AS OWNER, TABLE_NAME FROM ALL_TAB_PRIVS \n" +
+            "WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'";
 
     @Override
     public List<TableRole> queryRoles(Connection connection, String schemaName, String tableName) {
