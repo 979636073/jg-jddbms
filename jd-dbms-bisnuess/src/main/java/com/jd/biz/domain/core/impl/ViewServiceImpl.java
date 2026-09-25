@@ -83,12 +83,12 @@ public class ViewServiceImpl implements ViewService {
         Connection connection = Chat2DBContext.getConnection();
         String dbType = Chat2DBContext.getConnectInfo().getDbType();
         if (("DM".equalsIgnoreCase(dbType) || "ORACLE".equalsIgnoreCase(dbType))
-                && isMaterializedViewObject(connection, schemaName, tableName)) {
+                && isMaterializedViewObject(connection, dbType, schemaName, tableName)) {
             Table table = new Table();
             table.setDatabaseName(databaseName);
             table.setSchemaName(schemaName);
             table.setName(tableName);
-            table.setDdl(materializedViewDdl(connection, schemaName, tableName));
+            table.setDdl(materializedViewDdl(connection, dbType, schemaName, tableName));
             table.setColumnList(metaSchema.columns(connection, databaseName, schemaName, tableName));
             table.setType("MATERIALIZED VIEW");
             return DataResult.of(table);
@@ -96,8 +96,10 @@ public class ViewServiceImpl implements ViewService {
         return DataResult.of(metaSchema.view(connection, databaseName, schemaName, tableName));
     }
 
-    private boolean isMaterializedViewObject(Connection connection, String schemaName, String viewName) {
-        String sql = "SELECT 1 FROM SYS.ALL_OBJECTS WHERE OWNER = ? AND OBJECT_NAME = ? AND OBJECT_TYPE = 'MATERIALIZED VIEW'";
+    private boolean isMaterializedViewObject(Connection connection, String dbType, String schemaName, String viewName) {
+        String sql = "ORACLE".equalsIgnoreCase(dbType)
+                ? "SELECT 1 FROM ALL_MVIEWS WHERE OWNER = ? AND MVIEW_NAME = ?"
+                : "SELECT 1 FROM SYS.ALL_OBJECTS WHERE OWNER = ? AND OBJECT_NAME = ? AND OBJECT_TYPE = 'MATERIALIZED VIEW'";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, schemaName);
             statement.setString(2, viewName);
@@ -109,7 +111,7 @@ public class ViewServiceImpl implements ViewService {
         }
     }
 
-    private String materializedViewDdl(Connection connection, String schemaName, String viewName) {
+    private String materializedViewDdl(Connection connection, String dbType, String schemaName, String viewName) {
         String sql = "SELECT DBMS_METADATA.GET_DDL('MATERIALIZED_VIEW', ?, ?) FROM DUAL";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, viewName);
@@ -118,6 +120,9 @@ public class ViewServiceImpl implements ViewService {
                 return resultSet.next() ? resultSet.getString(1) : null;
             }
         } catch (SQLException e) {
+            if ("ORACLE".equalsIgnoreCase(dbType) && (e.getErrorCode() == 31603 || e.getErrorCode() == 1031)) {
+                return null;
+            }
             throw new BusinessException("获取物化视图 DDL 失败: " + e.getMessage());
         }
     }

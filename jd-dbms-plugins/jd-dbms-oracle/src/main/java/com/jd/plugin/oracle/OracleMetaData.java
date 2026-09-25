@@ -81,7 +81,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     private static String SELECT_TABLE_SQL = "SELECT A.OWNER, A.TABLE_NAME, B.COMMENTS " +
             "FROM ALL_TABLES A LEFT JOIN ALL_TAB_COMMENTS B ON  A.OWNER = B.OWNER  AND A.TABLE_NAME = B.TABLE_NAME\n" +
-            "where A.OWNER = '%s' ";
+            "where A.OWNER = '%s' AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS M WHERE M.OWNER = A.OWNER AND M.MVIEW_NAME = A.TABLE_NAME) ";
 
     @Override
     public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName) {
@@ -879,7 +879,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             "        t.num_rows       \n" +
             "from\n" +
             "        all_tables t\n" +
-            "where t.owner = '%s' order by t.table_name ASC";
+            "where t.owner = '%s' AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS m WHERE m.owner = t.owner AND m.mview_name = t.table_name) order by t.table_name ASC";
 
 
     @Override
@@ -938,7 +938,11 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
         });
     }
 
-    private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type from sys.all_objects o where o.object_type in ('VIEW', 'MATERIALIZED VIEW') and o.owner = '%s'";
+    private static String SELECT_TABLE_VIEW_SQL = "select o.object_name, o.owner, o.status, o.created, o.last_ddl_time, " +
+            "case when o.object_type = 'TABLE' then 'MATERIALIZED VIEW' else o.object_type end as object_type " +
+            "from ALL_OBJECTS o where o.owner = '%s' and (o.object_type in ('VIEW', 'MATERIALIZED VIEW') " +
+            "or (o.object_type = 'TABLE' and exists (select 1 from ALL_MVIEWS m where m.owner = o.owner and m.mview_name = o.object_name) " +
+            "and NOT EXISTS (select 1 from ALL_OBJECTS v where v.owner = o.owner and v.object_name = o.object_name and v.object_type = 'MATERIALIZED VIEW')))";
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {

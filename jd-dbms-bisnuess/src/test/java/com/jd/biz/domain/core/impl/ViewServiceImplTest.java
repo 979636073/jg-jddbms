@@ -14,15 +14,21 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.lang.reflect.Proxy;
+import java.lang.reflect.Method;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ViewServiceImplTest {
@@ -99,6 +105,29 @@ public class ViewServiceImplTest {
     }
 
     @Test
+    public void shouldIdentifyOracleMaterializedViewWithoutDbaPrivileges() throws Exception {
+        AtomicReference<String> sql = new AtomicReference<>();
+        Method lookup = ViewServiceImpl.class.getDeclaredMethod("isMaterializedViewObject",
+                Connection.class, String.class, String.class, String.class);
+        lookup.setAccessible(true);
+
+        assertTrue((Boolean) lookup.invoke(new ViewServiceImpl(), metadataConnection(sql, null),
+                "ORACLE", "SYSTEM", "MV_TEST"));
+        assertEquals("SELECT 1 FROM ALL_MVIEWS WHERE OWNER = ? AND MVIEW_NAME = ?", sql.get());
+    }
+
+    @Test
+    public void shouldKeepOracleMaterializedViewReadableWhenDdlIsHidden() throws Exception {
+        Method ddl = ViewServiceImpl.class.getDeclaredMethod("materializedViewDdl",
+                Connection.class, String.class, String.class, String.class);
+        ddl.setAccessible(true);
+
+        assertNull(ddl.invoke(new ViewServiceImpl(),
+                metadataConnection(new AtomicReference<>(), new SQLException("metadata not visible", "42000", 31603)),
+                "ORACLE", "SYSTEM", "MV_TEST"));
+    }
+
+    @Test
     public void shouldRenameOnlyRequestedColumnWithoutParsingSelectBody() {
         RecordingViewService service = new RecordingViewService(true, false,
                 "SELECT 1 OLD_ID, (SELECT 2 FROM DUAL) OTHER_ID FROM DUAL");
@@ -170,6 +199,28 @@ public class ViewServiceImplTest {
                     if ("close".equals(method.getName())) {
                         connectionCloses.incrementAndGet();
                         return null;
+                    }
+                    return defaultValue(method.getReturnType());
+                });
+    }
+
+    private Connection metadataConnection(AtomicReference<String> sql, SQLException failure) {
+        ResultSet resultSet = (ResultSet) Proxy.newProxyInstance(ResultSet.class.getClassLoader(),
+                new Class<?>[]{ResultSet.class}, (proxy, method, args) ->
+                        "next".equals(method.getName()) ? true : defaultValue(method.getReturnType()));
+        PreparedStatement statement = (PreparedStatement) Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
+                new Class<?>[]{PreparedStatement.class}, (proxy, method, args) -> {
+                    if ("executeQuery".equals(method.getName())) {
+                        if (failure != null) throw failure;
+                        return resultSet;
+                    }
+                    return defaultValue(method.getReturnType());
+                });
+        return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                new Class<?>[]{Connection.class}, (proxy, method, args) -> {
+                    if ("prepareStatement".equals(method.getName())) {
+                        sql.set((String) args[0]);
+                        return statement;
                     }
                     return defaultValue(method.getReturnType());
                 });
