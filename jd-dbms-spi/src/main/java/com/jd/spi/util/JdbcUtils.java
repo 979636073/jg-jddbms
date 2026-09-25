@@ -150,7 +150,7 @@ public class JdbcUtils {
         Connection connection = null;
         // 加载驱动
         try {
-            if (ssh.isUse()) {
+            if (ssh != null && ssh.isUse()) {
                 ssh.setRHost(host);
                 ssh.setRPort(port);
                 session = SSHManager.getSSHSession(ssh);

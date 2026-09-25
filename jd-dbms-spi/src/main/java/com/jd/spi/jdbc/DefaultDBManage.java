@@ -36,8 +36,10 @@ public class DefaultDBManage implements DBManage {
             if (connection != null && !connection.isClosed()) {
                 return connection;
             }
-            ssh.setRHost(host);
-            ssh.setRPort(port);
+            if (ssh != null) {
+                ssh.setRHost(host);
+                ssh.setRPort(port);
+            }
             session = getSession(ssh);
             if (session != null) {
                 url = url.replace(host, "127.0.0.1").replace(port, ssh.getLocalPort());
