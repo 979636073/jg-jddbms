@@ -164,7 +164,7 @@ public class DatabaseServiceImpl implements DatabaseService {
     public ListResult<Schema> querySchema(SchemaQueryParam param) {
         List<Schema> schemas = CacheManage.getList(getSchemasKey(param.getDataSourceId(), param.getDataBaseName()),
                 Schema.class,
-                (key) -> param.getRefresh(), (key) -> {
+                (key) -> Boolean.TRUE.equals(param.getRefresh()), (key) -> {
                     Connection connection = param.getConnection() == null ? Chat2DBContext.getConnection()
                             : param.getConnection();
                     return getSchemaList(param.getDataBaseName(), connection);
