@@ -2,12 +2,14 @@ package com.jd.biz.domain.core.impl;
 
 import com.jd.biz.controller.rdb.request.ViewQueryRequest;
 import com.jd.biz.controller.rdb.request.ViewRequest;
+import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.spi.config.DriverConfig;
 import com.jd.spi.model.ExecuteResult;
 import com.jd.spi.model.Table;
 import com.jd.spi.model.TableColumn;
+import com.jd.spi.model.TableDetails;
 import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.ConnectInfo;
 import org.junit.After;
@@ -30,6 +32,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ViewServiceImplTest {
 
@@ -128,6 +131,42 @@ public class ViewServiceImplTest {
     }
 
     @Test
+    public void shouldExplainOracleMaterializedRefreshPermissionDenied() {
+        Statement statement = (Statement) Proxy.newProxyInstance(Statement.class.getClassLoader(),
+                new Class<?>[]{Statement.class}, (proxy, method, args) -> {
+                    if ("execute".equals(method.getName())) {
+                        throw new SQLException("ORA-01031: insufficient privileges ORA-06512: at SYS.DBMS_SNAPSHOT", "42000", 6550);
+                    }
+                    return defaultValue(method.getReturnType());
+                });
+        Connection connection = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                new Class<?>[]{Connection.class}, (proxy, method, args) ->
+                        "createStatement".equals(method.getName()) ? statement : defaultValue(method.getReturnType()));
+        putContext(connection, "ORACLE");
+        Table view = new Table();
+        view.setName("MV_TEST");
+        TableDetails details = new TableDetails();
+        details.setType("MATERIALIZED VIEW");
+        view.setTableDetails(details);
+        ViewServiceImpl service = new ViewServiceImpl() {
+            @Override
+            public List<Table> getViewList(String databaseName, String schemaName) {
+                return Arrays.asList(view);
+            }
+        };
+        ViewRequest request = new ViewRequest();
+        request.setSchemaName("SYSTEM");
+        request.setTableName("MV_TEST");
+
+        try {
+            service.refreshMaterialized(request);
+            fail("Expected refresh permission failure");
+        } catch (BusinessException e) {
+            assertEquals("当前账号无权刷新物化视图，请使用对象所有者或具备刷新权限的账号", e.getMessage());
+        }
+    }
+
+    @Test
     public void shouldRenameOnlyRequestedColumnWithoutParsingSelectBody() {
         RecordingViewService service = new RecordingViewService(true, false,
                 "SELECT 1 OLD_ID, (SELECT 2 FROM DUAL) OTHER_ID FROM DUAL");
@@ -172,8 +211,12 @@ public class ViewServiceImplTest {
     }
 
     private void putContext(Connection connection) {
+        putContext(connection, "VIEW_TEST");
+    }
+
+    private void putContext(Connection connection, String dbType) {
         ConnectInfo connectInfo = new ConnectInfo();
-        connectInfo.setDbType("VIEW_TEST");
+        connectInfo.setDbType(dbType);
         connectInfo.setDriverConfig(new DriverConfig());
         connectInfo.setConnection(connection);
         Chat2DBContext.putContext(connectInfo);

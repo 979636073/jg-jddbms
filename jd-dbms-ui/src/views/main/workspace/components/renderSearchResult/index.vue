@@ -375,14 +375,18 @@ export default {
           schemaName: this.queryResultData.uniqueData.schemaName,
           tableName: this.queryResultData.uniqueData.tableName,
         });
-        if (!res.success || !res.data?.ddl) {
-          this.$message.error(res.errorMessage || "获取物化视图 DDL 失败");
+        if (!res.success) {
+          this.$notify.error({ title: "无法查看 DDL", message: res.errorMessage || "获取物化视图 DDL 失败", duration: 0 });
+          return;
+        }
+        if (!res.data?.ddl) {
+          this.$notify.warning({ title: "无法查看 DDL", message: "当前账号无法读取该物化视图的 DDL，请核对对象所有权或元数据权限。", duration: 0 });
           return;
         }
         this.materializedDdl = res.data.ddl;
         this.materializedDdlVisible = true;
       } catch (e) {
-        this.$message.error("获取物化视图 DDL 失败");
+        this.$notify.error({ title: "无法查看 DDL", message: "获取物化视图 DDL 失败，请稍后重试", duration: 0 });
       } finally {
         this.materializedDdlLoading = false;
       }
@@ -404,13 +408,13 @@ export default {
           viewType: this.queryResultData.uniqueData.viewType,
         });
         if (!res.success) {
-          this.$message.error(res.errorMessage || "物化视图刷新失败");
+          this.$notify.error({ title: "物化视图刷新失败", message: res.errorMessage || "请检查当前账号的刷新权限", duration: 0 });
           return;
         }
         this.$message.success("物化视图刷新成功");
         this.refresh();
       } catch (e) {
-        this.$message.error("物化视图刷新失败，请稍后重试");
+        this.$notify.error({ title: "物化视图刷新失败", message: "请求失败，请稍后重试", duration: 0 });
       } finally {
         this.materializedViewRefreshing = false;
       }

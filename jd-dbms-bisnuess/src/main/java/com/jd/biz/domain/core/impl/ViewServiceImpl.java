@@ -301,8 +301,17 @@ public class ViewServiceImpl implements ViewService {
         if (!isMaterializedView(viewType)) {
             throw new BusinessException("指定对象不是物化视图");
         }
-        executeStatement(buildRefreshMaterializedViewSql(
-                Chat2DBContext.getConnectInfo().getDbType(), request.getSchemaName(), request.getTableName()));
+        String dbType = Chat2DBContext.getConnectInfo().getDbType();
+        String sql = buildRefreshMaterializedViewSql(dbType, request.getSchemaName(), request.getTableName());
+        try (Statement statement = Chat2DBContext.getConnection().createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            if ("ORACLE".equalsIgnoreCase(dbType)
+                    && (e.getErrorCode() == 1031 || (e.getMessage() != null && e.getMessage().contains("ORA-01031")))) {
+                throw new BusinessException("当前账号无权刷新物化视图，请使用对象所有者或具备刷新权限的账号");
+            }
+            throw new BusinessException(e.getMessage());
+        }
     }
 
     private String resolveViewType(ViewRequest request) {
