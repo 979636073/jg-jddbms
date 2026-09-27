@@ -58,9 +58,14 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -137,28 +142,36 @@ public class DlTemplateServiceImpl implements DlTemplateService {
 
     @Override
     public String getBlobData(GetBlobRequest request) throws SQLException {
-        boolean ref = Boolean.FALSE;
-        try {
-            Integer.parseInt(request.getRowId());
-            ref = Boolean.TRUE;
-        } catch (Exception ignored) {}
-        String sql = null;
-        if (ref) {
-            sql = "SELECT \"%s\" FROM \"%s\".\"%s\" WHERE ROWID = %s";
-        } else {
-            sql = "SELECT \"%s\" FROM \"%s\".\"%s\" WHERE ROWID ='%s'";
-        }
-        ExecuteResult execute = SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), String.format(sql, request.getBlobColumn(), request.getSchemaName(), request.getTableName(), request.getRowId()));
-        if (execute.getSuccess() && CollUtil.isNotEmpty(execute.getDataList())) {
-            List<List<String>> dataList = execute.getDataList();
-            List<String> strings = dataList.get(0);
-            if (CollUtil.isNotEmpty(strings)) {
-                return StrUtil.isNotBlank(strings.get(0)) ? strings.get(0) : null;
+        String sql = "SELECT " + quoteBlobIdentifier(request.getBlobColumn())
+                + " FROM " + quoteBlobIdentifier(request.getSchemaName()) + "."
+                + quoteBlobIdentifier(request.getTableName()) + " WHERE ROWID = ?";
+        try (PreparedStatement statement = Chat2DBContext.getConnection().prepareStatement(sql)) {
+            String rowId = request.getRowId();
+            if (rowId.matches("[0-9]+")) {
+                statement.setLong(1, Long.parseLong(rowId));
             } else {
-                return null;
+                statement.setString(1, rowId);
+            }
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return null;
+                try (InputStream input = result.getBinaryStream(1)) {
+                    if (input == null) return null;
+                    ByteArrayOutputStream output = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[8192];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) {
+                        output.write(buffer, 0, count);
+                    }
+                    return Base64.getEncoder().encodeToString(output.toByteArray());
+                } catch (IOException e) {
+                    throw new SQLException("读取 BLOB 数据失败", e);
+                }
             }
         }
-        return null;
+    }
+
+    private String quoteBlobIdentifier(String identifier) {
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
     private ListResult<ExecuteResult> reBuildHeader(List<ExecuteResult> results, String schemaName, String databaseName, Boolean isLog, Boolean isColumn) {
@@ -316,6 +329,14 @@ public class DlTemplateServiceImpl implements DlTemplateService {
     public String parseFileType(String blobStr) {
         byte[] bytes = Base64.getDecoder().decode(blobStr);
         String blobType = FileUtils.getBlobType(bytes);
+        if ("504B0304".equals(blobType)) {
+            String entries = new String(bytes, 0, Math.min(bytes.length, 65536), StandardCharsets.ISO_8859_1);
+            if (entries.contains("META-INF/MANIFEST.MF")) return ".jar";
+            if (entries.contains("word/document.xml")) return ".docx";
+            if (entries.contains("xl/workbook.xml")) return ".xlsx";
+            if (entries.contains("ppt/presentation.xml")) return ".pptx";
+            return ".zip";
+        }
         if (StrUtil.isNotBlank(blobType)) {
             return sysDictDataService.selectDictLabel("file_parse_type", blobType);
         }
@@ -324,26 +345,21 @@ public class DlTemplateServiceImpl implements DlTemplateService {
 
     @Override
     public void exportFile(String blobStr, String fileName, String prefix, HttpServletResponse response) {
-        ServletOutputStream outputStream = null;
+        byte[] bytes;
         try {
-            fileName = fileName + prefix;
-            byte[] bytes = Base64.getDecoder().decode(blobStr);
+            bytes = Base64.getDecoder().decode(blobStr);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("文件数据格式错误");
+        }
+        fileName = fileName + prefix;
+        try (ServletOutputStream outputStream = response.getOutputStream()) {
             response.setContentType(FileUtils.getContentType(fileName));
             // 设置下载文件名
             response.addHeader("Content-Disposition", "attachment;filename*=utf-8''" + URLEncoder.encode(fileName, CharsetUtil.UTF_8));
-            outputStream = response.getOutputStream();
             response.setContentLength(bytes.length);
             outputStream.write(bytes);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (outputStream != null) {
-                try {
-                    outputStream.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+        } catch (IOException e) {
+            throw new BusinessException("文件导出失败");
         }
     }
 

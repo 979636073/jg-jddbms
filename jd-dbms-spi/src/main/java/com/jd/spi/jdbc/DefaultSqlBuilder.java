@@ -346,14 +346,6 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
         if (CollectionUtils.isEmpty(headerList) || CollectionUtils.isEmpty(row)) {
             throw new BusinessException("无法定位要修改的数据行");
         }
-        for (int i = 1; i < headerList.size() && i < row.size(); i++) {
-            Header header = headerList.get(i);
-            if (Constants.ROW_ID.equalsIgnoreCase(header.getName()) && row.get(i) != null) {
-                return " where " + Constants.ROW_ID + " = "
-                        + SqlUtils.getSqlValue(row.get(i), DataTypeEnum.ROWID.getCode());
-            }
-        }
-
         List<Integer> predicateIndexes = new ArrayList<>();
         if (CollectionUtils.isNotEmpty(keyColumns)) {
             for (int i = 1; i < headerList.size() && i < row.size(); i++) {
@@ -362,6 +354,13 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
                 }
             }
         } else {
+            for (int i = 1; i < headerList.size() && i < row.size(); i++) {
+                Header header = headerList.get(i);
+                if (Constants.ROW_ID.equalsIgnoreCase(header.getName()) && row.get(i) != null) {
+                    return " where " + Constants.ROW_ID + " = "
+                            + SqlUtils.getSqlValue(row.get(i), header.getDataType());
+                }
+            }
             for (int i = 1; i < headerList.size() && i < row.size(); i++) {
                 if (isComparablePredicate(headerList.get(i))) {
                     predicateIndexes.add(i);
@@ -594,8 +593,11 @@ public class DefaultSqlBuilder implements SqlBuilder<Table> {
 
     }
 
-    private String getLobSqlValue(String value, String dataType) {
+    protected String getLobSqlValue(String value, String dataType) {
         DataTypeEnum type = DataTypeEnum.getByCode(dataType);
+        if (type == DataTypeEnum.BYTE && "".equals(value)) {
+            return "EMPTY_BLOB()";
+        }
         if (type == DataTypeEnum.BYTE || type == DataTypeEnum.CONTENT) {
             return "?";
         }

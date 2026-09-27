@@ -36,6 +36,8 @@ import com.jd.biz.domain.api.param.TaskUpdateParam;
 import com.jd.biz.domain.api.service.DatabaseService;
 import com.jd.biz.domain.api.service.TaskService;
 import com.jd.biz.domain.core.cache.CacheManage;
+import com.jd.biz.domain.core.dmp.DmpToolPackage;
+import com.jd.biz.domain.core.dmp.DmpToolRegistryService;
 import com.jd.biz.domain.repository.entity.DataSourceDO;
 import com.jd.biz.domain.repository.mapper.DataSourceMapper;
 import com.jd.biz.util.OSUtils;
@@ -140,6 +142,18 @@ public class DatabaseServiceImpl implements DatabaseService {
 
     @Value("${importDmp.oracle}")
     private String oraDmpImport;
+
+    @Value("${dmp.oracle.data-pump-directory:}")
+    private String oracleDataPumpDirectory;
+
+    @Value("${dmp.oracle.data-pump-path:}")
+    private String oracleDataPumpPath;
+
+    @Value("${dmp.oracle.compatibility-version:}")
+    private String oracleDataPumpCompatibilityVersion;
+
+    @Autowired
+    private DmpToolRegistryService dmpToolRegistryService;
 
 
     @Autowired
@@ -463,13 +477,25 @@ public class DatabaseServiceImpl implements DatabaseService {
         String dmpExport = "";
         String dmpUser = "";
         String dmpPassword = "";
+        String toolFamily = defaultToolFamily(connectInfo.getDbType(), dmpExportRequest.getDmpToolFamily());
+        DmpToolPackage managedTool = dmpToolRegistryService.select(dmpExportRequest.getDmpToolId(),
+                connectInfo.getDbType(), toolFamily, true, connectInfo.getDbVersion());
+        if (managedTool != null) {
+            dmpExport = managedTool.getExportExecutable();
+            toolFamily = managedTool.getToolFamily();
+        }
+        validateDataPumpConfiguration(toolFamily);
         if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {
-            dmpExport = resolveDmpTool(DBTypeEnum.DM, true, dmDmpExport);
+            if (StrUtil.isBlank(dmpExport)) {
+                dmpExport = resolveDmpTool(DBTypeEnum.DM, true, dmDmpExport, toolFamily);
+            }
             dmpUser = connectInfo.getUser();
             dmpPassword = connectInfo.getPassword();
         }
         if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.ORACLE.name())) {
-            dmpExport = resolveDmpTool(DBTypeEnum.ORACLE, true, oraDmpExport);
+            if (StrUtil.isBlank(dmpExport)) {
+                dmpExport = resolveDmpTool(DBTypeEnum.ORACLE, true, oraDmpExport, toolFamily);
+            }
             dmpUser = connectInfo.getUser();
             dmpPassword = connectInfo.getPassword();
         }
@@ -505,10 +531,14 @@ public class DatabaseServiceImpl implements DatabaseService {
             return dmpExportVo;
         }
 
-        dmpExportVo.setDmpUrl(HzbConfig.getProfile() + "/" + dmpFileName);
-        dmpExportVo.setLogUrl(HzbConfig.getProfile() + "/" + logFileName);
-        final File finalLogFile = new File(HzbConfig.getProfile() + "/" + logFileName);
-        final File finalDmpFile = new File(HzbConfig.getProfile() + "/" + dmpFileName);
+        String outputDirectory = DmpToolRegistryService.ORACLE_DATAPUMP.equals(toolFamily)
+                ? oracleDataPumpPath : HzbConfig.getProfile();
+        FileUtil.mkdir(outputDirectory);
+        dmpExportRequest.setFilePath(outputDirectory);
+        dmpExportVo.setDmpUrl(outputDirectory + "/" + dmpFileName);
+        dmpExportVo.setLogUrl(outputDirectory + "/" + logFileName);
+        final File finalLogFile = new File(outputDirectory + "/" + logFileName);
+        final File finalDmpFile = new File(outputDirectory + "/" + dmpFileName);
         String schemas = "";
         if (CollUtil.isEmpty(schemaList)) {
             schemas = dmpExportRequest.getSchemaName();
@@ -517,6 +547,12 @@ public class DatabaseServiceImpl implements DatabaseService {
         }
         String finalDmpExport = dmpExport;
         String finalSchemas = schemas;
+        DmpToolOptions dmpToolOptions = DmpToolOptions.builder()
+                .toolFamily(toolFamily)
+                .targetVersion(StrUtil.blankToDefault(dmpExportRequest.getTargetVersion(),
+                        oracleDataPumpCompatibilityVersion))
+                .directoryName(oracleDataPumpDirectory)
+                .build();
         StringBuilder commandOutput = new StringBuilder();
 
         LoginUser finalLoginUser = loginUser;
@@ -531,14 +567,15 @@ public class DatabaseServiceImpl implements DatabaseService {
                 if (OSUtils.isWindows()) {
                     isWin = true;
                 }
-                DmpCommand command = metaData.exportDmp(connectInfo, tableList, finalSchemas, finalLogFile, finalDmpFile, finalDmpExport, isWin, finalDmpUser, finalDmpPassword);
+                DmpCommand command = metaData.exportDmp(connectInfo, tableList, finalSchemas, finalLogFile,
+                        finalDmpFile, finalDmpExport, isWin, finalDmpUser, finalDmpPassword, dmpToolOptions);
                 ProcessBuilder processBuilder = null;
                 boolean shouldClose = false;
                 try {
                     log.info("执行数据库导出工具：{}", command.getExecutable());
                     processBuilder = new ProcessBuilder(command.toProcessArguments()).inheritIO();
                     if (OSUtils.isKylin() || OSUtils.isLinux()) {
-                        processBuilder = processBuilder.directory(new File("/root"));
+                        processBuilder = processBuilder.directory(dmpWorkingDirectory());
                     }
                     configureDmpToolEnvironment(processBuilder, connectInfo.getDbType(), finalDmpExport);
                 } catch (Exception e) {
@@ -684,12 +721,24 @@ public class DatabaseServiceImpl implements DatabaseService {
         String dmpImport = "";
         String dmpUser = "";
         String dmpPassword = "";
+        String toolFamily = defaultToolFamily(connectInfo.getDbType(), dmpImportRequest.getDmpToolFamily());
+        DmpToolPackage managedTool = dmpToolRegistryService.select(dmpImportRequest.getDmpToolId(),
+                connectInfo.getDbType(), toolFamily, false, connectInfo.getDbVersion());
+        if (managedTool != null) {
+            dmpImport = managedTool.getImportExecutable();
+            toolFamily = managedTool.getToolFamily();
+        }
+        validateDataPumpConfiguration(toolFamily);
         if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {
-            dmpImport = resolveDmpTool(DBTypeEnum.DM, false, dmDmpImport);
+            if (StrUtil.isBlank(dmpImport)) {
+                dmpImport = resolveDmpTool(DBTypeEnum.DM, false, dmDmpImport, toolFamily);
+            }
             dmpUser = connectInfo.getUser();
             dmpPassword = connectInfo.getPassword();
         } else {
-            dmpImport = resolveDmpTool(DBTypeEnum.ORACLE, false, oraDmpImport);
+            if (StrUtil.isBlank(dmpImport)) {
+                dmpImport = resolveDmpTool(DBTypeEnum.ORACLE, false, oraDmpImport, toolFamily);
+            }
             dmpUser = connectInfo.getUser();
             dmpPassword = connectInfo.getPassword();
         }
@@ -701,7 +750,21 @@ public class DatabaseServiceImpl implements DatabaseService {
         dmpImportVo.setStatus(TaskStatusEnum.INIT.name());
         Long taskId = createDmpTask(TaskTypeEnum.UPLOAD_TABLE_STRUCTURE, "DMP导入", dmpImportRequest.getDataSourceId(), dmpImportRequest.getDatabaseName(), dmpImportRequest.getSchemaName());
         File file = sourceFile;
-        if (DBTypeEnum.ORACLE.name().equalsIgnoreCase(connectInfo.getDbType()) && OSUtils.isWindows()) {
+        if (DmpToolRegistryService.ORACLE_DATAPUMP.equals(toolFamily)) {
+            try {
+                Path dataPumpDirectory = Paths.get(oracleDataPumpPath).toAbsolutePath().normalize();
+                Files.createDirectories(dataPumpDirectory);
+                Path dataPumpFile = dataPumpDirectory.resolve("task-" + taskId + ".dmp");
+                Files.copy(sourceFile.toPath(), dataPumpFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                file = dataPumpFile.toFile();
+            } catch (IOException e) {
+                String message = "Data Pump文件准备失败：" + e.getMessage();
+                dmpImportVo.setStatus(TaskStatusEnum.ERROR.name());
+                dmpImportVo.setMsg(message);
+                updateDmpTask(taskId, TaskStatusEnum.ERROR.name(), null, "1", message);
+                return dmpImportVo;
+            }
+        } else if (DBTypeEnum.ORACLE.name().equalsIgnoreCase(connectInfo.getDbType()) && OSUtils.isWindows()) {
             try {
                 Path tempDirectory = Paths.get(HzbConfig.getProfile(), "dmp-import");
                 Files.createDirectories(tempDirectory);
@@ -727,7 +790,9 @@ public class DatabaseServiceImpl implements DatabaseService {
             dmpImportVo.setStatus(TaskStatusEnum.ERROR.name());
             return dmpImportVo;
         }
-        final File file1 = new File(HzbConfig.getProfile() + "/" + logFileName);
+        String importOutputDirectory = DmpToolRegistryService.ORACLE_DATAPUMP.equals(toolFamily)
+                ? oracleDataPumpPath : HzbConfig.getProfile();
+        final File file1 = new File(importOutputDirectory + "/" + logFileName);
         dmpImportVo.setLogUrl(file1.getAbsolutePath());
 
         // init状态
@@ -735,6 +800,10 @@ public class DatabaseServiceImpl implements DatabaseService {
         redisCache.expire(key, 300);
         String finalDmpImport = dmpImport;
         File finalImportFile = file;
+        DmpToolOptions dmpToolOptions = DmpToolOptions.builder()
+                .toolFamily(toolFamily)
+                .directoryName(oracleDataPumpDirectory)
+                .build();
         AtomicReference<String> msg = new AtomicReference<>("");
         LoginUser finalLoginUser = loginUser;
         String finalDmpUser = dmpUser;
@@ -752,11 +821,14 @@ public class DatabaseServiceImpl implements DatabaseService {
                 if (OSUtils.isWindows()) {
                     isWin = true;
                 }
-                DmpCommand command = metaData.importDmp(connectInfo, dmpImportRequest.getTableList(), dmpImportRequest.getFromName(), dmpImportRequest.getToName(), dmpImportRequest.getSchemaName(), finalImportFile, file1, finalDmpImport, dmpImportRequest.getToUser(), isWin, finalDmpUser, finalDmpPassword);
+                DmpCommand command = metaData.importDmp(connectInfo, dmpImportRequest.getTableList(),
+                        dmpImportRequest.getFromName(), dmpImportRequest.getToName(), dmpImportRequest.getSchemaName(),
+                        finalImportFile, file1, finalDmpImport, dmpImportRequest.getToUser(), isWin,
+                        finalDmpUser, finalDmpPassword, dmpToolOptions);
                 log.info("执行数据库导入工具：{}", command.getExecutable());
                 ProcessBuilder processBuilder = new ProcessBuilder(command.toProcessArguments()).inheritIO();
                 if (OSUtils.isKylin() || OSUtils.isLinux()) {
-                    processBuilder = processBuilder.directory(new File("/root"));
+                    processBuilder = processBuilder.directory(dmpWorkingDirectory());
                 }
                 configureDmpToolEnvironment(processBuilder, connectInfo.getDbType(), finalDmpImport);
                 processBuilder.redirectErrorStream();
@@ -858,11 +930,12 @@ public class DatabaseServiceImpl implements DatabaseService {
         return dmpImportVo;
     }
 
-    private String resolveDmpTool(DBTypeEnum dbType, boolean export, String configuredPath) {
+    private String resolveDmpTool(DBTypeEnum dbType, boolean export, String configuredPath, String toolFamily) {
         boolean windows = OSUtils.isWindows();
         String toolName = dbType == DBTypeEnum.DM
                 ? (export ? "dexp" : "dimp")
-                : (export ? "exp" : "imp");
+                : (DmpToolRegistryService.ORACLE_DATAPUMP.equals(toolFamily)
+                    ? (export ? "expdp" : "impdp") : (export ? "exp" : "imp"));
         if (windows) {
             toolName += ".exe";
         }
@@ -880,7 +953,35 @@ public class DatabaseServiceImpl implements DatabaseService {
             current = current.getParent();
         }
         log.warn("未找到项目内{}工具，回退到配置路径", toolName);
+        if (DmpToolRegistryService.ORACLE_DATAPUMP.equals(toolFamily)
+                && !Paths.get(configuredPath).getFileName().toString().toLowerCase(Locale.ROOT)
+                .startsWith(export ? "expdp" : "impdp")) {
+            return toolName;
+        }
         return configuredPath;
+    }
+
+    private String defaultToolFamily(String dbType, String requestedFamily) {
+        if (StrUtil.isNotBlank(requestedFamily)) {
+            return requestedFamily;
+        }
+        if (DBTypeEnum.DM.name().equalsIgnoreCase(dbType)) {
+            return DmpToolRegistryService.DM_DEXP;
+        }
+        return StrUtil.isNotBlank(oracleDataPumpDirectory) && StrUtil.isNotBlank(oracleDataPumpPath)
+                ? DmpToolRegistryService.ORACLE_DATAPUMP
+                : DmpToolRegistryService.ORACLE_LEGACY;
+    }
+
+    private void validateDataPumpConfiguration(String toolFamily) {
+        if (DmpToolRegistryService.ORACLE_DATAPUMP.equals(toolFamily)
+                && (StrUtil.isBlank(oracleDataPumpDirectory) || StrUtil.isBlank(oracleDataPumpPath))) {
+            throw new BusinessException("Oracle Data Pump尚未配置DIRECTORY名称和共享目录路径");
+        }
+    }
+
+    static File dmpWorkingDirectory() {
+        return FileUtil.newFile(HzbConfig.getProfile());
     }
 
     private void configureDmpToolEnvironment(ProcessBuilder processBuilder, String dbType, String dmpTool) {

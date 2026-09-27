@@ -2,7 +2,7 @@
   <el-dialog
     title="连接数据源"
     :visible.sync="visibleDialog"
-    width="60%"
+    width="92%"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :before-close="handleClose"
@@ -149,7 +149,7 @@
     <div slot="footer" class="dialog-footer">
       <el-button @click="clearForm">清空</el-button>
       <el-button @click="saveConnection('test')">测试连接</el-button>
-      <el-button type="primary" @click="saveConnection('save')">连接</el-button>
+      <el-button type="primary" @click="saveConnection('save')">保存并连接</el-button>
     </div>
   </el-dialog>
 </template>
@@ -172,6 +172,11 @@ export default {
     },
   },
   watch: {
+    visibleDialog(val) {
+      if (val) {
+        this.queryDataSoureList();
+      }
+    },
     "formData.type"(val) {
       if (val == "ORACLE") {
         this.formData.port = "1521";
@@ -247,7 +252,6 @@ export default {
     };
   },
   mounted() {
-    this.queryDataSoureList();
     this.getDriverList();
   },
   methods: {
@@ -262,8 +266,18 @@ export default {
         searchKey: "",
       };
       connectionServer.getList(params).then((res) => {
-        this.tableData = res.data.data;
-        this.$store.commit("SET_DATASOURCELIST", res.data.data);
+        if (!res.success) {
+          this.tableData = [];
+          this.$message.error(res.errorMessage || res.errorCode || "数据源列表加载失败");
+          return;
+        }
+        const dataSourceList = res.data && Array.isArray(res.data.data)
+          ? res.data.data
+          : [];
+        this.tableData = dataSourceList;
+        this.$store.commit("SET_DATASOURCELIST", dataSourceList);
+      }).catch(() => {
+        this.tableData = [];
       });
     },
     closeDataSource(row) {
@@ -458,13 +472,17 @@ export default {
 
 <style lang='scss' scoped>
 ::v-deep .el-dialog {
+  max-width: 1100px;
   .el-dialog__body {
     padding: 10px;
+    max-height: calc(100vh - 180px);
+    overflow: auto;
     .dialogBox {
       display: flex;
       width: 100%;
       .tableData {
         flex: 1;
+        min-width: 0;
         margin-right: 10px;
       }
 
@@ -491,9 +509,17 @@ export default {
       }
 
       .formData {
-        width: 350px;
+        flex: 0 0 350px;
       }
     }
+  }
+}
+
+@media (max-width: 1150px) {
+  ::v-deep .el-dialog .el-dialog__body .dialogBox {
+    flex-direction: column;
+    .tableData { margin-right: 0; }
+    .formData { flex: 0 0 auto; width: 100%; }
   }
 }
 </style>

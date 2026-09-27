@@ -74,6 +74,34 @@ public class DefaultSqlBuilderDmlTest {
     }
 
     @Test
+    public void shouldPreferPrimaryKeyOverSyntheticRowId() {
+        QueryResult query = queryResult(
+                Arrays.asList(header("行号", DataTypeEnum.CHAT2DB_ROW_NUMBER, false),
+                        header("ID", DataTypeEnum.NUMERIC, true),
+                        header("NAME", DataTypeEnum.STRING, false),
+                        header("ROWID", DataTypeEnum.NUMERIC, false)),
+                operation("UPDATE",
+                        Arrays.asList("1", "10", "new", "1"),
+                        Arrays.asList("1", "10", "old", "1")));
+
+        String sql = new DefaultSqlBuilder().buildSqlByQuery(query);
+
+        assertEquals("UPDATE TEST_TABLE set \"NAME\" = 'new' where \"ID\" = 10;\n", sql);
+    }
+
+    @Test
+    public void shouldUseNumericRowIdForDmTableWithoutPrimaryKey() {
+        QueryResult query = queryResult(
+                Arrays.asList(header("行号", DataTypeEnum.CHAT2DB_ROW_NUMBER, false),
+                        header("NAME", DataTypeEnum.STRING, false),
+                        header("ROWID", DataTypeEnum.NUMERIC, false)),
+                operation("DELETE", null, Arrays.asList("1", "test", "5")));
+
+        assertEquals("DELETE FROM TEST_TABLE where ROWID = 5;\n",
+                new DefaultSqlBuilder().buildSqlByQuery(query));
+    }
+
+    @Test
     public void shouldUseComparableOldValuesWhenTableHasNoPrimaryKey() {
         QueryResult query = queryResult(
                 Arrays.asList(header("行号", DataTypeEnum.CHAT2DB_ROW_NUMBER, false),
@@ -122,6 +150,25 @@ public class DefaultSqlBuilderDmlTest {
         assertEquals(Arrays.asList("AQID", "new text"), result.getBlobValues());
         assertEquals(Arrays.asList(DataTypeEnum.BYTE.getCode(), DataTypeEnum.CONTENT.getCode()),
                 result.getParameterTypes());
+    }
+
+    @Test
+    public void shouldUseEmptyBlobInsteadOfNullForZeroByteFile() {
+        java.util.List<Header> headers = Arrays.asList(
+                header("行号", DataTypeEnum.CHAT2DB_ROW_NUMBER, false),
+                header("ID", DataTypeEnum.NUMERIC, true),
+                header("PAYLOAD", DataTypeEnum.BYTE, false));
+        QueryResult update = queryResult(headers, operation("UPDATE",
+                Arrays.asList("1", "10", ""), Arrays.asList("1", "10", null)));
+        BlobSqlResult updateSql = new DefaultSqlBuilder().buildBlobSql(update);
+        assertTrue(updateSql.getDataSql().contains("\"PAYLOAD\" = EMPTY_BLOB()"));
+        assertTrue(updateSql.getBlobValues().isEmpty());
+
+        QueryResult insert = queryResult(headers, operation("CREATE",
+                Arrays.asList("2", "11", ""), null));
+        BlobSqlResult insertSql = new DefaultSqlBuilder().buildBlobSql(insert);
+        assertTrue(insertSql.getDataSql().contains("EMPTY_BLOB()"));
+        assertTrue(insertSql.getBlobValues().isEmpty());
     }
 
     private QueryResult queryResult(java.util.List<Header> headers, ResultOperation operation) {

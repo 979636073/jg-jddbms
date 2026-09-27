@@ -19,6 +19,8 @@ import com.jd.spi.sql.ConnectInfo;
 import com.jd.spi.sql.SQLExecutor;
 import com.jd.spi.util.SortUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 
 import javax.validation.constraints.NotEmpty;
@@ -28,10 +30,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.*;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class DMMetaData extends DefaultMetaService implements MetaData {
 
+    private static final Logger log = LoggerFactory.getLogger(DMMetaData.class);
     private static final int RELATION_QUERY_TIMEOUT_SECONDS = 15;
 
     private List<String> systemSchemas = Arrays.asList("CTISYS", "SYS", "SYSDBA", "SYSSSO", "SYSAUDITOR");
@@ -1000,39 +1005,81 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
         });
     }
 
-    private static String SELECT_TAB_AUTO_INCREMENT = "SELECT\n" +
+    private static final String SELECT_TAB_AUTO_INCREMENT = "SELECT\n" +
             "        B.OWNER        ,\n" +
             "        B.TABLE_NAME   ,\n" +
             "        A.NAME COL_NAME,\n" +
             "        A.TYPE$\n" +
             "FROM\n" +
-            "        SYS.SYSCOLUMNS A,\n" +
+            "        SYSCOLUMNS A,\n" +
             "        ALL_TABLES B    ,\n" +
-            "        SYS.SYSOBJECTS C\n" +
+            "        SYSOBJECTS C\n" +
             "WHERE\n" +
-            "        A.INFO2      =1\n" +
+            "        (A.INFO2 & 1)=1\n" +
             "    AND A.ID         =C.ID\n" +
             "    AND C.NAME       = B.TABLE_NAME\n" +
             "    AND B.OWNER      = '%s'\n" +
             "    AND B.TABLE_NAME = '%s'";
 
-    private List<String> getAutoIncrement(Connection connection, String owner, String tableName) {
-        String sql = String.format(SELECT_TAB_AUTO_INCREMENT, owner, tableName);
-        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
-            List<String> incrementColumns = Lists.newArrayList();
-            while (resultSet.next()) {
-                final String colName = resultSet.getString("COL_NAME");
-                final String type = resultSet.getString("TYPE$");
-                if (DMColumnTypeEnum.INT.name().equals(type) ||
-                        DMColumnTypeEnum.INTEGER.name().equals(type) ||
-                        DMColumnTypeEnum.BIGINT.name().equals(type) ||
-                        DMColumnTypeEnum.SMALLINT.name().equals(type) ||
-                        DMColumnTypeEnum.TINYINT.name().equals(type)) {
-                    incrementColumns.add(colName);
-                }
-            }
+    private static final String SELECT_TABLE_DDL =
+            "SELECT DBMS_METADATA.GET_DDL('TABLE', '%s', '%s') AS DDL FROM DUAL";
+    private static final Pattern IDENTITY_COLUMN_PATTERN = Pattern.compile(
+            "^\\s*\"((?:[^\"]|\"\")+)\"\\s+.*\\b(?:IDENTITY|AUTO_INCREMENT)\\b.*$",
+            Pattern.CASE_INSENSITIVE);
+
+    static String buildAutoIncrementSql(String owner, String tableName) {
+        return String.format(SELECT_TAB_AUTO_INCREMENT,
+                owner.replace("'", "''"), tableName.replace("'", "''"));
+    }
+
+    static String buildTableDdlSql(String owner, String tableName) {
+        return String.format(SELECT_TABLE_DDL,
+                tableName.replace("'", "''"), owner.replace("'", "''"));
+    }
+
+    static List<String> parseAutoIncrementColumns(String ddl) {
+        List<String> incrementColumns = Lists.newArrayList();
+        if (ddl == null) {
             return incrementColumns;
-        });
+        }
+        for (String line : ddl.split("\\r?\\n")) {
+            Matcher matcher = IDENTITY_COLUMN_PATTERN.matcher(line);
+            if (matcher.matches()) {
+                incrementColumns.add(matcher.group(1).replace("\"\"", "\""));
+            }
+        }
+        return incrementColumns;
+    }
+
+    private List<String> getAutoIncrement(Connection connection, String owner, String tableName) {
+        String sql = buildAutoIncrementSql(owner, tableName);
+        try {
+            return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+                List<String> incrementColumns = Lists.newArrayList();
+                while (resultSet.next()) {
+                    final String colName = resultSet.getString("COL_NAME");
+                    final String type = resultSet.getString("TYPE$");
+                    if (DMColumnTypeEnum.INT.name().equals(type) ||
+                            DMColumnTypeEnum.INTEGER.name().equals(type) ||
+                            DMColumnTypeEnum.BIGINT.name().equals(type) ||
+                            DMColumnTypeEnum.SMALLINT.name().equals(type) ||
+                            DMColumnTypeEnum.TINYINT.name().equals(type)) {
+                        incrementColumns.add(colName);
+                    }
+                }
+                return incrementColumns;
+            });
+        } catch (RuntimeException catalogException) {
+            try {
+                String ddlSql = buildTableDdlSql(owner, tableName);
+                return SQLExecutor.getInstance().execute(connection, ddlSql, resultSet ->
+                        resultSet.next() ? parseAutoIncrementColumns(resultSet.getString("DDL")) : Lists.newArrayList());
+            } catch (RuntimeException ddlException) {
+                catalogException.addSuppressed(ddlException);
+                log.warn("Unable to query DM identity metadata for {}.{}", owner, tableName, catalogException);
+                return Lists.newArrayList();
+            }
+        }
     }
 
     private static String SELECT_TAB_PRIMARY_KEY = "SELECT\n" +

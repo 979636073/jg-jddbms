@@ -37,6 +37,42 @@ export default {
     },
   },
   computed: {
+    valueEditorKind() {
+      return this.editorKind(this.selectedHeader);
+    },
+    isEditableTable() {
+      return !this.readonly && this.typeView !== "views" &&
+        this.queryResultData?.uniqueData?.dataType !== "views" && !this.isMaterializedView;
+    },
+    pendingChangeSummary() {
+      const changes = new Map();
+      this.sqlInfo.forEach((item) => {
+        if (["CREATE", "UPDATE", "DELETE"].includes(item.type)) {
+          changes.set(String(item.rowId), item.type);
+        }
+      });
+      const originals = new Map((this.oldTableData || []).map((row) => [String(row["行号"]), row]));
+      const headers = this.queryResultData.headerList || [];
+      this.dataTable.forEach((row) => {
+        const rowId = String(row["行号"]);
+        if (changes.has(rowId)) return;
+        const original = originals.get(rowId);
+        if (original && headers.some((header) => !this.sameCellValue(row[header.name], original[header.name]))) {
+          changes.set(rowId, "UPDATE");
+        }
+      });
+      return Array.from(changes, ([rowId, type]) => ({ rowId, type }));
+    },
+    valueEditorChanged() {
+      if (!this.selectedRow || !this.selectedHeader) return false;
+      const nextValue = this.valueEditorNull ? null : this.valueEditorDraft;
+      return !this.sameCellValue(nextValue, this.selectedRow[this.selectedHeader.name]);
+    },
+    valueEditorReadonly() {
+      if (!this.selectedRow || !this.selectedHeader || !this.isEditableTable) return true;
+      return this.editorKind(this.selectedHeader) === "readonly" ||
+        this.selectedHeader.name === this.isDisableds(this.selectedRow);
+    },
     isMaterializedView() {
       return String(this.queryResultData?.uniqueData?.viewType || "").toUpperCase() === "MATERIALIZED VIEW";
     },
@@ -92,6 +128,15 @@ export default {
       editStatus: true,
       editingOriginalRow: null,
       editingHeader: null,
+      selectedHeader: null,
+      valueEditorDraft: null,
+      valueEditorNull: false,
+      valuePanelVisible: true,
+      pendingPreviewVisible: false,
+      binaryPreviewLoading: false,
+      binaryUploadLoading: false,
+      binaryUploadFileName: "",
+      blobSaveLoading: false,
       queryData: {},
       checked: false,
       isErrorExecute: false,
@@ -138,7 +183,7 @@ export default {
       total: 0,
       clickRow: null, // 当前点击的行
       clickCell: null, // 当前点击的列
-      selectedRow: -1,
+      selectedRow: null,
       selectedColumn: null,
       dataTable: [],
       oldTableData: [],
@@ -208,8 +253,6 @@ export default {
       sortObj: {},
       sortParams: {},
       fileType: "",
-      pasteDialogVisible: false,
-      pasteData: [],
       copyHeader: [],
       exoprtObj: {},
       addSuccessData: [],
@@ -221,8 +264,6 @@ export default {
       add_importRounds: 1,
       edit_importRounds: 1,
       isFileObj: {},
-      fileList: [], // 上传文件列表,
-      isFile: false,
 
       searchDialogVisible: false,
       searchDialogForm: {
@@ -243,6 +284,19 @@ export default {
     };
   },
   watch: {
+    pendingChangeSummary: {
+      handler(changes) {
+        const pageId = this.queryResultData?.pageId || this.$route.params.id;
+        if (pageId) {
+          this.$store.dispatch("workspaceData/setPageDirty", {
+            pageId,
+            dirty: changes.length > 0,
+          });
+        }
+      },
+      deep: true,
+      immediate: true,
+    },
     queryResultData: {
       handler(newVal, oldVal) {
         console.log(newVal, "变换值");
@@ -272,7 +326,10 @@ export default {
             }, 1000);
           });
         } else {
-          this.isFile = false;
+          this.selectedRow = null;
+          this.selectedColumn = null;
+          this.selectedHeader = null;
+          this.valueEditorDraft = null;
           let tableData = [];
           if (newVal?.dataList) {
             tableData = newVal.dataList?.map((item) => {
@@ -605,44 +662,20 @@ export default {
         reader.readAsDataURL(file.raw);
       });
     },
-    fileChange(file, row, field) {
-      this.fileToBase64(file).then((res) => {
-        row[field] = res.split(",")[1];
-        this.isFile = true;
-        let sqlInfoTemp = [];
-        let type = "";
-        this.sqlInfo.forEach((item) => {
-          if (item.rowId == row["行号"]) {
-            type = item.type;
-          } else {
-            sqlInfoTemp.push(item);
-          }
-        });
-        let sqlInfo = {};
-        if (type == "CREATE") {
-          sqlInfo = {
-            type: "CREATE",
-            rowId: row["行号"],
-            dataList: this.queryResultData.headerList.map((item) => {
-              return this.cellValue(row, item, true);
-            }),
-          };
-        } else {
-          sqlInfo = {
-            type: "UPDATE",
-            rowId: row["行号"],
-            oldDataList: this.queryResultData.headerList.map((item) => {
-              return this.cellValue(this.oldRow, item);
-            }),
-            dataList: this.queryResultData.headerList.map((item) => {
-              return this.cellValue(row, item);
-            }),
-          };
-        }
-        sqlInfoTemp.push(sqlInfo);
-        this.sqlInfo = sqlInfoTemp;
-        console.log(this.sqlInfo, "第一次sqlInfo");
-      });
+    async fileChange(file, row, field) {
+      this.binaryUploadLoading = true;
+      this.binaryUploadFileName = file.name || file.raw?.name || "所选文件";
+      await this.$nextTick();
+      try {
+        const res = await this.fileToBase64(file);
+        row[field] = res.slice(res.indexOf(",") + 1);
+        this.syncPendingOperations();
+        this.$message.success(`已读取 ${this.binaryUploadFileName}，请点击“保存变更”写入数据库`);
+      } catch (error) {
+        this.$message.error("读取文件失败");
+      } finally {
+        this.binaryUploadLoading = false;
+      }
     },
     refresh() {
       this.sort = {
@@ -668,92 +701,47 @@ export default {
     },
     // 粘贴事件
     pasteInfo(e) {
-      if (this.readonly) return;
-      e.preventDefault(); //阻止默认粘贴事件
-      e.stopPropagation(); //阻止事件冒泡
-      if (!this.selectedRow && !this.selectedColumn) {
+      if (!this.isEditableTable) return;
+      if (["INPUT", "TEXTAREA"].includes(e.target?.tagName) || e.target?.isContentEditable) return;
+      if (!this.selectedRow || !this.selectedHeader) {
         this.$message.warning("请选择开始粘贴位置！");
         return;
       }
-      try {
-        let clipboardData = e.clipboardData || window.clipboardData; // IE
-        if (!clipboardData) {
-          //chrome
-          clipboardData = e.originalEvent.clipboardData;
-        }
-        let data = clipboardData.getData("Text"); //复制过来的内容
-        if (data) {
-          let rows = []; // 解析成为 数组 格式
-          // console.log(clipboardData,data);
-          let dataArr = data.split("\r\n");
-          // console.log(dataArr);
-          dataArr.forEach((item) => {
-            if (item) {
-              // 筛除全为空的数据
-              let values = item.split("\t");
-              let isEmpty = values.some((item) => {
-                return item != "";
-              });
-              if (isEmpty) {
-                rows.push(values);
-              }
-            }
-          });
-          console.log(rows[0], "rows[0]");
-          if (rows.length) {
-            if (rows.length == 1) {
-              this.singleRowInsert(rows[0]);
-              this.$message.success("粘贴成功");
-            } else {
-              // 多行插入
-              this.pasteData = rows;
-              this.pasteDialogVisible = true;
-            }
+      const data = (e.clipboardData || e.originalEvent?.clipboardData)?.getData("Text");
+      if (!data) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.commitActiveEdit();
+      this.pasteGrid(data);
+    },
+    pasteGrid(text) {
+      const startRow = this.dataTable.indexOf(this.selectedRow);
+      const startColumn = this.headerList.findIndex((item) => item.name === this.selectedHeader.name);
+      if (startRow < 0 || startColumn < 0) return;
+      const lines = text.replace(/\r\n?/g, "\n").split("\n");
+      if (lines[lines.length - 1] === "") lines.pop();
+      let changed = 0;
+      let clipped = false;
+      lines.forEach((line, rowOffset) => {
+        const row = this.dataTable[startRow + rowOffset];
+        if (!row) { clipped = true; return; }
+        line.split("\t").forEach((value, columnOffset) => {
+          const header = this.headerList[startColumn + columnOffset];
+          if (!header) { clipped = true; return; }
+          if (["binary", "readonly"].includes(this.editorKind(header)) || header.name === this.isDisableds(row)) return;
+          if (row[header.name] !== value) {
+            row[header.name] = value;
+            changed++;
           }
-        }
-      } catch (err) {
-        this.$message.error(err);
+        });
+      });
+      if (changed) {
+        this.syncPendingOperations();
+        this.valueEditorDraft = this.selectedRow[this.selectedHeader.name];
+        this.valueEditorNull = this.valueEditorDraft == null;
       }
-    },
-    singleRowInsert(data) {
-      // 单行插入
-      let columnIndex = this.selectedColumn.index - 1;
-      let keys = this.headerList
-        .map((item) => {
-          return item.name;
-        })
-        .filter((key, index) => {
-          return index >= columnIndex;
-        });
-      let pasteObj = {};
-      data.forEach((item, index) => {
-        pasteObj[keys[index]] = item;
-      });
-      Object.assign(this.selectedRow, pasteObj);
-      // if(!this.selectedRow.rowType || this.selectedRow.rowType != 'add'){
-      this.inputBlur(this.selectedRow, this.selectedColumn);
-      // }
-    },
-    multiRowInsert() {
-      let columnIndex = this.selectedColumn.index - 1;
-      let keys = this.headerList
-        .map((item) => {
-          return item.name;
-        })
-        .filter((key, index) => {
-          return index >= columnIndex;
-        });
-      this.pasteData.forEach((item, index) => {
-        if (index == 0) {
-          this.singleRowInsert(item);
-        } else {
-          let pasteObj = {};
-          item.forEach((val, index2) => {
-            pasteObj[keys[index2]] = val;
-          });
-          this.addRow(pasteObj);
-        }
-      });
+      if (clipped) this.$message.warning("粘贴范围超出当前结果页，越界部分未写入；请翻页后继续。");
+      return changed;
     },
 
     defaultDestroy() {
@@ -776,7 +764,11 @@ export default {
         pageNo: this.queryParams.pageNum,
         pageSize: this.queryParams.pageSize,
         schemaName: this.queryResultData.uniqueData.schemaName,
-        sql: `SELECT * FROM ${this.queryResultData.tableName}`,
+        sql: this.queryResultData.uniqueData.databaseType === "ORACLE" && this.queryResultData.uniqueData.dataType === "tables"
+          ? `SELECT t.*, t.rowid as "ROWID" FROM ${this.queryResultData.tableName} t`
+          : this.queryResultData.uniqueData.databaseType === "DM" && this.queryResultData.uniqueData.dataType === "tables"
+            ? `SELECT t.*, t.rowid FROM ${this.queryResultData.tableName} t`
+            : `SELECT * FROM ${this.queryResultData.tableName}`,
         ...this.queryParams.params,
       };
 
@@ -807,7 +799,7 @@ export default {
       });
     },
     //执行blob新增
-    executeBlobData() {
+    async executeBlobData() {
       let send = {
         dataSourceId: this.queryResultData.uniqueData.dataSourceId,
         headerList: this.queryResultData.headerList,
@@ -816,11 +808,14 @@ export default {
         tableName: this.queryResultData.tableName,
         type: this.queryResultData.uniqueData.databaseType,
       };
-      tableServer.addBlobData(send).then((res) => {
+      this.blobSaveLoading = true;
+      await this.$nextTick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      try {
+        const res = await tableServer.addBlobData(send);
         if (res.success && res.data) {
           this.$message.success("保存成功");
           this.advancedQuery();
-          this.isFile = false;
           this.sqlInfo = [];
           this.$refs.ref_table.clearSelection();
           this.clickRow = null;
@@ -831,30 +826,37 @@ export default {
             message: res.errorMessage,
           });
         }
-      });
+      } catch (error) {
+        return false;
+      } finally {
+        this.blobSaveLoading = false;
+      }
     },
 
     async executeUpdateDataSql() {
+      this.blobSaveLoading = true;
+      await this.$nextTick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const savingBlob = this.requiresBlobSave();
       this.commitActiveEdit();
-      this.syncPendingOperations();
+      if (!this.sqlInfo.length) this.syncPendingOperations();
       if (!this.sqlInfo.length) {
+        this.blobSaveLoading = false;
         this.$notify.error({
           title: "提醒",
           message: "表数据未做修改",
         });
         return;
       }
-      const hasContentColumn = this.queryResultData.headerList.some(
-        (item) => item.dataType === "CONTENT"
-      );
-      if (this.isFile || hasContentColumn) {
-        this.executeBlobData();
+      if (savingBlob || this.requiresBlobSave()) {
+        await this.executeBlobData();
       } else {
         console.log(this.sqlInfo, "this.sqlInfo");
         let sql;
         try {
           sql = await this.getExecuteUpdateSql(this.sqlInfo);
         } catch (error) {
+          this.blobSaveLoading = false;
           this.$notify.error({
             title: "生成保存语句失败",
             message: error.message || "请检查表结构和待保存数据",
@@ -862,6 +864,7 @@ export default {
           return;
         }
         if (sql == "" || sql == null) {
+          this.blobSaveLoading = false;
           this.$notify.error({
             title: "提醒",
             message: "表数据未做修改",
@@ -875,6 +878,7 @@ export default {
             tableName: this.queryResultData.tableName,
           };
           let that = this;
+          this.blobSaveLoading = false;
           this.$modal
             .confirm("是否确认保存修改数据？")
             .then(function () {
@@ -907,6 +911,16 @@ export default {
             });
         }
       }
+    },
+    requiresBlobSave() {
+      const headers = this.queryResultData.headerList || [];
+      return this.sqlInfo.some((operation) => headers.some((header, index) => {
+        const type = this.editorKind(header);
+        if (type !== "binary" && type !== "text") return false;
+        if (operation.type === "CREATE") return operation.dataList?.[index] != null;
+        if (operation.type !== "UPDATE") return false;
+        return !this.sameCellValue(operation.dataList?.[index], operation.oldDataList?.[index]);
+      }));
     },
     // 获取sql
     async getExecuteUpdateSql(operations) {
@@ -959,22 +973,14 @@ export default {
     },
     // 回退
     handelBack() {
-      let storedState = localStorage.getItem(this.storageKey);
-      let backList = JSON.parse(storedState);
-      let list = backList.slice(0, -1);
-      this.localArr = this.localArr.slice(0, -1);
-      localStorage.setItem(this.storageKey, JSON.stringify(list));
-      this.dataTable = list[list.length - 1];
-      if (list.length == 1) {
-        let addList = list.filter(
-          (item) => item.rowType && item.rowType == "add"
-        );
-        if (!addList.length) {
-          this.editStatus = true;
-          this.sqlInfo = [];
-          // return this.$message.warning("无回退内容");
-        }
-      }
+      this.dataTable = JSON.parse(JSON.stringify(this.oldTableData || []));
+      this.sqlInfo = [];
+      this.selectedRow = null;
+      this.selectedColumn = null;
+      this.selectedHeader = null;
+      this.editStatus = true;
+      this.localArr = [JSON.parse(JSON.stringify(this.dataTable))];
+      localStorage.setItem(this.storageKey, JSON.stringify(this.localArr));
     },
     inputFocus(textareaId) {
       this.$nextTick(() => {
@@ -989,15 +995,11 @@ export default {
     // 失去焦点初始化
     inputBlur(row, header) {
       this.inputFocusFlag = false;
-      let oldData1 = JSON.parse(JSON.stringify(this.dataTable));
-      this.localArr.push(oldData1);
-
-      localStorage.setItem(this.storageKey, JSON.stringify(this.localArr));
+      const editedHeader = header || this.editingHeader || this.selectedColumn;
+      if (!editedHeader) return;
       let sqlInfoItem = this.sqlInfo.find((item) => {
         return item.rowId === row["行号"];
       });
-      const editedHeader = header || this.editingHeader || this.selectedColumn;
-      if (!editedHeader) return;
       const originalRow = this.editingOriginalRow || this.oldRow || {};
       let key = editedHeader.name || editedHeader.property;
       if (originalRow[key] !== row[key]) {
@@ -1043,6 +1045,10 @@ export default {
       this.clickCell = null;
       this.editingOriginalRow = null;
       this.editingHeader = null;
+      if (this.selectedRow === row && this.selectedHeader?.name === key) {
+        this.valueEditorDraft = row[key];
+        this.valueEditorNull = row[key] == null;
+      }
     },
     cellValue(row, header, useDefault) {
       const value = row ? row[header.name] : null;
@@ -1112,8 +1118,137 @@ export default {
     },
     commitActiveEdit() {
       if (this.clickRow === null || !this.editingHeader) return;
+      if (this.editorKind(this.editingHeader) === "binary") {
+        this.clickRow = null;
+        this.clickCell = null;
+        this.editingOriginalRow = null;
+        this.editingHeader = null;
+        return;
+      }
       const row = this.dataTable[this.clickRow];
       if (row) this.inputBlur(row, this.editingHeader);
+    },
+    cancelActiveEdit() {
+      if (this.clickRow === null || !this.editingHeader) return;
+      const row = this.dataTable[this.clickRow];
+      if (row && this.editingOriginalRow) {
+        row[this.editingHeader.name] = this.editingOriginalRow[this.editingHeader.name];
+        this.valueEditorDraft = row[this.editingHeader.name];
+        this.valueEditorNull = this.valueEditorDraft == null;
+      }
+      this.clickRow = null;
+      this.clickCell = null;
+      this.editingOriginalRow = null;
+      this.editingHeader = null;
+      this.syncPendingOperations();
+    },
+    beginCellEdit(row, column, replacement) {
+      const header = this.queryResultData.headerList?.find((item) => item.name === column.property);
+      if (!this.isEditableTable || !header || !["string", "number"].includes(this.editorKind(header)) ||
+          header.name === this.isDisableds(row)) return;
+      this.oldRow = JSON.parse(JSON.stringify(row));
+      this.editingOriginalRow = JSON.parse(JSON.stringify(row));
+      this.editingHeader = header;
+      this.clickRow = this.dataTable.indexOf(row);
+      this.clickCell = this.$refs.ref_table.columns.findIndex((item) => item.property === header.name);
+      if (replacement !== undefined) {
+        row[header.name] = replacement;
+        this.valueEditorDraft = replacement;
+      }
+      this.$nextTick(() => {
+        const input = this.$refs.ref_table.$el.querySelector(
+          `.el-table__body tbody tr:nth-child(${this.clickRow + 1}) td:nth-child(${this.clickCell + 1}) .focusInput input`
+        );
+        if (input) input.focus();
+      });
+    },
+    moveSelection(rowOffset, columnOffset) {
+      const headers = this.headerList;
+      const rowIndex = this.dataTable.indexOf(this.selectedRow);
+      const columnIndex = headers.findIndex((item) => item.name === this.selectedHeader?.name);
+      if (rowIndex < 0 || columnIndex < 0 || !headers.length) return;
+      const nextIndex = columnOffset
+        ? rowIndex * headers.length + columnIndex + columnOffset
+        : (rowIndex + rowOffset) * headers.length + columnIndex;
+      if (nextIndex < 0 || nextIndex >= this.dataTable.length * headers.length) return;
+      const nextRow = this.dataTable[Math.floor(nextIndex / headers.length)];
+      const nextHeader = headers[nextIndex % headers.length];
+      const column = this.$refs.ref_table.columns.find((item) => item.property === nextHeader.name);
+      if (!column) return;
+      this.selectValueCell(nextRow, column);
+      this.$nextTick(() => this.$refs.ref_table.$el.focus());
+    },
+    handleGridKeydown(event) {
+      if (!this.selectedRow || !this.selectedHeader || event.ctrlKey || event.metaKey || event.altKey) return;
+      const isInput = ["INPUT", "TEXTAREA"].includes(event.target?.tagName) || event.target?.isContentEditable;
+      const editing = this.clickRow !== null;
+      if (isInput && !editing) return;
+      if (editing && !["string", "number"].includes(this.editorKind(this.editingHeader))) return;
+      if (event.key === "Escape" && editing) {
+        event.preventDefault();
+        this.cancelActiveEdit();
+      } else if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        if (editing) this.commitActiveEdit();
+        this.moveSelection(event.key === "Enter" ? (event.shiftKey ? -1 : 1) : 0,
+          event.key === "Tab" ? (event.shiftKey ? -1 : 1) : 0);
+      } else if (!isInput && !editing && this.isEditableTable &&
+          (event.key === "F2" || event.key.length === 1)) {
+        event.preventDefault();
+        this.beginCellEdit(this.selectedRow, this.selectedColumn,
+          event.key === "F2" ? undefined : event.key);
+      }
+    },
+    editorKind(header) {
+      const type = String(header?.dataType || "").toUpperCase().replace(/\s+/g, " ");
+      if (type === "ROWID" || type === "UROWID") return "readonly";
+      if (/BLOB|BYTE|BINARY|RAW|BFILE|IMAGE/.test(type)) return "binary";
+      if (/CLOB|CONTENT|TEXT|LONGVARCHAR|JSON|XML|^LONG$/.test(type)) return "text";
+      if (type.includes("INTERVAL")) return "interval";
+      if (type.includes("TIME ZONE")) return "timezone";
+      if (type.startsWith("TIMESTAMP") || type === "DATETIME") return "datetime";
+      if (type === "DATE") return "date";
+      if (type === "TIME") return "time";
+      if (type === "YEAR") return "year";
+      if (type === "BIT" || type === "BOOLEAN") return "boolean";
+      if (/NUMBER|NUMERIC|DECIMAL|^DEC$|INT|FLOAT|DOUBLE|REAL/.test(type)) return "number";
+      return "string";
+    },
+    selectValueCell(row, column) {
+      const header = this.queryResultData.headerList?.find((item) => item.name === column?.property);
+      if (!row || !header) return;
+      this.selectedRow = row;
+      this.selectedColumn = column;
+      this.selectedHeader = header;
+      this.valueEditorDraft = row[header.name];
+      this.valueEditorNull = row[header.name] == null;
+    },
+    applyValueEditor() {
+      if (this.valueEditorReadonly || !this.valueEditorChanged) return;
+      const row = this.selectedRow;
+      const header = this.selectedHeader;
+      this.oldRow = JSON.parse(JSON.stringify(row));
+      this.editingOriginalRow = JSON.parse(JSON.stringify(row));
+      this.editingHeader = header;
+      row[header.name] = this.valueEditorNull ? null : this.valueEditorDraft;
+      this.inputBlur(row, header);
+      this.valueEditorDraft = row[header.name];
+    },
+    clearBinaryValue() {
+      if (this.valueEditorReadonly || !this.selectedRow || !this.selectedHeader || this.selectedRow[this.selectedHeader.name] == null) return;
+      this.valueEditorNull = true;
+      this.applyValueEditor();
+    },
+    revertValueEditor() {
+      if (this.valueEditorReadonly) return;
+      const row = this.selectedRow;
+      const header = this.selectedHeader;
+      const original = this.oldTableData.find((item) => item["行号"] === row["行号"]);
+      if (!original) return;
+      row[header.name] = original[header.name];
+      this.valueEditorDraft = original[header.name];
+      this.valueEditorNull = original[header.name] == null;
+      this.syncPendingOperations();
     },
     isDateColumn(dataType) {
       const type = String(dataType || "").toUpperCase();
@@ -1122,8 +1257,54 @@ export default {
     datePickerType(dataType) {
       const type = String(dataType || "").toUpperCase();
       if (type === "YEAR") return "year";
-      if (type === "DATE") return "date";
+      if (type === "DATE" && String(this.queryResultData?.uniqueData?.databaseType || "").toUpperCase() !== "ORACLE") return "date";
       return "datetime";
+    },
+    parseDatePickerValue(value) {
+      if (value == null || value === "") return null;
+      if (value instanceof Date) return value;
+      const match = String(value).match(/^(\d{4})(?:-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?)?/);
+      if (!match) return null;
+      return new Date(Number(match[1]), Number(match[2] || 1) - 1, Number(match[3] || 1),
+        Number(match[4] || 0), Number(match[5] || 0), Number(match[6] || 0));
+    },
+    formatDatePickerValue(value, dataType) {
+      if (!(value instanceof Date) || Number.isNaN(value.getTime())) return null;
+      const pad = number => String(number).padStart(2, "0");
+      const date = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+      const type = this.datePickerType(dataType);
+      return type === "year" ? String(value.getFullYear()) :
+        type === "date" ? date : `${date} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+    },
+    async openBinaryViewer(row, header) {
+      this.binaryPreviewLoading = true;
+      try {
+        const { tableName, schemaName, dataSourceId } = this.queryResultData.uniqueData;
+        const columnIndex = this.queryResultData.headerList.findIndex(item => item.name === header.name);
+        const operation = this.sqlInfo.find(item => String(item.rowId) === String(row["行号"]));
+        const pending = operation && (operation.type === "CREATE" ||
+          (operation.type === "UPDATE" && !this.sameCellValue(operation.dataList[columnIndex], operation.oldDataList[columnIndex])));
+        if (!pending && !row.ROWID) throw new Error("当前行未提供 ROWID，无法预览或下载二进制值");
+        const blobData = pending ? row[header.name] :
+          (await tableServer.getBlobData({ tableName, schemaName, dataSourceId, rowId: row.ROWID, blobColumn: header.name })).data;
+        if (blobData == null) throw new Error("未获取到二进制内容");
+        const formData = new FormData();
+        formData.append("blobStr", blobData);
+        const result = await tableServer.getTableDataBlob(formData);
+        if (!result.success) throw new Error(result.errorCode || "无法识别文件类型");
+        const detectedType = typeof result.data === "string" ? result.data.toLowerCase() : "";
+        const fileType = /^\.[a-z0-9]{1,10}$/.test(detectedType) ? detectedType : ".bin";
+        const fileName = `${tableName}_${header.name}_${row.ROWID || row["行号"]}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
+        this.$refs.fileRef.fromData.name = fileName;
+        this.$refs.fileRef.fromData.type = fileType;
+        this.$refs.fileRef.blobStr = blobData;
+        this.$refs.fileRef.isShow = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"].includes(fileType);
+        this.$refs.fileRef.dialogVisible = true;
+      } catch (error) {
+        this.$message.error(error.message || "文件预览失败");
+      } finally {
+        this.binaryPreviewLoading = false;
+      }
     },
     // 撤销
     handleRevoke() {
@@ -1427,9 +1608,9 @@ export default {
       //   if (val.name == id && val.autoIncrement === 1 && val.primaryKey) {
       //   }
       // })
+      this.selectValueCell(row, column);
+      if (!this.isEditableTable) return;
       this.editStatus = false;
-      if (this.typeView == "views") return;
-      if (this.readonly) return;
       if (this.queryResultData.tableName) {
         this.oldRow = JSON.parse(JSON.stringify(row));
         this.editingOriginalRow = JSON.parse(JSON.stringify(row));
@@ -1595,48 +1776,14 @@ export default {
           },
         ];
       } else if (
-        this.isFileObj.dataType === "BYTE" &&
-        row[this.isFileObj.name].length
+        this.editorKind(this.isFileObj) === "binary" &&
+        row[this.isFileObj.name]
       ) {
         // 针对blob 单元格右键
         nodeItems = [
           {
             label: "预览",
-            onClick: () => {
-              const formData = new FormData();
-              let { tableName, schemaName, dataSourceId } =
-                this.queryResultData.uniqueData;
-              let params = {
-                tableName,
-                schemaName,
-                dataSourceId,
-                rowId: row.ROWID,
-                blobColumn: column.property,
-              };
-              // formData.append("blobStr", row[this.isFileObj.name]);
-              tableServer.getBlobData(params).then((res) => {
-                if (res.data) {
-                  let blobData = res.data;
-                  formData.append("blobStr", blobData);
-                  tableServer.getTableDataBlob(formData).then((res) => {
-                    if (res.success) {
-                      this.$refs.fileRef.fromData.type = res.data;
-                      this.$refs.fileRef.blobStr = blobData;
-                      this.$refs.fileRef.dialogVisible = true;
-                      if (res.data.includes(".docx")) {
-                        this.$refs.fileRef.isShow = false;
-                      } else {
-                        this.$refs.fileRef.isShow = true;
-                      }
-                    } else {
-                      this.$message.error(res.errorCode);
-                    }
-                  });
-                } else {
-                  return;
-                }
-              });
-            },
+            onClick: () => this.openBinaryViewer(row, this.isFileObj),
           },
         ];
       } else {
@@ -1831,14 +1978,13 @@ export default {
       this.queryPageData(this.exoprtObj);
     },
     handleCellClick(row, column, cell, event) {
-      if (this.readonly) return;
-      if (column.columnKey == 1 || column.index == 0) return;
+      if (column.index == 0) return;
       // console.log(JSON.stringify(column));
       // console.log(JSON.stringify(cell));
 
-      this.selectedRow = row;
+      this.selectValueCell(row, column);
       this.oldRow = JSON.parse(JSON.stringify(row));
-      this.selectedColumn = column;
+      if (this.clickRow === null) this.$refs.ref_table.$el.focus();
     },
     tableCellStyle({ row, column, columnIndex }) {
       if (this.ctrlPressed) {
@@ -1855,8 +2001,8 @@ export default {
           column.columnKey != 1
         ) {
           return {
-            backgroundColor: "#1890ff",
-            color: "#fff",
+            backgroundColor: "#edf3ff",
+            boxShadow: "inset 0 0 0 2px #1d4bbe",
           };
         } else {
           return this.selectedCols.includes(column.property)
@@ -2622,7 +2768,8 @@ export default {
     v-loading="pageLoading"
     :style="{ marginTop: readonly ? '5px' : 0 }"
   >
-    <div class="table_btn_list" v-if="!readonly">
+    <div class="table_btn_list table-editor-toolbar" v-if="!readonly">
+      <el-tag v-if="!isEditableTable && !isMaterializedView" size="mini" type="info">只读</el-tag>
       <el-tag v-if="isMaterializedView" size="mini" type="info" class="materialized-readonly-tag">
         物化视图 · 只读
       </el-tag>
@@ -2669,40 +2816,30 @@ export default {
         size="mini"
         type="text"
         style="margin-left: 0"
-        v-show="this.queryResultData.uniqueData.dataType !== 'views'"
+        v-if="isEditableTable"
       >
         <img src="@/assets/main/3-con-ico01.png" alt />
-        添加
+        添加行
       </el-button>
       <el-button
         @click="deleteRow()"
         :disabled="!multipleSelection.length"
         size="mini"
         type="text"
-        v-if="typeView !== 'views'"
+        v-if="isEditableTable"
       >
         <img src="@/assets/main/3-con-ico02.png" alt />
-        删除
+        删除行
       </el-button>
       <el-button
         @click="handelBack"
         size="mini"
         type="text"
-        :disabled="editStatus"
-        v-show="this.queryResultData.uniqueData.dataType !== 'views'"
+        :disabled="!pendingChangeSummary.length"
+        v-if="isEditableTable"
       >
         <img src="@/assets/main/15-1.png" alt />
-        回退
-      </el-button>
-      <el-button
-        @click="executeUpdateDataSql"
-        v-if="typeView !== 'views'"
-        size="mini"
-        type="primary"
-        plain
-      >
-        <img src="@/assets/main/1-con-ico22.png" alt />
-        保存
+        撤销变更
       </el-button>
       <el-button @click="refresh" size="mini" type="primary" plain>
         <img src="@/assets/main/5-ico3.png" alt />
@@ -2743,7 +2880,7 @@ export default {
           dialogImportVisible = true;
           isLoading = true;
         "
-        v-show="this.queryResultData.uniqueData.dataType !== 'views'"
+        v-if="isEditableTable"
       >
         <img src="@/assets/main/3-con-ico04.png" alt />
         导入
@@ -2760,17 +2897,41 @@ export default {
         }"
         >高级查询</el-button
       >
+      <div class="table-editor-commit">
+        <el-tag size="mini" :type="pendingChangeSummary.length ? 'warning' : 'info'" class="pending-change-summary">
+          {{ pendingChangeSummary.length ? `${pendingChangeSummary.length} 行待保存` : "无待保存变更" }}
+        </el-tag>
+        <el-button size="mini" plain :disabled="!pendingChangeSummary.length || blobSaveLoading" @click="pendingPreviewVisible = !pendingPreviewVisible">预览变更</el-button>
+        <el-button
+          @click="executeUpdateDataSql"
+          v-if="isEditableTable"
+          :disabled="!pendingChangeSummary.length || blobSaveLoading"
+          :loading="blobSaveLoading"
+          size="mini"
+          type="primary"
+        >{{ blobSaveLoading ? "保存中…" : "保存变更" }}</el-button>
+        <el-button size="mini" type="text" @click="valuePanelVisible = !valuePanelVisible">
+          {{ valuePanelVisible ? "收起字段值" : "展开字段值" }}
+        </el-button>
+      </div>
     </div>
     <!-- <ScreeningResult ref="screeningResult" :queryResultData="queryResultData" @getTableList="getTableList" /> -->
-    <div id="tableContainer" style="height: 85%; width: 100%">
+    <div class="table-editor-workspace" :class="{ 'inspector-hidden': !valuePanelVisible || readonly }">
+    <div id="tableContainer" class="table-editor-grid">
+      <div class="table-editor-grid-heading">
+        <span>结果集 · {{ dataTable.length }} 行</span>
+        <span>选中后键入 · Enter / Tab 移动 · 特殊类型在右侧编辑</span>
+      </div>
       <el-table
         :data="dataTable"
         ref="ref_table"
         size="mini"
         class="table-custom-class jdTable_small"
-        style="width: 100%; overflow: auto; height: 100%"
+        style="width: 100%; height: calc(100% - 32px)"
         border
+        tabindex="0"
         @cell-click="handleCellClick"
+        @keydown.native="handleGridKeydown"
         @cell-contextmenu="handleContextMenu"
         @selection-change="handleSelectionChange"
         @paste.native="pasteInfo($event)"
@@ -2834,9 +2995,9 @@ export default {
                 :content="scope.column.label"
                 placement="top"
               >
-                <span style="cursor: pointer; user-select: none">{{
-                  scope.column.label
-                }}</span>
+              <span class="table-editor-column-heading" style="cursor: pointer; user-select: none">
+                {{ scope.column.label }}
+              </span>
               </el-tooltip>
             </div>
           </template>
@@ -2848,28 +3009,35 @@ export default {
             >
               <el-date-picker
                 v-if="isDateColumn(header.dataType)"
-                v-model="scope.row[header.name]"
+                :value="parseDatePickerValue(scope.row[header.name])"
                 :type="datePickerType(header.dataType)"
                 size="mini"
+                @input="scope.row[header.name] = formatDatePickerValue($event, header.dataType)"
                 @change="inputBlur(scope.row, header)"
-                value-format="yyyy-MM-dd HH:mm:ss"
                 placeholder="选择日期"
                 class="focusInput"
               ></el-date-picker>
               <el-upload
-                v-else-if="header.dataType == 'BYTE'"
+                v-else-if="editorKind(header) === 'binary'"
                 class="upload"
                 ref="upload"
                 action="none"
-                :file-list="fileList"
+                :show-file-list="false"
                 :on-change="(file) => fileChange(file, scope.row, header.name)"
-                :limit="1"
                 :auto-upload="false"
               >
-                <el-button slot="trigger" size="mini" type="primary"
-                  >选取文件</el-button
+                <el-button slot="trigger" size="mini" type="primary" :loading="binaryUploadLoading" :disabled="binaryUploadLoading"
+                  >{{ binaryUploadLoading ? "读取中…" : "选取文件" }}</el-button
                 >
               </el-upload>
+              <el-input
+                v-else-if="['string', 'number'].includes(editorKind(header))"
+                class="focusInput"
+                :disabled="header.name === isDisableds(scope.row)"
+                v-model="scope.row[header.name]"
+                size="mini"
+                @blur="inputBlur(scope.row, header)"
+              />
               <el-popover v-else placement="top" width="500" trigger="focus">
                 <el-input
                   style="width: 470px"
@@ -2878,7 +3046,6 @@ export default {
                   :id="`textarea_${scope.$index}_${header.name}`"
                   :disabled="header.name === isDisableds(scope.row)"
                   v-model="scope.row[header.name]"
-                  maxlength="300"
                   @blur="inputBlur(scope.row, header)"
                 />
                 <el-input
@@ -2887,15 +3054,14 @@ export default {
                   :ref="'focusInput' + scope.row.index + '__' + header.name"
                   :disabled="header.name === isDisableds(scope.row)"
                   v-model="scope.row[header.name]"
-                  maxlength="300"
                   @focus="inputFocus(`textarea_${scope.$index}_${header.name}`)"
                   size="mini"
                 />
               </el-popover>
             </div>
             <template v-else>
-              <span v-if="scope.row[header.name]">
-                <span v-if="header.dataType == 'BYTE'">文件</span>
+              <span v-if="scope.row[header.name] || (editorKind(header) === 'binary' && scope.row[header.name] === '')">
+                <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}</span>
                 <span v-else>{{ scope.row[header.name] }}</span>
               </span>
               <span v-else style="color: rgba(35, 36, 41, 0.45)"
@@ -2921,30 +3087,37 @@ export default {
                 >
                   <el-date-picker
                     v-if="isDateColumn(header.dataType)"
-                    v-model="scope.row[header.name]"
+                    :value="parseDatePickerValue(scope.row[header.name])"
                     :type="datePickerType(header.dataType)"
                     size="mini"
+                    @input="scope.row[header.name] = formatDatePickerValue($event, header.dataType)"
                     @change="inputBlur(scope.row, header)"
-                    value-format="yyyy-MM-dd HH:mm:ss"
                     placeholder="选择日期"
                     class="focusInput"
                   ></el-date-picker>
                   <el-upload
-                    v-else-if="header.dataType == 'BYTE'"
+                    v-else-if="editorKind(header) === 'binary'"
                     class="upload"
                     ref="upload"
                     action="none"
-                    :file-list="fileList"
+                    :show-file-list="false"
                     :on-change="
                       (file) => fileChange(file, scope.row, header.name)
                     "
-                    :limit="1"
                     :auto-upload="false"
                   >
-                    <el-button slot="trigger" size="mini" type="primary"
-                      >选取文件</el-button
+                    <el-button slot="trigger" size="mini" type="primary" :loading="binaryUploadLoading" :disabled="binaryUploadLoading"
+                      >{{ binaryUploadLoading ? "读取中…" : "选取文件" }}</el-button
                     >
                   </el-upload>
+                  <el-input
+                    v-else-if="['string', 'number'].includes(editorKind(header))"
+                    class="focusInput"
+                    :disabled="header.name === isDisableds(scope.row)"
+                    v-model="scope.row[header.name]"
+                    size="mini"
+                    @blur="inputBlur(scope.row, header)"
+                  />
                   <el-popover
                     v-else
                     placement="top"
@@ -2958,7 +3131,6 @@ export default {
                       :id="`textarea_${scope.$index}_${header.name}`"
                       :disabled="header.name === isDisableds(scope.row)"
                       v-model="scope.row[header.name]"
-                      maxlength="300"
                       @blur="inputBlur(scope.row, header)"
                     />
                     <el-input
@@ -2967,7 +3139,6 @@ export default {
                       :ref="'focusInput' + scope.row.index + '__' + header.name"
                       :disabled="header.name === isDisableds(scope.row)"
                       v-model="scope.row[header.name]"
-                      maxlength="300"
                       @focus="
                         inputFocus(`textarea_${scope.$index}_${header.name}`)
                       "
@@ -2976,8 +3147,8 @@ export default {
                   </el-popover>
                 </div>
                 <template v-else>
-                  <span v-if="scope.row[header.name]">
-                    <span v-if="header.dataType == 'BYTE'">文件</span>
+                  <span v-if="scope.row[header.name] || (editorKind(header) === 'binary' && scope.row[header.name] === '')">
+                    <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}</span>
                     <span v-else>{{ scope.row[header.name] }}</span>
                   </span>
                   <span v-else style="color: rgba(35, 36, 41, 0.45)"
@@ -2989,6 +3160,80 @@ export default {
           </template>
         </el-table-column>
       </el-table>
+    </div>
+    <aside class="value-inspector" v-if="valuePanelVisible && !readonly">
+      <div class="value-inspector-title">
+        <strong>字段值</strong>
+        <span v-if="selectedRow">第 {{ selectedRow['行号'] }} 行</span>
+      </div>
+      <div v-if="selectedRow && selectedHeader" class="value-inspector-content">
+        <label>当前列 / 类型</label>
+        <div class="value-inspector-meta">
+          <strong>{{ selectedHeader.name }}</strong>
+          <el-tag size="mini" type="info">{{ selectedHeader.dataType }}</el-tag>
+        </div>
+        <label>完整值</label>
+        <template v-if="valueEditorKind === 'binary'">
+          <div class="value-inspector-file">{{ binaryUploadLoading ? `正在读取 ${binaryUploadFileName}…` : selectedRow[selectedHeader.name] == null ? "无文件" : selectedRow[selectedHeader.name] === '' ? "空文件" : "二进制文件" }}</div>
+          <el-button size="mini" :loading="binaryPreviewLoading" :disabled="selectedRow[selectedHeader.name] == null" @click="openBinaryViewer(selectedRow, selectedHeader)">预览 / 下载</el-button>
+          <div class="value-inspector-actions" v-if="!valueEditorReadonly">
+            <el-upload action="none" :show-file-list="false" :auto-upload="false" :on-change="file => fileChange(file, selectedRow, selectedHeader.name)">
+              <el-button size="mini" :loading="binaryUploadLoading" :disabled="binaryUploadLoading">{{ binaryUploadLoading ? "读取中…" : "上传 / 替换" }}</el-button>
+            </el-upload>
+            <el-button size="mini" :disabled="selectedRow[selectedHeader.name] == null" @click="clearBinaryValue">清空字段值</el-button>
+            <el-button size="mini" @click="revertValueEditor">还原此值</el-button>
+          </div>
+          <p v-if="!valueEditorReadonly">清空后仅形成待保存变更，点击“保存变更”才会写入数据库。</p>
+        </template>
+        <template v-else-if="valueEditorKind === 'readonly'">
+          <el-input :value="String(selectedRow[selectedHeader.name] || '')" type="textarea" :rows="3" readonly />
+        </template>
+        <template v-else>
+          <el-date-picker
+            v-if="['date', 'datetime', 'year'].includes(valueEditorKind)"
+            :value="parseDatePickerValue(valueEditorDraft)"
+            :type="datePickerType(selectedHeader.dataType)"
+            @input="valueEditorDraft = formatDatePickerValue($event, selectedHeader.dataType)"
+            size="mini"
+            :disabled="valueEditorReadonly || valueEditorNull"
+            placeholder="选择日期时间"
+          />
+          <el-time-picker
+            v-else-if="valueEditorKind === 'time'"
+            v-model="valueEditorDraft"
+            value-format="HH:mm:ss"
+            size="mini"
+            :disabled="valueEditorReadonly || valueEditorNull"
+            placeholder="选择时间"
+          />
+          <el-select v-else-if="valueEditorKind === 'boolean'" v-model="valueEditorDraft" size="mini" :disabled="valueEditorReadonly || valueEditorNull">
+            <el-option label="1 / TRUE" value="1" />
+            <el-option label="0 / FALSE" value="0" />
+          </el-select>
+          <el-input
+            v-else
+            v-model="valueEditorDraft"
+            :type="valueEditorKind === 'text' ? 'textarea' : 'text'"
+            :rows="valueEditorKind === 'text' ? 8 : 2"
+            :disabled="valueEditorReadonly || valueEditorNull"
+            size="mini"
+            :placeholder="valueEditorKind === 'timezone' ? '保留时区偏移量输入完整值' : '输入字段值'"
+          />
+          <el-checkbox v-if="!valueEditorReadonly" v-model="valueEditorNull" class="value-inspector-null">设为 NULL</el-checkbox>
+          <div class="value-inspector-actions" v-if="!valueEditorReadonly">
+            <el-button size="mini" type="primary" :disabled="!valueEditorChanged" @click="applyValueEditor">应用修改</el-button>
+            <el-button size="mini" @click="revertValueEditor">还原此值</el-button>
+          </div>
+          <p>应用后仅形成待保存变更，点击“保存变更”才会写入数据库。</p>
+        </template>
+      </div>
+      <div v-else class="value-inspector-empty">选择单元格，查看完整值和对应类型的编辑方式。</div>
+    </aside>
+    </div>
+    <div class="table-editor-pending" v-if="pendingPreviewVisible && pendingChangeSummary.length">
+      <div><strong>待保存变更 · 操作摘要</strong><el-button size="mini" type="text" @click="pendingPreviewVisible = false">收起</el-button></div>
+      <ul><li v-for="item in pendingChangeSummary" :key="item.rowId">第 {{ item.rowId }} 行 · {{ item.type === 'CREATE' ? '新增' : item.type === 'DELETE' ? '删除' : '修改' }}</li></ul>
+      <el-button size="mini" type="text" @click="sqlPreview">查看 SQL 预览</el-button>
     </div>
     <div class="table_bottom_box">
       <div class="table_bottom_info">
@@ -3448,23 +3693,6 @@ export default {
       </div>
     </el-dialog>
 
-    <el-dialog
-      title="提示"
-      :visible.sync="pasteDialogVisible"
-      width="400px"
-      :close-on-press-escape="false"
-      :close-on-click-modal="false"
-      :show-close="false"
-    >
-      <span>将{{ pasteData.length }}行数据插入行数据中,是否新增?</span>
-      <span slot="footer" class="dialog-footer">
-        <el-button plain @click="multiRowInsert(), (pasteDialogVisible = false)"
-          >是</el-button
-        >
-        <!-- <el-button plain @click="singleRowInsert(pasteData[0]), (pasteDialogVisible = false)">否</el-button> -->
-        <el-button plain @click="pasteDialogVisible = false">取 消</el-button>
-      </span>
-    </el-dialog>
     <Filedialog ref="fileRef"></Filedialog>
 
     <el-dialog
@@ -3605,17 +3833,30 @@ export default {
   padding: 3px !important;
 }
 .table_box {
-  // height: calc(100% - 58px);
   height: 100%;
   background: #fff;
-  padding: 0 20px;
+  padding: 0 12px;
   border-radius: 5px;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   .table_btn_list {
     position: relative;
     display: flex;
     align-items: center;
     padding: 10px 0;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+
+    .table-editor-commit {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-left: auto;
+    }
+    ::v-deep .el-button + .el-button { margin-left: 0; }
 
     .materialized-readonly-tag {
       margin-right: 10px;
@@ -3641,10 +3882,113 @@ export default {
       background: #68728c;
     }
   }
+  .table-editor-workspace {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 160px;
+    overflow: hidden;
+  }
+  .table-editor-grid {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    ::v-deep .table-custom-class {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      .el-table__header-wrapper { flex: 0 0 auto; }
+      .el-table__body-wrapper {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto !important;
+      }
+    }
+  }
+  .table-editor-grid-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    padding: 0 8px;
+    color: #60718b;
+    background: #f7f9fc;
+    font-size: 12px;
+    border-bottom: 1px solid #e7ebf2;
+  }
+  .value-inspector {
+    flex: 0 0 270px;
+    min-width: 0;
+    margin-bottom: 0;
+    overflow-y: auto;
+    border-left: 1px solid #dfe5ee;
+    background: #fbfcfe;
+    color: #31435d;
+    font-size: 12px;
+  }
+  .value-inspector-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 32px;
+    padding: 0 12px;
+    border-bottom: 1px solid #e7ebf2;
+  }
+  .value-inspector-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 12px;
+    label { color: #78879d; }
+    .el-input, .el-select, .el-date-editor { width: 100%; }
+    p { margin: 0; line-height: 1.5; color: #8a98aa; }
+  }
+  .value-inspector-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    word-break: break-all;
+  }
+  .value-inspector-file {
+    width: 100%;
+    padding: 10px;
+    background: #f1f4f8;
+    border: 1px solid #e0e6ee;
+    border-radius: 4px;
+  }
+  .value-inspector-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 0;
+    background: #fbfcfe;
+  }
+  .value-inspector-empty { padding: 16px 12px; color: #8895a8; line-height: 1.6; }
+  .table-editor-pending {
+    max-height: 150px;
+    overflow: auto;
+    padding: 8px 12px;
+    border-top: 1px solid #e7ebf2;
+    background: #f9fafc;
+    font-size: 12px;
+    > div { display: flex; align-items: center; justify-content: space-between; }
+    ul { margin: 4px 0; padding-left: 16px; }
+    li { line-height: 20px; }
+  }
   .table_bottom_box {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex: 0 0 auto;
+    min-height: 42px;
+    gap: 8px;
+    border-top: 1px solid #e7ebf2;
 
     .table_bottom_info {
       font-size: 12px;

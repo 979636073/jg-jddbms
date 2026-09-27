@@ -493,9 +493,19 @@ public class OracleSqlBuilder extends DefaultSqlBuilder {
                 && type != DataTypeEnum.ARRAY && type != DataTypeEnum.OBJECT;
     }
 
+    @Override
+    protected String getLobSqlValue(String value, String dataType) {
+        return DataTypeEnum.DATETIME == DataTypeEnum.getByCode(dataType)
+                ? getDmlSqlValue(value, dataType) : super.getLobSqlValue(value, dataType);
+    }
+
     private String getDmlSqlValue(String value, Header header) {
-        String sqlValue = SqlUtils.getSqlValue(value, header.getDataType());
-        if (DataTypeEnum.DATETIME != DataTypeEnum.getByCode(header.getDataType())
+        return getDmlSqlValue(value, header.getDataType());
+    }
+
+    private String getDmlSqlValue(String value, String dataType) {
+        String sqlValue = SqlUtils.getSqlValue(value, dataType);
+        if (DataTypeEnum.DATETIME != DataTypeEnum.getByCode(dataType)
                 || StringUtils.isBlank(sqlValue) || "DEFAULT".equals(sqlValue)) {
             return sqlValue;
         }

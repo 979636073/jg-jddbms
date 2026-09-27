@@ -77,6 +77,20 @@ public class SQLExecutorBlobTest {
         assertEquals(Collections.singletonList("bytes:1:AQID"), bindings);
     }
 
+    @Test
+    public void shouldKeepEmptyBlobDistinctFromNull() {
+        List<String> bindings = new ArrayList<>();
+        Connection connection = connection(new ArrayList<>(), bindings, 1, 1);
+
+        ExecuteResult result = SQLExecutor.getInstance().executeBlob(connection,
+                "UPDATE T SET PAYLOAD = ? WHERE ID = 1; UPDATE T SET PAYLOAD = ? WHERE ID = 2;",
+                Arrays.asList("", null),
+                Arrays.asList(DataTypeEnum.BYTE.getCode(), DataTypeEnum.BYTE.getCode()));
+
+        assertTrue(result.getSuccess());
+        assertEquals(Arrays.asList("bytes:1:", "bytes:1:null"), bindings);
+    }
+
     private Connection connection(List<String> preparedSql, List<String> bindings, int... affectedRows) {
         int[] statementIndex = {0};
         return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),

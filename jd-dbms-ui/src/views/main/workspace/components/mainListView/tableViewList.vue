@@ -204,7 +204,11 @@ export default {
         pageNo: 1,
         pageSize: 200,
         schemaName: item.schema,
-        sql: `select * from "${item.schema}"."${item.name}"`,
+        sql: this.dataInfo.dataSource.type === "ORACLE"
+          ? `select t.*, t.rowid as "ROWID" from "${item.schema}"."${item.name}" t`
+          : this.dataInfo.dataSource.type === "DM"
+            ? `select t.*, t.rowid from "${item.schema}"."${item.name}" t`
+            : `select * from "${item.schema}"."${item.name}"`,
         tableName: item.name,
         total: 0,
         type: this.dataInfo.dataSource.type,

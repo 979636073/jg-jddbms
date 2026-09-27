@@ -7,6 +7,7 @@ const state = {
     dataBaseInfo: {},
     dataSourceData: [],
     dataCurrentData: new Map(),
+    dirtyPageIds: {},
     changeFlag: 0,
 }
 const mutations = {
@@ -21,6 +22,9 @@ const mutations = {
     },
     SET_DATA_CURRENT_DATA(state, data) {
         state.dataCurrentData.set(data.pageId, data)
+    },
+    SET_PAGE_DIRTY(state, { pageId, dirty }) {
+        state.dirtyPageIds = { ...state.dirtyPageIds, [pageId]: dirty }
     },
     CHANGE_FLAG(state) {
         state.changeFlag += 1
@@ -39,6 +43,9 @@ const actions = {
     setDataCurrentData({ commit }, data) {
         commit('SET_DATA_CURRENT_DATA', data)
         commit('CHANGE_FLAG')
+    },
+    setPageDirty({ commit }, data) {
+        commit('SET_PAGE_DIRTY', data)
     },
     currendChange({ commit }) {
         commit('CHANGE_FLAG')

@@ -105,12 +105,14 @@ export default {
         newRoles: this.userRoleList,
       };
       userServer.editUserRole(params).then((res) => {
-        if (res.code == 200) {
+        if (res.success) {
           this.initData();
           this.userHandleCloseFn(false);
           this.$message.success('操作成功!')
         } else {
-          this.$message.error(res.errorCode);
+          const failed = (res.data?.items || []).filter(item => item.status === 'FAILED' || item.status === 'ROLLBACK_FAILED');
+          this.$message.error(failed.map(item => `${item.action} ${item.name}: ${item.message}`).join('; ') || res.errorMessage || '操作失败');
+          this.getUserRoleList();
         }
       });
     },

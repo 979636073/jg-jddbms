@@ -1,6 +1,7 @@
 package com.jd.biz.domain.core.impl;
 
 import com.jd.biz.controller.rdb.request.TableBriefQueryRequest;
+import com.jd.biz.controller.rdb.vo.UserOperationResult;
 import com.jd.plugin.oracle.builder.OracleSqlBuilder;
 import com.jd.spi.jdbc.DefaultSqlBuilder;
 import com.jd.spi.model.TableObjectRoleData;
@@ -10,6 +11,8 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 public class TableUserServiceRoleChangeTest {
@@ -61,6 +64,41 @@ public class TableUserServiceRoleChangeTest {
                         "grant SELECT on \"SYSTEM\".\"TEST_TABLE\" to \"JDDBMS_USER\" with grant option",
                         "grant UPDATE on \"SYSTEM\".\"TEST_TABLE\" to \"JDDBMS_USER\""),
                 sqlList(changes));
+    }
+
+    @Test
+    public void shouldReportFailedPrivilegeAndCompensation() {
+        List<TableUserServiceImpl.SqlChange> changes = Arrays.asList(
+                new TableUserServiceImpl.SqlChange("SELECT", "GRANT", "grant select", "revoke select"),
+                new TableUserServiceImpl.SqlChange("UPDATE", "GRANT", "grant update", "revoke update"),
+                new TableUserServiceImpl.SqlChange("DELETE", "GRANT", "grant delete", "revoke delete"));
+        List<String> executed = new ArrayList<>();
+        UserOperationResult result = service.executeChanges(changes, sql -> {
+            executed.add(sql);
+            if ("grant update".equals(sql)) throw new SQLException("permission denied");
+        });
+
+        Assert.assertFalse(result.isSuccess());
+        Assert.assertEquals(Arrays.asList("grant select", "grant update", "revoke select"), executed);
+        Assert.assertEquals("ROLLED_BACK", result.getItems().get(0).getStatus());
+        Assert.assertEquals("UPDATE", result.getItems().get(1).getName());
+        Assert.assertEquals("FAILED", result.getItems().get(1).getStatus());
+        Assert.assertTrue(result.getItems().get(1).getMessage().contains("permission denied"));
+        Assert.assertEquals("SKIPPED", result.getItems().get(2).getStatus());
+    }
+
+    @Test
+    public void shouldReportCompensationFailure() {
+        List<TableUserServiceImpl.SqlChange> changes = Arrays.asList(
+                new TableUserServiceImpl.SqlChange("SELECT", "GRANT", "grant select", "revoke select"),
+                new TableUserServiceImpl.SqlChange("UPDATE", "GRANT", "grant update", "revoke update"));
+        UserOperationResult result = service.executeChanges(changes, sql -> {
+            if (!"grant select".equals(sql)) throw new SQLException(sql + " denied");
+        });
+
+        Assert.assertFalse(result.isSuccess());
+        Assert.assertEquals("ROLLBACK_FAILED", result.getItems().get(0).getStatus());
+        Assert.assertTrue(result.getItems().get(0).getMessage().contains("revoke select denied"));
     }
 
     private List<String> sqlList(List<TableUserServiceImpl.SqlChange> changes) {

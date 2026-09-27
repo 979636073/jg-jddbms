@@ -536,16 +536,16 @@ export default {
 
 <template>
   <div class="table_editor">
+    <el-button
+      class="back-overview-button"
+      size="mini"
+      type="primary"
+      plain
+      @click="backToOverview"
+    >
+      <i class="el-icon-back"></i> 返回模式总览
+    </el-button>
     <el-tabs v-model="activeName" @tab-click="handleClick">
-      <el-button
-        class="back-overview-button"
-        size="mini"
-        type="primary"
-        plain
-        @click="backToOverview"
-      >
-        <i class="el-icon-back"></i> 返回模式总览
-      </el-button>
       <el-tab-pane label="数据" name="sixth">
         <renderSearchResult :queryResultData="queryResultData" ref="renderSearchResult"></renderSearchResult>
       </el-tab-pane>
@@ -617,11 +617,11 @@ export default {
       </el-tab-pane>
     </el-tabs>
     <el-button
+      class="table-save-button"
       @click="submit()"
       size="mini"
       type="primary"
       plain
-      style="position: absolute; right: 10px; top: 10px"
       v-if=" activeName == 'second' || activeName == 'third' || activeName == 'first'"
     >保存</el-button>
     <SqlPreview ref="sqlPreview" title="sql预览">
@@ -662,8 +662,14 @@ export default {
 }
 .back-overview-button {
   position: absolute;
-  right: 10px;
-  top: 5px;
+  right: 20px;
+  top: 17px;
+  z-index: 2;
+}
+.table-save-button {
+  position: absolute;
+  right: 160px;
+  top: 17px;
   z-index: 2;
 }
 </style>

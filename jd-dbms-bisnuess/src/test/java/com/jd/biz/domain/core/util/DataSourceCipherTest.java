@@ -12,7 +12,7 @@ public class DataSourceCipherTest {
 
     @Test
     public void shouldEncryptWithRandomIvAndDecrypt() {
-        DataSourceCipher cipher = new DataSourceCipher(KEY);
+        DataSourceCipher cipher = new DataSourceCipher(KEY, "");
 
         String first = cipher.encrypt("oracle-password");
         String second = cipher.encrypt("oracle-password");
@@ -27,11 +27,19 @@ public class DataSourceCipherTest {
     public void shouldReadLegacyDesCiphertext() throws Exception {
         String legacy = new DesUtil(DesUtil.DES_KEY).encrypt("dm-password", DesUtil.CBC);
 
-        assertEquals("dm-password", new DataSourceCipher(KEY).decrypt(legacy));
+        assertEquals("dm-password", new DataSourceCipher(KEY, "").decrypt(legacy));
+    }
+
+    @Test
+    public void shouldDecryptWithLegacyAesKey() {
+        String legacyKey = "legacy-key-with-at-least-32-characters";
+        String encrypted = new DataSourceCipher(legacyKey, "").encrypt("legacy-password");
+
+        assertEquals("legacy-password", new DataSourceCipher(KEY, legacyKey).decrypt(encrypted));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldRejectShortKey() {
-        new DataSourceCipher("short-key");
+        new DataSourceCipher("short-key", "");
     }
 }

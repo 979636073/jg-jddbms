@@ -32,7 +32,7 @@
       </div>
 
       <div class="right">
-        <el-table :data="tableData" v-loading="loading" border height="650px" style="width: 100%">
+        <el-table :data="tableData" v-loading="loading" border height="100%" style="width: 100%">
           <el-table-column prop="desc" label="权限"> </el-table-column>
           <el-table-column prop="rule" label="授权">
             <template slot-scope="scope">
@@ -164,9 +164,11 @@ export default {
       userServer.saveObjectRole(params).then(res=>{
         if(res.success) {
           this.$message.success('授权成功!');
-          this.clickItem(this.selectItem,this.heightIndexs)
+          this.clickItem(this.selectItem,this.heightIndexs[0])
         } else {
-          this.$message.error(res.errorCode);
+          const failed = (res.data?.items || []).filter(item => item.status === 'FAILED' || item.status === 'ROLLBACK_FAILED');
+          this.$message.error(failed.map(item => `${item.action} ${item.name}: ${item.message}`).join('; ') || res.errorMessage || '授权失败');
+          this.clickItem(this.selectItem,this.heightIndexs[0]);
         }
       })
     }
@@ -177,7 +179,8 @@ export default {
 <style lang='scss' scoped>
 .conainer_data {
   width: 100%;
-  height: 700px;
+  height: 100%;
+  min-height: 0;
   display: flex;
   .left {
     width: 18%;
@@ -194,7 +197,8 @@ export default {
   }
   .right {
     width: 82%;
-    height: 100%;
+    height: calc(100% - 56px);
+    min-height: 0;
     padding-left: 15px;
     position: relative;
   }

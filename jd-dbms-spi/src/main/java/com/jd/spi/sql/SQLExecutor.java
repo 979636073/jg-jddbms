@@ -171,7 +171,7 @@ public class SQLExecutor implements CommandExecutor {
                                 ? parameterTypes.get(valueIndex) : DataTypeEnum.BYTE.getCode();
                         if (DataTypeEnum.CONTENT.getCode().equals(parameterType)) {
                             stmt.setString(i + 1, value);
-                        } else if (StrUtil.isNotBlank(value)) {
+                        } else if (value != null) {
                             stmt.setBytes(i + 1, Base64.getDecoder().decode(value));
                         } else {
                             stmt.setBytes(i + 1, null);
@@ -377,7 +377,13 @@ public class SQLExecutor implements CommandExecutor {
         MetaData metaData = Chat2DBContext.getMetaData();
         String tableName = metaData.getMetaDataName(command.getDatabaseName(), command.getSchemaName(),
                 command.getTableName());
+        String dbType = Chat2DBContext.getConnectInfo().getDbType();
         String sql = "select * from " + tableName;
+        if (DataSourceTypeEnum.ORACLE.getCode().equals(dbType)) {
+            sql = "select t.*, t.rowid as \"ROWID\" from " + tableName + " t";
+        } else if (DataSourceTypeEnum.DM.getCode().equals(dbType)) {
+            sql = "select t.*, t.rowid from " + tableName + " t";
+        }
         command.setScript(sql);
         log.debug("Executing table query (length={})", StringUtils.length(sql));
         return execute(command);
@@ -966,7 +972,7 @@ public class SQLExecutor implements CommandExecutor {
                         command.setSessionId(executeResult.getSessionId());
                     }
                     result.add(executeResult);
-                    if (Boolean.TRUE.equals(executeResult.getCancelled())) {
+                    if (shouldStopAfterResult(command, executeResult)) {
                         break;
                     }
                 } catch (Exception e) {
@@ -990,6 +996,12 @@ public class SQLExecutor implements CommandExecutor {
             }
         }
         return result;
+    }
+
+    static boolean shouldStopAfterResult(Command command, ExecuteResult result) {
+        return Boolean.TRUE.equals(result.getCancelled())
+                || (Boolean.TRUE.equals(command.getIsErrorExecute())
+                && !Boolean.TRUE.equals(result.getSuccess()));
     }
 
     private Boolean parseSqlCommit(List<String> sqlList) {
@@ -1196,6 +1208,15 @@ public class SQLExecutor implements CommandExecutor {
                 connectionVo = getOwnedSession(sessionId);
                 connection = connectionVo.getConnection();
                 session_id = sessionId;
+                if (connection == null || connection.isClosed()) {
+                    if (Boolean.TRUE.equals(connectionVo.getSign())) {
+                        closeSession(sessionId, connectionVo);
+                        return buildFailureResult(sql,
+                                new SQLException("待提交事务的数据库连接已失效，请重新执行并确认数据"), executionId, null);
+                    }
+                    connection = Chat2DBContext.getConnection();
+                    connectionVo.setConnection(connection);
+                }
                 if (connectionVo.getSign()) {
                     sign = true;
                 }

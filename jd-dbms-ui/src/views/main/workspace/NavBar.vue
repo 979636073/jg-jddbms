@@ -10,11 +10,13 @@ import { getUserProfile } from "@/api/system/user";
 import { v4 as uuidv4 } from "uuid";
 import { TASK_STATUS } from "@/constants/task";
 import TaskDrawer from "@/views/main/task/TaskDrawer.vue";
+import DmpToolManager from "@/views/main/workspace/components/DmpToolManager.vue";
+import { listDmpTools } from "@/api/main/dmpTool";
 
 export default {
   name: "databaseHeader",
   dicts: ["role_user"],
-  components: { Hamburger, TaskDrawer },
+  components: { Hamburger, TaskDrawer, DmpToolManager },
   props: {
     opened: {
       type: Boolean,
@@ -32,6 +34,12 @@ export default {
       contextMenuVisible: false,
       taskDrawerVisible: false,
       runningTaskCount: 0,
+      dmpToolManagerVisible: false,
+      dmpToolMode: "AUTO",
+      dmpToolId: "",
+      dmpToolFamily: "",
+      dmpTargetVersion: "",
+      dmpToolOptions: [],
       exportProgress: "0%",
       loading2: false,
       navType: "editor",
@@ -180,6 +188,27 @@ export default {
         return this.selectTableData;
       }
     },
+    currentDbType() {
+      const dataSource = this.dataInfo && this.dataInfo.dataSource;
+      return String((dataSource && (dataSource.type || dataSource.dbType)) || "").toUpperCase();
+    },
+    dmpToolFamilyOptions() {
+      if (this.currentDbType === "DM") {
+        return [{ value: "DM_DEXP", label: "达梦 DEXP / DIMP" }];
+      }
+      return [
+        { value: "ORACLE_LEGACY", label: "Oracle 传统 EXP / IMP" },
+        { value: "ORACLE_DATAPUMP", label: "Oracle Data Pump（expdp / impdp）" },
+      ];
+    },
+    availableDmpTools() {
+      return this.dmpToolOptions.filter(item =>
+        item.enabled && item.status === "AVAILABLE" &&
+        item.currentPlatformCompatible !== false &&
+        item.databaseType === this.currentDbType &&
+        item.toolFamily === this.dmpToolFamily
+      );
+    },
   },
   watch: {
     $route: {
@@ -261,11 +290,44 @@ export default {
     },
     // 从sql控制台跳转到表数据
     sqlDetailTableData(data) {
-      let tableName = data.tableName.replaceAll('"', "");
+      const tableName = String(data.tableName || "").replaceAll('"', "");
+      const schemaName = String(data.schemaName || data.databaseName || "").replaceAll('"', "");
+      const dataSourceId = data.dataSourceId || this.dataInfo?.dataSource?.id;
+      const dataSourceName = data.dataSourceName || this.dataInfo?.dataSource?.alias;
+      if (!tableName || !schemaName) {
+        this.$message.error("缺少表名或模式名，无法打开表");
+        return;
+      }
+
+      const openedView = !data.forceNew && this.$store.getters.visitedViews2.find(view => {
+        if (!view.path || !view.path.startsWith("/workspace/look/")) return false;
+        const query = view.query || {};
+        const viewPageId = view.params?.id || view.path.split("/").pop();
+        const currentConfig = this.$store.state.workspaceData.dataCurrentData.get(viewPageId);
+        const uniqueData = currentConfig?.uniqueData || {};
+        const openedDataSourceId = query.dataSourceId || uniqueData.dataSourceId;
+        const openedSchemaName = query.schemaName || query.databaseName || uniqueData.schemaName || uniqueData.databaseName;
+        const openedTableName = query.tableName || uniqueData.tableName;
+        return String(openedDataSourceId) === String(dataSourceId) &&
+          openedSchemaName === schemaName && openedTableName === tableName;
+      });
+      if (openedView) {
+        if (openedView.path !== this.$route.path) {
+          this.$router.push({ path: openedView.path, query: openedView.query }).catch(() => {});
+        }
+        return;
+      }
+
       let pageId = uuidv4();
       this.$router.push({
         path: "/workspace/look/" + pageId,
-        query: { schemaName: data.databaseName, tableName: tableName },
+        query: {
+          dataSourceId,
+          dataSourceName,
+          schemaName,
+          tableName,
+          objectType: "table",
+        },
       });
     },
     // 获取服务器地址
@@ -501,6 +563,14 @@ export default {
             dataBaseName: this.dataInfo.dataSource.alias,
           };
         }
+        params.dmpToolFamily = this.dmpToolFamily;
+        params.dmpToolId = this.dmpToolMode === "MANUAL" ? this.dmpToolId : undefined;
+        params.targetVersion = this.dmpToolFamily === "ORACLE_DATAPUMP"
+          ? this.dmpTargetVersion || undefined
+          : undefined;
+        if (this.dmpToolMode === "MANUAL" && !this.dmpToolId) {
+          return this.$message.error("请选择客户端工具");
+        }
         this.loading = true;
         sqlServer.exportDmp(params).then((res) => {
           if (res.success && res.data) {
@@ -577,7 +647,9 @@ export default {
       const params = {
         fileName: this.fileName,
         filePath: this.url,
-        dataSourceId: this.dataInfo.dataSource.id
+        dataSourceId: this.dataInfo.dataSource.id,
+        dmpToolFamily: this.dmpToolFamily,
+        dmpToolId: this.dmpToolMode === "MANUAL" ? this.dmpToolId : undefined
       };
       if (this.radioImp === "table") {
         if (!this.formData.user || !this.formData.toUser) {
@@ -598,6 +670,9 @@ export default {
         }
         params.fromUser = [this.searchFrom.user];
         params.toUser = [this.searchFrom.toUser];
+      }
+      if (this.dmpToolMode === "MANUAL" && !this.dmpToolId) {
+        return this.$message.error("请选择客户端工具");
       }
       this.loadingTime = true;
       const submit = this.radioImp === "user" ? sqlServer.importDmpUser(params) : sqlServer.importDmp(params);
@@ -712,10 +787,12 @@ export default {
     handleCommand(command) {
       this.isDialog = command;
       if (command == "importDMP") {
+        this.prepareDmpToolSelection();
         this.ImportDialog = true;
         this.getTableDataList();
         this.getDataBaseTree();
       } else if (command == "exportDMP") {
+        this.prepareDmpToolSelection();
         this.selectTableData = [];
         this.multipleSelection = [];
         this.transferValue = [];
@@ -724,6 +801,31 @@ export default {
         this.radio = "table";
         this.getDataBaseTree();
       }
+    },
+    prepareDmpToolSelection() {
+      this.dmpToolMode = "AUTO";
+      this.dmpToolId = "";
+      this.dmpTargetVersion = "";
+      this.dmpToolFamily = this.currentDbType === "DM" ? "DM_DEXP" : "ORACLE_LEGACY";
+      this.loadDmpTools();
+    },
+    loadDmpTools() {
+      listDmpTools().then(res => {
+        this.dmpToolOptions = res.data || [];
+        if (this.dmpToolId && !this.availableDmpTools.some(item => item.id === this.dmpToolId)) {
+          this.dmpToolId = "";
+        }
+      });
+    },
+    handleDmpFamilyChange() {
+      this.dmpToolId = "";
+    },
+    openDmpToolManager() {
+      this.dmpToolManagerVisible = true;
+    },
+    dmpFamilyLabel(family) {
+      const option = this.dmpToolFamilyOptions.find(item => item.value === family);
+      return option ? option.label : family;
     },
     handleCommandFn(command) {
       this.isDialog = command;
@@ -982,6 +1084,10 @@ export default {
       :visible.sync="taskDrawerVisible"
       @running-count="updateRunningTaskCount"
     />
+    <dmp-tool-manager
+      :visible.sync="dmpToolManagerVisible"
+      @changed="loadDmpTools"
+    />
     <!-- 导出 -->
     <el-dialog
       :title="
@@ -1052,6 +1158,53 @@ export default {
             <el-radio-button label="user">导出用户</el-radio-button>
             <el-radio-button label="database">导出整库</el-radio-button>
           </el-radio-group>
+        </div>
+        <div class="dmp-tool-config">
+          <div class="dmp-tool-config__header">
+            <div>
+              <div class="dmp-tool-config__title">客户端工具</div>
+              <div class="dmp-tool-config__hint">自动模式会从相同数据库、格式和运行平台中选择兼容版本。</div>
+            </div>
+            <el-button type="text" icon="el-icon-setting" @click="openDmpToolManager">管理工具</el-button>
+          </div>
+          <div class="dmp-tool-config__fields">
+            <el-select v-model="dmpToolFamily" size="small" @change="handleDmpFamilyChange">
+              <el-option
+                v-for="item in dmpToolFamilyOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+            <el-radio-group v-model="dmpToolMode" size="small">
+              <el-radio-button label="AUTO">自动选择</el-radio-button>
+              <el-radio-button label="MANUAL">手动指定</el-radio-button>
+            </el-radio-group>
+            <el-select
+              v-if="dmpToolMode === 'MANUAL'"
+              v-model="dmpToolId"
+              size="small"
+              placeholder="请选择已启用工具"
+              class="dmp-tool-select"
+            >
+              <el-option
+                v-for="item in availableDmpTools"
+                :key="item.id"
+                :label="`${item.version} · ${item.os}/${item.arch}`"
+                :value="item.id"
+              />
+            </el-select>
+            <el-input
+              v-if="dmpToolFamily === 'ORACLE_DATAPUMP'"
+              v-model.trim="dmpTargetVersion"
+              size="small"
+              placeholder="目标兼容版本，如 12.2（可选）"
+              class="dmp-version-input"
+            />
+          </div>
+          <div v-if="dmpToolFamily === 'ORACLE_DATAPUMP'" class="dmp-tool-config__warning">
+            Data Pump 需要服务端已配置 Oracle DIRECTORY 与共享目录映射。
+          </div>
         </div>
         <div style="margin-top: 20px" v-if="this.radio == 'table'">
           <div class="titleFrom">
@@ -1154,6 +1307,46 @@ export default {
             <el-radio-button label="user">导入用户</el-radio-button>
             <el-radio-button label="database">导入整库</el-radio-button>
           </el-radio-group>
+        </div>
+        <div class="dmp-tool-config">
+          <div class="dmp-tool-config__header">
+            <div>
+              <div class="dmp-tool-config__title">DMP格式与客户端工具</div>
+              <div class="dmp-tool-config__hint">Oracle传统DMP与Data Pump DMP不兼容，请按文件来源选择。</div>
+            </div>
+            <el-button type="text" icon="el-icon-setting" @click="openDmpToolManager">管理工具</el-button>
+          </div>
+          <div class="dmp-tool-config__fields">
+            <el-select v-model="dmpToolFamily" size="small" @change="handleDmpFamilyChange">
+              <el-option
+                v-for="item in dmpToolFamilyOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+            <el-radio-group v-model="dmpToolMode" size="small">
+              <el-radio-button label="AUTO">自动选择</el-radio-button>
+              <el-radio-button label="MANUAL">手动指定</el-radio-button>
+            </el-radio-group>
+            <el-select
+              v-if="dmpToolMode === 'MANUAL'"
+              v-model="dmpToolId"
+              size="small"
+              placeholder="请选择已启用工具"
+              class="dmp-tool-select"
+            >
+              <el-option
+                v-for="item in availableDmpTools"
+                :key="item.id"
+                :label="`${item.version} · ${item.os}/${item.arch}`"
+                :value="item.id"
+              />
+            </el-select>
+          </div>
+          <div v-if="dmpToolFamily === 'ORACLE_DATAPUMP'" class="dmp-tool-config__warning">
+            Data Pump 需要服务端已配置 Oracle DIRECTORY 与共享目录映射。
+          </div>
         </div>
         <div style="margin-top: 10px" v-if="radioImp == 'table'">
           <el-form
@@ -1539,10 +1732,21 @@ export default {
   .nav_list {
     display: flex;
     align-items: center;
+    justify-content: center;
+    position: absolute;
+    left: 50%;
+    max-width: calc(100% - 430px);
+    transform: translateX(-50%);
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
     .nav_item {
       display: flex;
       align-items: center;
       margin-right: 30px;
+      flex-shrink: 0;
       height: 36px;
       line-height: 36px;
       color: #4a5565;
@@ -1553,6 +1757,9 @@ export default {
         height: 15px;
         margin-right: 6px;
       }
+    }
+    .nav_item:last-child {
+      margin-right: 0;
     }
     .nav_item_action {
       .el-dropdown {
@@ -1701,6 +1908,46 @@ export default {
     width: 250px;
     margin-left: 30px;
   }
+}
+.dmp-tool-config {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid #e1e6ec;
+  border-radius: 5px;
+  background: #f8fafc;
+}
+.dmp-tool-config__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dmp-tool-config__title {
+  color: #313745;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dmp-tool-config__hint {
+  margin-top: 4px;
+  color: #7c7f86;
+  font-size: 12px;
+}
+.dmp-tool-config__fields {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dmp-tool-select {
+  width: 220px;
+}
+.dmp-version-input {
+  width: 230px;
+}
+.dmp-tool-config__warning {
+  margin-top: 10px;
+  color: #b88230;
+  font-size: 12px;
 }
 ::v-deep .el-table__empty-block {
   width: 100% !important;

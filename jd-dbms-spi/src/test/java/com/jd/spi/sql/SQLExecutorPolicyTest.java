@@ -1,5 +1,7 @@
 package com.jd.spi.sql;
 
+import com.jd.spi.model.Command;
+import com.jd.spi.model.ExecuteResult;
 import org.junit.Test;
 
 import java.lang.reflect.Proxy;
@@ -9,6 +11,8 @@ import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class SQLExecutorPolicyTest {
 
@@ -47,6 +51,19 @@ public class SQLExecutorPolicyTest {
 
         assertEquals("OK", result);
         assertEquals(15, timeout.get());
+    }
+
+    @Test
+    public void shouldStopAfterReturnedFailureWhenErrorExecutionIsDisabled() {
+        Command command = new Command();
+        command.setIsErrorExecute(true);
+        ExecuteResult failed = new ExecuteResult();
+        failed.setSuccess(false);
+
+        assertTrue(SQLExecutor.shouldStopAfterResult(command, failed));
+
+        command.setIsErrorExecute(false);
+        assertFalse(SQLExecutor.shouldStopAfterResult(command, failed));
     }
 
     private <T> T proxy(Class<T> type, Invocation invocation) {

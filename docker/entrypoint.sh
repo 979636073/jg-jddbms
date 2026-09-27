@@ -24,4 +24,9 @@ if [ -z "${JDDBMS_DATASOURCE_ENCRYPTION_KEY:-}" ]; then
     export JDDBMS_DATASOURCE_ENCRYPTION_KEY
 fi
 
+if [ -z "${JDDBMS_DATASOURCE_ENCRYPTION_LEGACY_KEYS:-}" ] && [ -s "$secret_dir/datasource-encryption-legacy-keys" ]; then
+    JDDBMS_DATASOURCE_ENCRYPTION_LEGACY_KEYS="$(cat "$secret_dir/datasource-encryption-legacy-keys")"
+    export JDDBMS_DATASOURCE_ENCRYPTION_LEGACY_KEYS
+fi
+
 exec java -jar /app/jddbms.jar

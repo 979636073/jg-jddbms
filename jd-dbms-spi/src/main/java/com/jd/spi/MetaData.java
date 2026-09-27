@@ -349,6 +349,13 @@ public interface MetaData {
      */
     DmpCommand exportDmp(ConnectInfo connectInfo, List<String> tableName, String schemaName, File logFileName, File dmpFileName, String exportDmp,Boolean isWin, String dmpUser, String dmpPassword);
 
+    default DmpCommand exportDmp(ConnectInfo connectInfo, List<String> tableName, String schemaName,
+                                 File logFileName, File dmpFileName, String exportDmp, Boolean isWin,
+                                 String dmpUser, String dmpPassword, DmpToolOptions options) {
+        return exportDmp(connectInfo, tableName, schemaName, logFileName, dmpFileName,
+                exportDmp, isWin, dmpUser, dmpPassword);
+    }
+
 
     /**
      * 导入dmp文件
@@ -360,6 +367,14 @@ public interface MetaData {
      * @return
      */
     DmpCommand importDmp(ConnectInfo connectInfo, List<String> tableName, String fromName, String toName, String schemaName, File file, File logFileName, String importDmp, List<String> FromUsers, Boolean isWin, String dmpUser, String dmpPassword);
+
+    default DmpCommand importDmp(ConnectInfo connectInfo, List<String> tableName, String fromName,
+                                 String toName, String schemaName, File file, File logFileName,
+                                 String importDmp, List<String> fromUsers, Boolean isWin,
+                                 String dmpUser, String dmpPassword, DmpToolOptions options) {
+        return importDmp(connectInfo, tableName, fromName, toName, schemaName, file, logFileName,
+                importDmp, fromUsers, isWin, dmpUser, dmpPassword);
+    }
 
     /**
      * 表详情信息

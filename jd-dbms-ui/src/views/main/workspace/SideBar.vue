@@ -212,12 +212,18 @@ export default {
     if (this.$route.query.schemaName) {
       // 此判断是从约束进来打开新窗口
       this.schema = this.$route.query.schemaName;
+      this.$emit("isType", this.type, this.schema, this.activeClass);
+      if (this.$route.query.tableName && !this.isQuery) {
+        this.handelClickItem({
+          name: this.$route.query.tableName,
+          tableDetails: {},
+        }, -1, {});
+      }
       this.getTableDataList(this.schema);
     } else {
       // debugger
       if (this.$route.query.databaseName && this.$route.query.tableName) {
         this.schema = this.$route.query.databaseName;
-        // this.filterName = this.$route.query.tableName
         this.$emit("isType", this.type, this.schema, this.activeClass);
         this.getTableDataList(this.schema);
       } else {
@@ -229,9 +235,6 @@ export default {
     this.$EventBus.$on("refreshRightTable", (page) => {
       this.refreshRightTable(page);
     });
-    if (this.$route.query.tableName) {
-      this.filterName = this.$route.query.tableName;
-    }
   },
   destroyed() {
     window.removeEventListener("beforeunload", this.beforeunload);
@@ -549,9 +552,9 @@ export default {
         pageNo: 1,
         pageSize: 200,
         schemaName: uniqueData?.schemaName,
-        sql: `select * from ${
-          uniqueData?.schemaName || uniqueData?.databaseName
-        }.${uniqueData.tableName}`,
+        sql: uniqueData?.databaseType === "DM" && uniqueData?.dataType === "tables"
+          ? `select t.*, t.rowid from "${uniqueData.schemaName}"."${uniqueData.tableName}" t`
+          : `select * from ${uniqueData?.schemaName || uniqueData?.databaseName}.${uniqueData.tableName}`,
         tableName: uniqueData.tableName,
         total: 0,
         type: uniqueData.databaseType,
@@ -595,9 +598,9 @@ export default {
               pageNo: 1,
               pageSize: 200,
               schemaName: extraParams?.schemaName,
-              sql: `select * from ${
-                extraParams?.schemaName || extraParams?.databaseName
-              }.${extraParams.tableName}`,
+              sql: data.treeNodeType === "table" && extraParams.databaseType === "DM"
+                ? `select t.*, t.rowid from "${extraParams.schemaName}"."${extraParams.tableName}" t`
+                : `select * from ${extraParams?.schemaName || extraParams?.databaseName}.${extraParams.tableName}`,
               tableName: extraParams.tableName,
               total: 0,
               type: this.currentDataSource.type,
@@ -836,6 +839,7 @@ export default {
       this.tableListTotal = 0;
       this.hasMoreTables = false;
       this.activeClass = -1;
+      this.nameTbale = "";
       this.detailDataSource = [];
       if (!this.dataInfo.dataSource) {
         this.styleLoading = false;
@@ -890,12 +894,6 @@ export default {
             path: details.path,
             type: details.type,
           };
-          if (
-            this.$route.query.tableName &&
-            item.name == this.$route.query.tableName
-          ) {
-            this.handelClickItem(item, index, {});
-          }
           detailDataSource.push({
             name: item.name,
             schema: details.schema,
@@ -913,6 +911,57 @@ export default {
             tableDetails,
           };
         });
+        const routeSchema = this.$route.query.schemaName || this.$route.query.databaseName;
+        if (
+          this.type == "tables" &&
+          this.$route.query.tableName &&
+          (!routeSchema || routeSchema === this.schema)
+        ) {
+          const routeTableName = this.$route.query.tableName;
+          let routeTableIndex = this.dataTreeList.findIndex(item => item.name === routeTableName);
+          if (routeTableIndex === -1) {
+            const targetRes = await tableServer.getTableList({
+              ...params,
+              pageNo: 1,
+              pageSize: 200,
+              searchKey: routeTableName,
+              isRefreshCache: false,
+            });
+            if (requestId !== this.tableSearchRequestId) return;
+            const targetItem = targetRes?.success
+              ? (targetRes.data.data || []).find(item => item.name === routeTableName)
+              : null;
+            if (targetItem) {
+              const details = targetItem.tableDetails || {};
+              this.dataTreeList.unshift({
+                name: targetItem.name,
+                comment: targetItem.comment || details.comment,
+                pinned: targetItem.pinned,
+                tableDetails: {
+                  tableSpace: details.tableSpace,
+                  valid: details.valid,
+                  path: details.path,
+                  type: details.type,
+                },
+              });
+              detailDataSource.unshift({
+                name: targetItem.name,
+                schema: details.schema,
+                tableSpace: details.tableSpace,
+                comment: targetItem.comment || details.comment,
+                numRows: details.numRows,
+                created: details.created,
+                lastDDL: details.lastDDL,
+                type: details.type,
+              });
+              routeTableIndex = 0;
+            }
+          }
+          this.activeClass = routeTableIndex;
+          this.heightIndexs = routeTableIndex === -1 ? [] : [routeTableIndex];
+          this.nameTbale = routeTableName;
+          this.scrollToActiveTable();
+        }
         this.detailDataSource = detailDataSource;
         this.tableListTotal = Number(res.data.total) || data.length;
         this.hasMoreTables = this.type == "tables" && data.length < this.tableListTotal;
@@ -1074,12 +1123,18 @@ export default {
           } else if (this.type == "users") {
             params.userNames = this.seleCtrlKet;
             userServer.deleteUser(params).then((res) => {
+              const items = res.data?.items || [];
               if (res.success) {
                 this.getTableDataList(this.schema);
                 this.$message.success("删除成功");
                 this.getDataBaseTreeData();
               } else {
-                this.$message.error(res.errorMessage);
+                if (items.some(item => item.status === 'SUCCESS')) {
+                  this.getTableDataList(this.schema);
+                  this.getDataBaseTreeData();
+                }
+                const failed = items.filter(item => item.status === 'FAILED');
+                this.$message.error(failed.map(item => `${item.name}: ${item.message}`).join('; ') || res.errorMessage || '删除失败');
               }
             });
           }
@@ -1146,7 +1201,9 @@ export default {
           return;
         }
         const data = res.data.data || [];
-        this.dataTreeList = this.dataTreeList.concat(data.map((item) => ({
+        const existingTableNames = new Set(this.dataTreeList.map(item => item.name));
+        const newData = data.filter(item => !existingTableNames.has(item.name));
+        this.dataTreeList = this.dataTreeList.concat(newData.map((item) => ({
           name: item.name,
           comment: item.comment || (item.tableDetails || {}).comment,
           pinned: item.pinned,
@@ -1157,7 +1214,7 @@ export default {
             type: (item.tableDetails || {}).type,
           },
         })));
-        this.detailDataSource = this.detailDataSource.concat(data.map((item) => {
+        this.detailDataSource = this.detailDataSource.concat(newData.map((item) => {
           const details = item.tableDetails || {};
           return {
             name: item.name,
@@ -1200,6 +1257,42 @@ export default {
     handelKeyDown(event) {
       this.ctrlKey = event.key == "Control";
     },
+    openTableInWindow(items, index, event) {
+      if (this.isQuery || !items?.name) return;
+      const hasSelectedTable = this.activeClass >= 0 && Boolean(this.nameTbale);
+      if (!hasSelectedTable) {
+        this.$router.replace({
+          path: this.$route.path,
+          query: {
+            dataSourceId: this.dataInfo.dataSource.id,
+            dataSourceName: this.dataInfo.dataSource.alias,
+            schemaName: this.schema,
+            tableName: items.name,
+            objectType: "table",
+          },
+        });
+        this.handelClickItem(items, index, event);
+        return;
+      }
+      this.$EventBus.$emit("openLookPage", {
+        dataSourceId: this.dataInfo.dataSource.id,
+        dataSourceName: this.dataInfo.dataSource.alias,
+        schemaName: this.schema,
+        tableName: items.name,
+        objectType: "table",
+      });
+    },
+    scrollToActiveTable() {
+      if (this.activeClass < 0) return;
+      this.$nextTick(() => {
+        const scrollbar = this.$refs.objectListScrollbar;
+        const wrap = scrollbar?.wrap || scrollbar?.$refs?.wrap;
+        const activeItem = wrap?.querySelector(`[data-object-index="${this.activeClass}"]`);
+        if (!wrap || !activeItem) return;
+        const centerOffset = Math.max((wrap.clientHeight - activeItem.offsetHeight) / 2, 0);
+        wrap.scrollTop = Math.max(activeItem.offsetTop - centerOffset, 0);
+      });
+    },
     // 切表事件
     async handelClickItem(items, index, event) {
       this.contextMenuVisible = false;
@@ -1227,12 +1320,16 @@ export default {
         this.activeClass = index;
         let type = "";
         const materializedView = this.type == "views" && this.isMaterializedView(items);
+        const objectName = items.name || items.tableDetails.tableSpace;
+        const viewTitle = this.type == "tables" && this.schema
+          ? `${this.schema}.${objectName}`
+          : objectName;
         this.$store.dispatch("jdTagsView/changeView", {
-          title: items.name || items.tableDetails.tableSpace,
+          title: viewTitle,
           id: this.$route.params.id,
         });
         this.$store.state.jdTagsView.titleMap.push({
-          title: items.name || items.tableDetails.tableSpace,
+          title: viewTitle,
           id: this.$route.params.id,
         });
         if (this.type == "tables") {
@@ -1254,7 +1351,11 @@ export default {
             pageSize: 100,
             skipCount: false,
             schemaName: this.schema,
-            sql: `select * from "${this.schema}"."${items.name}"`,
+            sql: this.dataInfo.dataSource.type === "ORACLE" && this.type == "tables"
+              ? `select t.*, t.rowid as "ROWID" from "${this.schema}"."${items.name}" t`
+              : this.dataInfo.dataSource.type === "DM" && this.type == "tables"
+                ? `select t.*, t.rowid from "${this.schema}"."${items.name}" t`
+                : `select * from "${this.schema}"."${items.name}"`,
             tableName: items.name,
             total: 0,
             type: this.dataInfo.dataSource.type,
@@ -1482,7 +1583,14 @@ export default {
     newTableLable() {
       let databaseName = this.context_current_item.schemaName;
       let tableName = this.context_current_item.name;
-      this.$EventBus.$emit("openLookPage", { databaseName, tableName });
+      this.$EventBus.$emit("openLookPage", {
+        dataSourceId: this.context_current_item.dataSourceId || this.dataInfo.dataSource.id,
+        dataSourceName: this.dataInfo.dataSource.alias,
+        databaseName,
+        tableName,
+        objectType: "table",
+        forceNew: true,
+      });
     },
     routerSql() {
       const params = {
@@ -1752,7 +1860,7 @@ export default {
       <div class="isopen" @click="isopenFn">
         <img src="@/assets/main/1-1-sub侧边.png" alt />
       </div>
-      <el-scrollbar class="object-list-scrollbar" style="height: calc(100% - 40px)" v-loading="styleLoading" :element-loading-text="loadingText">
+      <el-scrollbar ref="objectListScrollbar" class="object-list-scrollbar" style="height: calc(100% - 40px)" v-loading="styleLoading" :element-loading-text="loadingText">
         <draggable
           class="components-draggable"
           :list="filterDataTreeList"
@@ -1835,7 +1943,8 @@ export default {
         <div
           v-for="(item, index) in filterDataTreeList"
           :key="item.name || item.tableDetails.tableSpace || index"
-          @click.stop="type != 'tables' && handelClickItem(item, index, $event)"
+          :data-object-index="index"
+          @click.stop="type == 'tables' ? openTableInWindow(item, index, $event) : handelClickItem(item, index, $event)"
           @contextmenu="creatRightMenu(item, $event)"
           class="itemWrap virtual-list-item"
           :class="{ active: heightIndexs.includes(index), selected: type == 'tables' && seleCtrlKet.includes(item.name) }"
@@ -1898,7 +2007,7 @@ export default {
             />
             <img v-else src="@/assets/main/1-sub-ico03.png" alt />
           </span>
-          <span class="table_name" :class="{ 'table-name-clickable': type == 'tables' }" @click="type == 'tables' && handelClickItem(item, index, $event)">
+          <span class="table_name">
             {{ item.name || item.tableDetails.tableSpace }}
           </span>
           <span
@@ -2312,9 +2421,6 @@ export default {
 .table-selection {
   margin-left: 8px;
   flex-shrink: 0;
-}
-.table-name-clickable {
-  cursor: pointer;
 }
 .view-type-badge {
   flex: 0 0 auto;

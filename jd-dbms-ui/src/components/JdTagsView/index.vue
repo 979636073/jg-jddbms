@@ -7,12 +7,13 @@
         :key="tag.path"
         :class="isActive(tag) ? 'active' : ''"
         :to="{ path: tag.path, query: tag.query, fullPath: tag.fullPath }"
+        :title="getViewTooltip(tag)"
         tag="span"
         class="tags-view-item"
         :style="activeStyle(tag)"
         @click.middle.native="!isAffix(tag) ? closeSelectedTag(tag) : ''"
+        @contextmenu.prevent.native="openMenu(tag, $event)"
       >
-        <!-- @contextmenu.prevent.native="openMenu(tag,$event)" -->
         <span class="badge">{{ index + 1 }}</span>
         {{ getViewTitle(tag) }}
         <span
@@ -60,12 +61,6 @@
       </li>
       <li @click="closeOthersTags">
         <i class="el-icon-circle-close"></i> 关闭其他
-      </li>
-      <li v-if="!isFirstView()" @click="closeLeftTags">
-        <i class="el-icon-back"></i> 关闭左侧
-      </li>
-      <li v-if="!isLastView()" @click="closeRightTags">
-        <i class="el-icon-right"></i> 关闭右侧
       </li>
       <li @click="closeAllTags(selectedTag)">
         <i class="el-icon-circle-close"></i> 全部关闭
@@ -150,7 +145,10 @@ export default {
             title = item.title;
           }
         });
-        return title || item.meta.title;
+        const resolvedTitle = title || item.meta.title;
+        return this.$store.state.workspaceData.dirtyPageIds[id]
+          ? `${resolvedTitle} *`
+          : resolvedTitle;
       };
     }
   },
@@ -219,6 +217,17 @@ export default {
     }
   },
   methods: {
+    getViewTooltip(tag) {
+      const query = tag.query || {};
+      if (!query.tableName) return this.getViewTitle(tag);
+      const tooltip = [query.dataSourceName, query.schemaName || query.databaseName, query.tableName]
+        .filter(Boolean)
+        .join(" / ");
+      const pageId = tag.params?.id || tag.path?.split("/").pop();
+      return this.$store.state.workspaceData.dirtyPageIds[pageId]
+        ? `${tooltip}（有未保存修改）`
+        : tooltip;
+    },
     isActive(route) {
       return route.path === this.$route.path;
     },
@@ -347,10 +356,25 @@ export default {
         this.$store.dispatch("jdTagsView/delIframeView", this.$route);
       }
     },
-    closeSelectedTag(view) {
+    async closeSelectedTag(view) {
       console.log(view, "点击关闭tag");
+      const pageId = view.params?.id || view.path?.split("/").pop();
+      if (pageId && this.$store.state.workspaceData.dirtyPageIds[pageId]) {
+        try {
+          await this.$confirm("当前表存在未保存的数据修改，关闭后将丢失。是否继续关闭？", "提示", {
+            confirmButtonText: "关闭",
+            cancelButtonText: "取消",
+            type: "warning",
+          });
+        } catch (error) {
+          return;
+        }
+      }
       // if (this.isActive(view)) {
       this.$jdTab.closePage(view).then(({ visitedViews }) => {
+        if (pageId) {
+          this.$store.dispatch("workspaceData/setPageDirty", { pageId, dirty: false });
+        }
         this.toLastView(visitedViews, view);
         this.$store.commit("SET_ISCLOSEALL", false);
       });

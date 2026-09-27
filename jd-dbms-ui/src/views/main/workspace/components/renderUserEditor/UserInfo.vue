@@ -106,7 +106,8 @@ export default {
           this.initData();
           this.$message.success("操作成功");
         } else {
-          this.$message.error(res.errorCode);
+          this.isLock = !this.isLock;
+          this.$message.error(res.errorMessage || res.errorCode || '操作失败');
         }
       });
     },
@@ -130,11 +131,11 @@ export default {
         newPassWord: this.fromData.password,
       };
       userServer.upatePassword(params).then((res) => {
-        if (res.success) {
+        if (res.success && res.data?.success !== false) {
           this.$message.success("修改成功!");
           this.cancel();
         } else {
-          this.$message.error("修改失败!");
+          this.$message.error(res.errorMessage || res.data?.message || "修改失败!");
         }
       });
     },

@@ -8,12 +8,12 @@ import com.jd.biz.controller.rdb.request.TableBriefQueryRequest;
 import com.jd.biz.controller.rdb.request.TableRequest;
 import com.jd.biz.controller.rdb.vo.ExecuteResultVO;
 import com.jd.biz.controller.rdb.vo.TableVO;
+import com.jd.biz.controller.rdb.vo.UserOperationResult;
 import com.jd.biz.domain.api.service.TableUserService;
 import com.jd.common.annotation.Log;
 import com.jd.common.core.domain.AjaxResult;
 import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.excption.BusinessException;
-import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.common.tools.base.wrapper.result.web.WebPageResult;
@@ -77,14 +77,20 @@ public class TableUserController {
      */
     @Log(title = "数据库用户角色授权", businessType = BusinessType.GRANT)
     @PostMapping("/addOrDelUserRole")
-    public AjaxResult addOrDelUserRole(@Valid @RequestBody TableBriefQueryRequest request) throws SQLException {
+    public DataResult<UserOperationResult> addOrDelUserRole(@Valid @RequestBody TableBriefQueryRequest request) throws SQLException {
         if (StringUtils.isBlank(request.getUserName())) {
             throw new BusinessException("user.role.change.paramRequired");
         }
         if (request.getNewRoles() == null || request.getOldRoles() == null) {
             throw new BusinessException("user.role.change.paramRequired");
         }
-        return tableUserService.addOrDelUserRole(request.getUserName(), request.getNewRoles(), request.getOldRoles());
+        UserOperationResult result = tableUserService.addOrDelUserRole(request.getUserName(), request.getNewRoles(), request.getOldRoles());
+        if (result.isSuccess()) {
+            return DataResult.of(result);
+        }
+        DataResult<UserOperationResult> response = DataResult.error("user.role.change.failed", failureMessage(result));
+        response.setData(result);
+        return response;
     }
 
     /**
@@ -149,8 +155,14 @@ public class TableUserController {
      */
     @Log(title = "数据库对象权限授权", businessType = BusinessType.GRANT)
     @PostMapping("/addObjectRole")
-    public DataResult<Boolean> addObjectRole(@RequestBody @Valid TableBriefQueryRequest request) throws SQLException {
-        return DataResult.of(tableUserService.addObjectRole(request));
+    public DataResult<UserOperationResult> addObjectRole(@RequestBody @Valid TableBriefQueryRequest request) throws SQLException {
+        UserOperationResult result = tableUserService.addObjectRole(request);
+        if (result.isSuccess()) {
+            return DataResult.of(result);
+        }
+        DataResult<UserOperationResult> response = DataResult.error("user.objectRole.change.failed", failureMessage(result));
+        response.setData(result);
+        return response;
     }
 
 
@@ -201,29 +213,52 @@ public class TableUserController {
      */
     @Log(title = "删除数据库用户", businessType = BusinessType.DELETE)
     @PostMapping("/dropUser")
-    public ActionResult dropUser(@Valid @RequestBody TableBriefQueryRequest request) {
+    public DataResult<UserOperationResult> dropUser(@Valid @RequestBody TableBriefQueryRequest request) {
         if (CollUtil.isEmpty(request.getUserNames())
                 || request.getUserNames().stream().anyMatch(StringUtils::isBlank)) {
             throw new BusinessException("user.drop.nameRequired");
         }
-        List<String> failedUserNames = new ArrayList<>();
-        int successCount = 0;
-        for (String userName : request.getUserNames()) {
-            try {
-                String sql = Chat2DBContext.getSqlBuilder().dropUser(userName);
-                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);
-                successCount++;
-            } catch (Exception e) {
-                failedUserNames.add(userName);
-                log.warn("删除用户失败,userName:{},error:{}", userName, e.getMessage());
-            }
+        UserOperationResult result = dropUsers(request.getUserNames(), userName -> {
+            String sql = Chat2DBContext.getSqlBuilder().dropUser(userName);
+            SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);
+        });
+        if (result.isSuccess()) {
+            return DataResult.of(result);
         }
-        if (failedUserNames.isEmpty()) {
-            return ActionResult.isSuccess();
+        List<String> failedUserNames = new ArrayList<>();
+        for (UserOperationResult.Item item : result.getItems()) {
+            if ("FAILED".equals(item.getStatus())) failedUserNames.add(item.getName());
         }
         String errorCode = "user.drop.partialFailed";
         String errorMessage = I18nUtils.getMessage(errorCode,
-                new Object[]{successCount, failedUserNames.size(), String.join(", ", failedUserNames)});
-        return ActionResult.fail(errorCode, errorMessage, null);
+                new Object[]{result.getItems().size() - failedUserNames.size(), failedUserNames.size(), String.join(", ", failedUserNames)});
+        DataResult<UserOperationResult> response = DataResult.error(errorCode, errorMessage);
+        response.setData(result);
+        return response;
+    }
+
+    UserOperationResult dropUsers(List<String> userNames, UserDropper dropper) {
+        UserOperationResult result = new UserOperationResult();
+        for (String userName : userNames) {
+            try {
+                dropper.drop(userName);
+                result.add(userName, "DROP", "SUCCESS", null);
+            } catch (Exception e) {
+                result.add(userName, "DROP", "FAILED", e.getMessage());
+                log.warn("删除用户失败,userName:{},error:{}", userName, e.getMessage());
+            }
+        }
+        return result;
+    }
+
+    private String failureMessage(UserOperationResult result) {
+        return result.getItems().stream()
+                .filter(item -> "FAILED".equals(item.getStatus()) || "ROLLBACK_FAILED".equals(item.getStatus()))
+                .map(item -> item.getAction() + " " + item.getName() + ": " + item.getMessage())
+                .collect(java.util.stream.Collectors.joining("; "));
+    }
+
+    interface UserDropper {
+        void drop(String userName) throws Exception;
     }
 }

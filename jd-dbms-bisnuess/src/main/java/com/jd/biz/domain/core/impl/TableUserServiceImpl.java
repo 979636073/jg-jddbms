@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.jd.common.enums.DBTypeEnum;
 import com.jd.biz.controller.rdb.enums.ResultType;
 import com.jd.biz.controller.rdb.request.TableBriefQueryRequest;
+import com.jd.biz.controller.rdb.vo.UserOperationResult;
 import com.jd.biz.domain.api.service.TableUserService;
 import com.jd.common.core.domain.AjaxResult;
 import com.jd.common.tools.base.excption.BusinessException;
@@ -84,7 +85,7 @@ public class TableUserServiceImpl implements TableUserService {
         } catch (SQLException e) {
             throw new BusinessException("user.lock.failed", new Object[]{ExceptionUtils.getMessage(e)});
         }
-        return DataResult.of(false);
+        return DataResult.error("user.lock.failed", "数据库未完成锁定状态变更");
     }
 
     @Override
@@ -92,6 +93,9 @@ public class TableUserServiceImpl implements TableUserService {
         try {
             String sql = Chat2DBContext.getSqlBuilder().manageUserPassword(name, newPassWord);
             ExecuteResult execute = SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql);
+            if (!Boolean.TRUE.equals(execute.getSuccess())) {
+                return DataResult.error("user.password.change.failed", execute.getMessage());
+            }
             return DataResult.of(execute);
         } catch (SQLException e) {
             throw new BusinessException("user.password.change.failed", new Object[]{ExceptionUtils.getMessage(e)});
@@ -118,13 +122,11 @@ public class TableUserServiceImpl implements TableUserService {
     }
 
     @Override
-    public AjaxResult addOrDelUserRole(String userName, List<TableRoleData> newRoles, List<TableRoleData> oldRoles) {
+    public UserOperationResult addOrDelUserRole(String userName, List<TableRoleData> newRoles, List<TableRoleData> oldRoles) {
         if (StrUtil.isBlank(userName) || newRoles == null || oldRoles == null) {
             throw new BusinessException("user.role.change.paramRequired");
         }
-        executeChanges(buildUserRoleChanges(Chat2DBContext.getSqlBuilder(), userName, newRoles, oldRoles),
-                "user.role.change.failed");
-        return AjaxResult.success();
+        return executeChanges(buildUserRoleChanges(Chat2DBContext.getSqlBuilder(), userName, newRoles, oldRoles));
     }
 
     @Override
@@ -138,8 +140,12 @@ public class TableUserServiceImpl implements TableUserService {
             SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), createSql);
             created = true;
             List<TableRoleData> requestedRoles = roles == null ? Collections.emptyList() : roles;
-            executeChanges(buildUserRoleChanges(Chat2DBContext.getSqlBuilder(), userName,
-                    requestedRoles, Collections.emptyList()), "user.role.change.failed");
+            UserOperationResult roleResult = executeChanges(buildUserRoleChanges(Chat2DBContext.getSqlBuilder(), userName,
+                    requestedRoles, Collections.emptyList()));
+            if (!roleResult.isSuccess()) {
+                throw new BusinessException("user.role.change.failed", new Object[]{roleResult.getItems().stream()
+                        .filter(item -> "FAILED".equals(item.getStatus())).findFirst().get().getMessage()});
+            }
             return AjaxResult.success();
         } catch (SQLException | RuntimeException e) {
             if (created) {
@@ -248,7 +254,7 @@ public class TableUserServiceImpl implements TableUserService {
     }
 
     @Override
-    public Boolean addObjectRole(TableBriefQueryRequest request) {
+    public UserOperationResult addObjectRole(TableBriefQueryRequest request) {
         if (request.getNewObjectRoleData() == null || request.getOldObjectRoleData() == null) {
             throw new BusinessException("user.objectRole.paramRequired");
         }
@@ -258,8 +264,7 @@ public class TableUserServiceImpl implements TableUserService {
         if (request.getSchemaName().equals(request.getUserName())) {
             throw new BusinessException("user.objectRole.sameSchema");
         }
-        executeChanges(buildObjectRoleChanges(Chat2DBContext.getSqlBuilder(), request), "user.objectRole.change.failed");
-        return true;
+        return executeChanges(buildObjectRoleChanges(Chat2DBContext.getSqlBuilder(), request));
     }
 
     List<SqlChange> buildUserRoleChanges(SqlBuilder<?> sqlBuilder, String userName,
@@ -276,13 +281,13 @@ public class TableUserServiceImpl implements TableUserService {
             boolean adminChanged = oldRole != null && newRole != null
                     && !Objects.equals(Boolean.TRUE.equals(oldRole.getIsAdmin()), Boolean.TRUE.equals(newRole.getIsAdmin()));
             if (oldRole != null && (newRole == null || adminChanged)) {
-                revokes.add(new SqlChange(
+                revokes.add(new SqlChange(roleName, "REVOKE",
                         sqlBuilder.delUserRole(userName, roleName),
                         sqlBuilder.addUserRole(userName, roleName,
                                 Boolean.TRUE.equals(oldRole.getIsAdmin()) ? roleName : "")));
             }
             if (newRole != null && (oldRole == null || adminChanged)) {
-                grants.add(new SqlChange(
+                grants.add(new SqlChange(roleName, "GRANT",
                         sqlBuilder.addUserRole(userName, roleName,
                                 Boolean.TRUE.equals(newRole.getIsAdmin()) ? roleName : ""),
                         sqlBuilder.delUserRole(userName, roleName)));
@@ -305,14 +310,14 @@ public class TableUserServiceImpl implements TableUserService {
             boolean grantOptionChanged = oldRole != null && newRole != null
                     && !Objects.equals(Boolean.TRUE.equals(oldRole.getToRule()), Boolean.TRUE.equals(newRole.getToRule()));
             if (oldRole != null && (newRole == null || grantOptionChanged)) {
-                revokes.add(new SqlChange(
+                revokes.add(new SqlChange(privilegeName, "REVOKE",
                         singleSql(sqlBuilder.delObjectRole(request.getSchemaName(), request.getUserName(),
                                 request.getTableName(), Collections.singletonList(oldRole))),
                         singleSql(sqlBuilder.addObjectRole(request.getSchemaName(), request.getUserName(),
                                 request.getTableName(), Collections.singletonList(oldRole)))));
             }
             if (newRole != null && (oldRole == null || grantOptionChanged)) {
-                grants.add(new SqlChange(
+                grants.add(new SqlChange(privilegeName, "GRANT",
                         singleSql(sqlBuilder.addObjectRole(request.getSchemaName(), request.getUserName(),
                                 request.getTableName(), Collections.singletonList(newRole))),
                         singleSql(sqlBuilder.delObjectRole(request.getSchemaName(), request.getUserName(),
@@ -362,31 +367,53 @@ public class TableUserServiceImpl implements TableUserService {
         return sqlList.get(0);
     }
 
-    private void executeChanges(List<SqlChange> changes, String errorCode) {
-        List<SqlChange> completed = new ArrayList<>();
-        try {
-            for (SqlChange change : changes) {
-                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), change.sql);
-                completed.add(change);
-            }
-        } catch (SQLException e) {
-            for (int i = completed.size() - 1; i >= 0; i--) {
-                try {
-                    SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), completed.get(i).rollbackSql);
-                } catch (SQLException rollbackException) {
-                    log.warn("权限变更补偿失败,sql:{},error:{}", completed.get(i).rollbackSql,
-                            rollbackException.getMessage());
+    private UserOperationResult executeChanges(List<SqlChange> changes) {
+        return executeChanges(changes, sql -> SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql));
+    }
+
+    UserOperationResult executeChanges(List<SqlChange> changes, SqlRunner runner) {
+        UserOperationResult result = new UserOperationResult();
+        for (int index = 0; index < changes.size(); index++) {
+            SqlChange change = changes.get(index);
+            try {
+                runner.run(change.sql);
+                result.add(change.name, change.action, "SUCCESS", null);
+            } catch (SQLException e) {
+                result.add(change.name, change.action, "FAILED", ExceptionUtils.getMessage(e));
+                for (int i = result.getItems().size() - 2; i >= 0; i--) {
+                    SqlChange completed = changes.get(i);
+                    try {
+                        runner.run(completed.rollbackSql);
+                        result.getItems().get(i).update("ROLLED_BACK", null);
+                    } catch (SQLException rollbackException) {
+                        result.getItems().get(i).update("ROLLBACK_FAILED", ExceptionUtils.getMessage(rollbackException));
+                        log.warn("权限变更补偿失败,sql:{},error:{}", completed.rollbackSql,
+                                rollbackException.getMessage());
+                    }
                 }
+                for (int i = index + 1; i < changes.size(); i++) {
+                    SqlChange skipped = changes.get(i);
+                    result.add(skipped.name, skipped.action, "SKIPPED", null);
+                }
+                break;
             }
-            throw new BusinessException(errorCode, new Object[]{ExceptionUtils.getMessage(e)});
         }
+        return result;
+    }
+
+    interface SqlRunner {
+        void run(String sql) throws SQLException;
     }
 
     static class SqlChange {
+        private final String name;
+        private final String action;
         private final String sql;
         private final String rollbackSql;
 
-        SqlChange(String sql, String rollbackSql) {
+        SqlChange(String name, String action, String sql, String rollbackSql) {
+            this.name = name;
+            this.action = action;
             this.sql = sql;
             this.rollbackSql = rollbackSql;
         }

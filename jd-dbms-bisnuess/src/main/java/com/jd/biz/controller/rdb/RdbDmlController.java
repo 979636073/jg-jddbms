@@ -341,7 +341,7 @@ public class RdbDmlController {
      */
     @RequestMapping(value = "/exportFile", method = {RequestMethod.POST})
     public void exportFile(@RequestBody exportFile exportFile, HttpServletResponse response) {
-        if (StrUtil.isBlank(exportFile.getBlobStr()) || StrUtil.isBlank(exportFile.getFileName()) || StrUtil.isBlank(exportFile.getPrefix())) {
+        if (exportFile.getBlobStr() == null || StrUtil.isBlank(exportFile.getFileName()) || StrUtil.isBlank(exportFile.getPrefix())) {
             throw new BusinessException("参数缺失");
         }
         if (!exportFile.getPrefix().contains(".")) {

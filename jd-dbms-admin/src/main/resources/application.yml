@@ -108,6 +108,7 @@ token:
   expireTime: 518400
 jddbms:
   datasource-encryption-key: ${JDDBMS_DATASOURCE_ENCRYPTION_KEY}
+  datasource-encryption-legacy-keys: ${JDDBMS_DATASOURCE_ENCRYPTION_LEGACY_KEYS:}
 sso:
   gateway: false
 # MyBatis配置
@@ -158,12 +159,19 @@ exportDmp:
   #  dm: /opt/dmdbms/bin/dexp
   oracle: ${JDDBMS_ORACLE_EXPORT_TOOL:exp}
 dmp:
+  tools:
+    # 客户端工具包保存目录；为空时使用 ${dbms.profile}/dmp-tools
+    root: ${JDDBMS_DMP_TOOL_ROOT:}
   dm:
     user: ${JDDBMS_DM_DMP_USER:}
     password: ${JDDBMS_DM_DMP_PASSWORD:}
   oracle:
     user: ${JDDBMS_ORACLE_DMP_USER:}
     password: ${JDDBMS_ORACLE_DMP_PASSWORD:}
+    # Data Pump使用数据库端DIRECTORY名称，目录路径需与数据库服务器共享或挂载。
+    data-pump-directory: ${JDDBMS_ORACLE_DATAPUMP_DIRECTORY:}
+    data-pump-path: ${JDDBMS_ORACLE_DATAPUMP_PATH:}
+    compatibility-version: ${JDDBMS_ORACLE_DATAPUMP_VERSION:}
 
 importDmp:
   dm: ${JDDBMS_DM_IMPORT_TOOL:dimp}

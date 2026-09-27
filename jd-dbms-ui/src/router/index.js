@@ -116,6 +116,7 @@ export const constantRoutes = [
   {
     path: '/task-center',
     component: Layout,
+    hidden: true,
     redirect: '/task-center/index',
     children: [
       {
@@ -142,6 +143,7 @@ export const constantRoutes = [
   {
     path: '/relation-graph',
     component: Layout,
+    hidden: true,
     redirect: '/relation-graph/index',
     children: [
       {

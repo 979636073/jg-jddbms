@@ -6,35 +6,13 @@
     :before-close="handleClose"
   >
     <span>
-      <el-form
-        :model="fromData"
-        :rules="rules"
-        ref="ruleForm"
-        label-width="120px"
-        class="demo-ruleForm"
-        :inline="true"
-      >
-        <el-form-item label="文件名称" prop="name">
-          <el-input
-            v-model="fromData.name"
-            placeholder="请输入文件名称"
-            size="small"
-          ></el-input>
-        </el-form-item>
-        <el-form-item label="文件类型后缀" prop="type">
-          <el-input
-            v-model="fromData.type"
-            size="small"
-            placeholder="例:.txt,.sql,.docx,.xlsx等等"
-          ></el-input>
-        </el-form-item>
-      </el-form>
+      <p>文件名：{{ fromData.name }}{{ fromData.type }}</p>
       <el-image
         v-if="isShow"
-        :src="'data:image/png;base64,' + blobStr"
-        fit="cover"
-        :style="`width:${500};height:${600};`"
-        :preview-src-list="['data:image/png;base64,' + blobStr]"
+        :src="imageSrc"
+        fit="contain"
+        style="width: 100%; height: 40vh; max-height: 420px"
+        :preview-src-list="[imageSrc]"
      />
      <el-tag v-else>请下载后预览</el-tag>
     </span>
@@ -56,14 +34,14 @@ export default {
         type: "",
       },
       blobStr: "",
-      isShow:true,
-      rules: {
-        name: [{ required: true, message: "请输入文件名称", trigger: "blur" }],
-        type: [
-          { required: true, message: "请输入后缀", trigger: "blur" },
-        ],
-      },
+      isShow:false,
     };
+  },
+  computed: {
+    imageSrc() {
+      const mime = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp" }[this.fromData.type] || "image/png";
+      return `data:${mime};base64,${this.blobStr}`;
+    },
   },
   methods: {
     handleClose() {
@@ -71,22 +49,16 @@ export default {
       this.fromData.name = "";
       this.fromData.type = "";
     },
-    downLoad() {
-      this.$refs.ruleForm.validate((valid) => {
-        if (valid) {
-          const params = {
-            blobStr: this.blobStr,
-            fileName: this.fromData.name,
-            prefix: this.fromData.type,
-          };
-          console.log(params,'params');
-          downloadFile(
-            process.env.VUE_APP_BASE_API + "/api/rdb/dml/exportFile",
-            params
-          );
-          this.handleClose();
-        }
-      });
+    async downLoad() {
+      try {
+        await downloadFile(
+          process.env.VUE_APP_BASE_API + "/api/rdb/dml/exportFile",
+          { blobStr: this.blobStr, fileName: this.fromData.name, prefix: this.fromData.type }
+        );
+        this.handleClose();
+      } catch (error) {
+        this.$message.error(error.message || "文件下载失败");
+      }
     },
   },
 };

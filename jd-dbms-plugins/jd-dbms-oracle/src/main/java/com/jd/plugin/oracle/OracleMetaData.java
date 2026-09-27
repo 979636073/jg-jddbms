@@ -1181,6 +1181,41 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
+    public DmpCommand importDmp(ConnectInfo connectInfo, List<String> tableName, String fromUser,
+                                String toUser, String schemaName, File file, File logFileName,
+                                String importDmp, List<String> toUserList, Boolean isWin,
+                                String dmpUser, String dmpPassword, DmpToolOptions options) {
+        if (options == null || !"ORACLE_DATAPUMP".equalsIgnoreCase(options.getToolFamily())) {
+            return importDmp(connectInfo, tableName, fromUser, toUser, schemaName, file,
+                    logFileName, importDmp, toUserList, isWin, dmpUser, dmpPassword);
+        }
+        String host = connectInfo.getUrl().split("@")[1];
+        String credential = dmpUser + "/" + dmpPassword + "@" + host;
+        List<String> arguments = new ArrayList<>();
+        arguments.add("DIRECTORY=" + options.getDirectoryName());
+        arguments.add("DUMPFILE=" + file.getName());
+        arguments.add("LOGFILE=" + logFileName.getName());
+        if (CollectionUtil.isNotEmpty(tableName) && StringUtils.isNotBlank(fromUser)) {
+            arguments.add("TABLES=" + tableName.stream()
+                    .map(name -> getMetaDataName(fromUser) + "." + getMetaDataName(name))
+                    .collect(Collectors.joining(",")));
+            if (StringUtils.isNotBlank(toUser) && !fromUser.equalsIgnoreCase(toUser)) {
+                arguments.add("REMAP_SCHEMA=" + fromUser + ":" + toUser);
+            }
+        } else if (StringUtils.isNotBlank(fromUser)) {
+            arguments.add("SCHEMAS=" + fromUser);
+            if (StringUtils.isNotBlank(toUser) && !fromUser.equalsIgnoreCase(toUser)) {
+                arguments.add("REMAP_SCHEMA=" + fromUser + ":" + toUser);
+            }
+        } else if (CollUtil.isNotEmpty(toUserList)) {
+            arguments.add("SCHEMAS=" + String.join(",", toUserList));
+        } else {
+            arguments.add("FULL=Y");
+        }
+        return new DmpCommand(importDmp, credential, arguments);
+    }
+
+    @Override
     public DmpCommand exportDmp(ConnectInfo connectInfo, List<String> tableName, String schemaName, File logFileName, File dmpFileName, String exportDmp,Boolean isWin, String dmpUser, String dmpPassword) {
         //获取主机名
         String host = connectInfo.getUrl().split("@")[1];
@@ -1215,6 +1250,35 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             arguments.add("log=" + logFileName);
         }
 
+        return new DmpCommand(exportDmp, credential, arguments);
+    }
+
+    @Override
+    public DmpCommand exportDmp(ConnectInfo connectInfo, List<String> tableName, String schemaName,
+                                File logFileName, File dmpFileName, String exportDmp, Boolean isWin,
+                                String dmpUser, String dmpPassword, DmpToolOptions options) {
+        if (options == null || !"ORACLE_DATAPUMP".equalsIgnoreCase(options.getToolFamily())) {
+            return exportDmp(connectInfo, tableName, schemaName, logFileName, dmpFileName,
+                    exportDmp, isWin, dmpUser, dmpPassword);
+        }
+        String host = connectInfo.getUrl().split("@")[1];
+        String credential = dmpUser + "/" + dmpPassword + "@" + host;
+        List<String> arguments = new ArrayList<>();
+        arguments.add("DIRECTORY=" + options.getDirectoryName());
+        arguments.add("DUMPFILE=" + dmpFileName.getName());
+        arguments.add("LOGFILE=" + logFileName.getName());
+        if (StrUtil.isNotBlank(options.getTargetVersion())) {
+            arguments.add("VERSION=" + options.getTargetVersion());
+        }
+        if (CollectionUtil.isNotEmpty(tableName)) {
+            arguments.add("TABLES=" + tableName.stream()
+                    .map(name -> getMetaDataName(schemaName) + "." + getMetaDataName(name))
+                    .collect(Collectors.joining(",")));
+        } else if (StrUtil.isNotEmpty(schemaName)) {
+            arguments.add("SCHEMAS=" + schemaName);
+        } else {
+            arguments.add("FULL=Y");
+        }
         return new DmpCommand(exportDmp, credential, arguments);
     }
 }

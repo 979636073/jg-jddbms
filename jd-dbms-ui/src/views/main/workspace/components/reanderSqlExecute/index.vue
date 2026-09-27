@@ -557,7 +557,7 @@ export default {
         this.execute();
       }
     },
-    requestSqlExecution(send) {
+    requestSqlExecution(send, retriedSession = false) {
       sqlServer
         .executeSql(send)
         .then((res) => {
@@ -591,6 +591,19 @@ export default {
             return;
           }
           const results = Array.isArray(res.data) ? res.data : [];
+          if (send.sessionId && results.length === 1 && results[0].success === false &&
+              results[0].message === "事务会话不存在或已过期") {
+            if (this.hasPendingTransaction) {
+              results[0].message = "待提交事务的会话已失效，请确认数据后重新执行";
+              results[0].sessionId = null;
+            } else if (!retriedSession) {
+              this.sessionId = "";
+              const executionId = this.createExecutionId();
+              this.currentExecutionId = executionId;
+              this.requestSqlExecution({ ...send, sessionId: undefined, executionId }, true);
+              return;
+            }
+          }
           const durations = results
             .filter((item) => item.duration !== null && item.duration !== undefined)
             .map((item) => Number(item.duration));
@@ -628,8 +641,11 @@ export default {
           this.messageData = results[0] && results[0].allMessage
             ? results[0].allMessage
             : this.buildExecutionSummary(results);
-          this.Allmessage = true;
-          this.successCurrentIndex = null;
+          const firstSelectIndex = results
+            .filter((item) => item.success)
+            .findIndex((item) => item.sqlType === "SELECT");
+          this.Allmessage = firstSelectIndex < 0;
+          this.successCurrentIndex = firstSelectIndex >= 0 ? firstSelectIndex : null;
           this.sqlLoading = false;
           this.currentExecutionId = "";
           this.cancelRequested = false;

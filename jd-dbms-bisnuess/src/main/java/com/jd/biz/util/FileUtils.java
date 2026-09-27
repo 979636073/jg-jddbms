@@ -38,6 +38,9 @@ public class FileUtils {
 
 
     public static String getBlobType(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) {
+            return "";
+        }
         byte[] header = new byte[]{bytes[0],bytes[1],bytes[2],bytes[3]};
         StringBuilder stringBuilder = new StringBuilder();
         for (byte b : header) {

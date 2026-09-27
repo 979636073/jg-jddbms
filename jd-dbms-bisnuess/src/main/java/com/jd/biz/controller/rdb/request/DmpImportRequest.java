@@ -48,5 +48,10 @@ public class DmpImportRequest  extends DataSourceBaseRequest {
 
     private List<String> toUser;
 
+    /** 客户端工具ID；为空时自动选择。 */
+    private String dmpToolId;
+
+    /** ORACLE_DATAPUMP、ORACLE_LEGACY 或 DM_DEXP。 */
+    private String dmpToolFamily;
 
 }
