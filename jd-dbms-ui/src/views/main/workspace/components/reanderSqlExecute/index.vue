@@ -4,6 +4,7 @@ import MonacoEditor from "@/components/MonacoEditor/index.vue";
 import sqlServer from "@/api/main/sql";
 import historyServer from "@/api/main/history";
 import tableServer from "@/api/main/table";
+import connectionServer from "@/api/main/connection";
 import { downloadFile } from "@/utils/file";
 import { copyText } from "@/utils";
 import draggable from "vuedraggable";
@@ -23,7 +24,10 @@ export default {
       messageData: "",
       disableCommit: false,
       disableRollBack: false,
-      flag: true,
+      resultExpanded: false,
+      schemaOptions: [],
+      schemaLoading: false,
+      executionSettingsVisible: false,
       isCommit: false,
       sessionId: "",
       sqlContent: null,
@@ -35,7 +39,7 @@ export default {
       successCurrentIndex: 0,
       errorCurrentIndex: 0,
       executeRes: "",
-      heightStyle: 300,
+      heightStyle: 220,
       updateId: "",
       isShow: false,
       errorShow: false,
@@ -90,23 +94,22 @@ export default {
     };
   },
   computed: {
-    lineTexts() {
-      return this.messageData
-        .split("\n")
-        .map((line) => {
-          if (line.includes("成功"))
-            return `<div style="color:blue">${line}</div>`;
-          if (line.includes("失败"))
-            return `<div style="color:red">${line}</div>`;
-          return line;
-        })
-        .join("<br>");
+    availableSchemas() {
+      return [...new Set([this.selectedSchema, ...this.schemaOptions].filter(Boolean))];
     },
     // activeConsoleId() {
     //   return this.$store.state.workspace.activeConsoleId;
     // },
     currentDataSource() {
-      return this.$store.state.workspace.currentConnectionDetails;
+      return this.currentConfig.uniqueData || {};
+    },
+    selectedSchema() {
+      return this.currentDataSource.schemaName || "";
+    },
+    connectionLabel() {
+      const source = this.$store.state.workspace.dataSourceList.find(item => String(item.id) === String(this.currentDataSource.dataSourceId));
+      if (!source) return this.currentDataSource.dataSourceName;
+      return source.alias && !source.alias.startsWith('@') ? source.alias : source.user || source.userName || source.alias;
     },
     successList() {
       if (this.currentConfig.sqlData && this.currentConfig.sqlData.length) {
@@ -149,7 +152,7 @@ export default {
       return this.successList.some((result) => this.hasUpdateCount(result));
     },
     hasPendingTransaction() {
-      return this.successList.some((result) => Boolean(result.sign));
+      return this.disableCommit || this.disableRollBack || this.successList.some((result) => Boolean(result.sign));
     },
   },
   watch: {
@@ -236,28 +239,38 @@ export default {
       this.$refs.MonacoEditor.setValue(this.currentConfig.uniqueData.sql);
     }
     this.sqlConsoleKeydown = (event) => {
+      if (this._inactive) return;
       if (event.key === "F9" || (event.ctrlKey && event.key === "Enter")) {
         event.preventDefault();
+        event.stopPropagation();
         this.executeSQL("run");
       } else if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "f") {
         event.preventDefault();
+        event.stopPropagation();
         this.formatSql();
       } else if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c") {
         event.preventDefault();
+        event.stopPropagation();
         if (this.disableCommit) this.handleCommit();
       } else if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "r") {
         event.preventDefault();
+        event.stopPropagation();
         if (this.disableRollBack) this.handleBackRoll();
       }
     };
-    document.addEventListener("keydown", this.sqlConsoleKeydown);
+    document.addEventListener("keydown", this.sqlConsoleKeydown, true);
   },
   beforeDestroy() {
     if (this.sqlConsoleKeydown) {
-      document.removeEventListener("keydown", this.sqlConsoleKeydown);
+      document.removeEventListener("keydown", this.sqlConsoleKeydown, true);
     }
   },
   methods: {
+    updateResult(result) {
+      const selected = this.successList[this.successCurrentIndex];
+      const results = this.currentConfig.sqlData.map(item => item === selected ? result : item);
+      this.$emit("setCurrentConfig", "sqlData", results);
+    },
     hasUpdateCount(result) {
       if (
         !result ||
@@ -328,19 +341,42 @@ export default {
       localStorage.setItem("jd-dbms-recent-sql", JSON.stringify(this.recentSqlScripts));
     },
     upAndDown(){
-      this.flag = !this.flag
-      this.flag ? this.heightStyle = 700 : this.heightStyle = 300
+      this.resultExpanded = !this.resultExpanded;
+      this.heightStyle = this.resultExpanded ? Math.max(180, this.$el.clientHeight - 220) : 220;
+    },
+    async loadSchemas(visible) {
+      if (!visible || this.schemaOptions.length || this.schemaLoading) return;
+      this.schemaLoading = true;
+      try {
+        const res = await connectionServer.getSchemaList({
+          dataSourceId: this.currentDataSource.dataSourceId,
+          databaseName: this.currentDataSource.databaseName,
+          refresh: false,
+        });
+        if (res.success) this.schemaOptions = (res.data || []).map(item => item.name);
+      } finally {
+        this.schemaLoading = false;
+      }
+    },
+    changeSchema(schemaName) {
+      if (this.sqlLoading || this.disableCommit || this.disableRollBack) return;
+      this.sessionId = "";
+      this.$emit("setCurrentConfig", "uniqueData", { ...this.currentDataSource, schemaName });
+    },
+    handleMoreAction(action) {
+      if (action === "import") this.importSqlFile();
+      else if (action === "clear") this.emptySql();
+      else if (action === "results") this.clearResults();
+      else if (action === "compile") this.executeSQL("run", true);
+      else if (action === "plan") this.executeSQL("plan");
+      else if (action === "export") this.exportSql();
     },
     handleBackRoll() {
-      this.disableCommit = false;
-      this.disableRollBack = false;
+      if (this.sqlLoading || !this.sessionId) return;
       let { uniqueData } = this.currentConfig;
       let sql =
         this.$refs.MonacoEditor.getSelectValue() ||
         this.$refs.MonacoEditor.getValue();
-      if (!sql) {
-        return;
-      }
       this.sqlLoading = true;
       let send = {
         consoleId: this.currentConfig.id,
@@ -351,7 +387,7 @@ export default {
         pageNo: 1,
         pageSize: 200,
         schemaName: uniqueData.schemaName,
-        sql: sql,
+        sql: sql || "ROLLBACK",
         status: "DRAFT",
         supportDatabase: false,
         supportSchema: true,
@@ -389,15 +425,11 @@ export default {
         });
     },
     handleCommit() {
-      this.disableCommit = false;
-      this.disableRollBack = false;
+      if (this.sqlLoading || !this.sessionId) return;
       let { uniqueData } = this.currentConfig;
       let sql =
         this.$refs.MonacoEditor.getSelectValue() ||
         this.$refs.MonacoEditor.getValue();
-      if (!sql) {
-        return;
-      }
       this.sqlLoading = true;
       let send = {
         consoleId: this.currentConfig.id,
@@ -408,7 +440,7 @@ export default {
         pageNo: 1,
         pageSize: 200,
         schemaName: uniqueData.schemaName,
-        sql: sql,
+        sql: sql || "COMMIT",
         status: "DRAFT",
         supportDatabase: false,
         supportSchema: true,
@@ -475,7 +507,7 @@ export default {
         this.$refs.MonacoEditor.getSelectValue() ||
         this.$refs.MonacoEditor.getValue();
       const params = {
-        dataSourceId: this.currentConfig.uniqueData.dataSourceId,
+        ...this.currentConfig.uniqueData,
         sql: sql,
         consoleId: this.currentConfig.id,
       };
@@ -501,16 +533,15 @@ export default {
       this.currentConfig.uniqueData.ddl = ddl;
     },
     // 执行sql
-    executeSQL(type, status) {
+    executeSQL(type, status, executeAll = false) {
       // 防止重复点击导致同一 SQL 并发执行，表现为窗口长时间无响应。
       if (this.sqlLoading) {
         return;
       }
       let { uniqueData } = this.currentConfig;
-      let sql =
-        this.$refs.MonacoEditor.getSelectValue() ||
-        this.$refs.MonacoEditor.getValue();
-      if (!sql) {
+      let sql = executeAll ? this.$refs.MonacoEditor.getValue() :
+        this.$refs.MonacoEditor.getSelectValue() || this.$refs.MonacoEditor.getCurrentStatement();
+      if (!sql.trim()) {
         return;
       }
       this.saveRecentSqlScript(sql);
@@ -526,6 +557,7 @@ export default {
           dataSourceId: uniqueData.dataSourceId,
           dataSourceName: uniqueData.dataSourceName,
           databaseType: uniqueData.databaseType,
+          databaseName: uniqueData.databaseName,
           hasNextPage: true,
           pageNo: 1,
           pageSize: 200,
@@ -546,11 +578,7 @@ export default {
           skipCount: true,
         };
         this.currentExecutionId = send.executionId;
-        if (this.flag) {
-          this.flag = false;
-        } else {
-          send.sessionId = this.sessionId;
-        }
+        if (this.sessionId) send.sessionId = this.sessionId;
         status ? (send.isExecuteCompile = true) : "";
         this.requestSqlExecution(send);
       } else {
@@ -591,6 +619,9 @@ export default {
             return;
           }
           const results = Array.isArray(res.data) ? res.data : [];
+          if (!res.success && !results.length) {
+            results.push({ success: false, message: res.errorMessage || "SQL 执行失败", originalSql: send.sql });
+          }
           if (send.sessionId && results.length === 1 && results[0].success === false &&
               results[0].message === "事务会话不存在或已过期") {
             if (this.hasPendingTransaction) {
@@ -621,23 +652,14 @@ export default {
           console.log(res.data, "(res.data");
           // if (res.data[0].success) {
 
-          if (results.length < 2) {
-            if (results[0]) {
-              results[0].params = { ...send, executionId: undefined };
-              this.sessionId = results[0].sessionId;
-              this.disableCommit = results[0].sign;
-              this.disableRollBack = results[0].sign;
-            }
-            this.$emit("setCurrentConfig", "sqlData", results);
-          } else {
-            if (results[0]) {
-              this.disableCommit = results[0].sign;
-              this.disableRollBack = results[0].sign;
-              this.sessionId = results[0].sessionId;
-            }
-            this.tableData = results;
-            this.$emit("setCurrentConfig", "sqlData", this.tableData);
-          }
+          results.forEach(result => {
+            result.params = { ...send, sql: result.originalSql || send.sql, sessionId: result.sessionId || send.sessionId, executionId: undefined };
+          });
+          const lastSessionResult = [...results].reverse().find(result => result.sessionId);
+          this.sessionId = lastSessionResult ? lastSessionResult.sessionId : "";
+          this.disableCommit = results.some(result => result.sign);
+          this.disableRollBack = this.disableCommit;
+          this.$emit("setCurrentConfig", "sqlData", results);
           this.messageData = results[0] && results[0].allMessage
             ? results[0].allMessage
             : this.buildExecutionSummary(results);
@@ -659,7 +681,16 @@ export default {
           //   this.errorMsg = res.data[0].message;
           // }
         })
-        .catch(() => {
+        .catch((error) => {
+          const message = `SQL 请求失败，数据库执行状态未确认：${error.message || String(error)}`;
+          this.$emit("setCurrentConfig", "sqlData", [{ success: false, message, originalSql: send.sql }]);
+          this.resultTab = "error";
+          this.errorCurrentIndex = 0;
+          this.isShow = true;
+          this.isSuccessShow = false;
+          this.lastExecutionDuration = null;
+          this.lastResultCount = 1;
+          this.lastOperationStatus = "请求失败，执行状态未确认";
           this.sqlLoading = false;
           this.currentExecutionId = "";
           this.cancelRequested = false;
@@ -699,8 +730,7 @@ export default {
     },
     // 清空
     emptySql() {
-      this.$refs.MonacoEditor.setValue(" ");
-      this.isShow = false;
+      this.$refs.MonacoEditor.setValue("");
     },
     clearResults() {
       this.$emit("setCurrentConfig", "sqlData", []);
@@ -830,11 +860,7 @@ export default {
             initialHeight = initialHeight + (startY - endY);
           }
 
-          if (initialHeight > 700) {
-            initialHeight = 700;
-          } else if (initialHeight < 300) {
-            initialHeight = 300;
-          }
+          initialHeight = Math.max(120, Math.min(initialHeight, that.$el.clientHeight - 220));
           startY = endY;
           that.heightStyle = initialHeight;
         }
@@ -842,8 +868,8 @@ export default {
 
       function handleMouseUp(event) {
         isFlag = false;
-        document.onmousemove = null;
-        document.onmouseup = null;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
       }
 
       document.addEventListener("mousemove", handleMouseMove);
@@ -876,24 +902,6 @@ export default {
     currentClick(item, index) {
       this.Allmessage = false;
       this.successCurrentIndex = index;
-      let { uniqueData } = this.currentConfig;
-      let send = {
-        consoleId: this.currentConfig.id,
-        dataSourceId: uniqueData.dataSourceId,
-        dataSourceName: uniqueData.dataSourceName,
-        databaseType: uniqueData.databaseType,
-        hasNextPage: true,
-        pageNo: 1,
-        pageSize: 200,
-        schemaName: uniqueData.schemaName,
-        sql: item.originalSql,
-        status: "DRAFT",
-        supportDatabase: false,
-        supportSchema: true,
-        total: 0,
-        type: uniqueData.type,
-      };
-      item.params = send;
     },
     handleInput(val) {
       this.inputSqlName = val.replace(/[@!=]/g, "");
@@ -901,7 +909,6 @@ export default {
     viewLog() {
       this.page.pageNum = 1;
       this.dialogTableVisible = true;
-      this.logData();
     },
     handleClose() {
       this.page.pageNum = 1;
@@ -1037,79 +1044,54 @@ export default {
 
 <template>
   <div class="sql_execute">
+    <div class="sql-context-bar">
+      <span class="context-label">数据源</span>
+      <span class="connection-name" :title="connectionLabel">{{ connectionLabel }}</span>
+      <el-tag size="small" type="info" effect="plain">{{ currentDataSource.databaseType || currentDataSource.type }}</el-tag>
+      <label class="context-label">模式</label>
+      <el-select :value="selectedSchema" filterable size="small" placeholder="选择模式"
+        :loading="schemaLoading" :disabled="sqlLoading || disableCommit || disableRollBack"
+        @visible-change="loadSchemas" @change="changeSchema">
+        <el-option v-for="schema in availableSchemas" :key="schema" :value="schema" :label="schema" />
+      </el-select>
+      <span class="schema-help">{{ disableCommit ? '事务待提交，提交或回滚后可切换模式' : '当前窗口独立执行上下文' }}</span>
+    </div>
     <div class="sql_search_box">
       <div class="monaco_btn">
         <input ref="sqlFileInput" type="file" accept=".sql,.txt" style="display:none" @change="handleSqlFileChange" />
-        <el-button size="mini" type="text" @click="importSqlFile" :loading="importingSqlFile" title="导入 SQL 文件">
-          <i class="el-icon-upload2"></i>
-          导入
-        </el-button>
-        <el-popover placement="bottom-start" width="360" trigger="click" v-model="recentScriptsVisible">
-          <div class="recent-sql-title">最近脚本</div>
-          <el-empty v-if="!recentSqlScripts.length" description="暂无最近脚本" :image-size="50" />
-          <div v-else class="recent-sql-list">
-            <div v-for="script in recentSqlScripts" :key="script.id" class="recent-sql-item">
-              <div class="recent-sql-preview" :title="script.sql" @click="restoreRecentSqlScript(script)">{{ script.preview }}</div>
-              <span class="recent-sql-time">{{ script.time }}</span>
-              <i class="el-icon-delete recent-sql-delete" title="删除" @click="removeRecentSqlScript(script)"></i>
-            </div>
-          </div>
-          <el-button slot="reference" size="mini" type="text" title="恢复最近脚本">
-            <i class="el-icon-time"></i>
-            最近脚本
-          </el-button>
-        </el-popover>
         <el-button
-          v-if="!sqlLoading"
           size="mini"
           @click="executeSQL('run')"
-          type="text"
+          type="primary"
+          :disabled="sqlLoading"
           style="margin-left: 0"
-          title="执行（F9 / Ctrl+Enter）"
+          title="执行选中 SQL；没有选中时执行光标所在语句（F9 / Ctrl+Enter）"
         >
-          <img src="@/assets/main/1-con-ico01.png" alt />
-          运行
+          <i class="el-icon-video-play"></i>
+          执行选中 / 当前语句
         </el-button>
+        <el-button size="mini" :disabled="sqlLoading" @click="executeSQL('run', false, true)">执行全部</el-button>
         <el-button
-          v-else
           size="mini"
           @click="cancelSqlExecution"
           type="danger"
           plain
-          :disabled="cancelRequested"
+          :disabled="!sqlLoading || cancelRequested"
           title="停止当前 SQL"
         >
           <i :class="cancelRequested ? 'el-icon-loading' : 'el-icon-video-pause'"></i>
           {{ cancelRequested ? "正在停止" : "停止" }}
         </el-button>
-        <el-select
-          v-model="queryTimeoutSeconds"
-          size="mini"
-          style="width: 92px; margin-left: 6px"
-          title="单条 SQL 超时时间"
-        >
-          <el-option label="5秒超时" :value="5"></el-option>
-          <el-option label="30秒超时" :value="30"></el-option>
-          <el-option label="60秒超时" :value="60"></el-option>
-          <el-option label="120秒超时" :value="120"></el-option>
-        </el-select>
-        <el-button size="mini" @click="emptySql" type="text">
-          <img src="@/assets/main/1-con-ico03.png" alt />
-          清空
-        </el-button>
         <el-button size="mini" @click="formatSql" type="text">
-          <img src="@/assets/main/1-con-ico04.png" alt />
-          美化
-        </el-button>
-        <el-button size="mini" type="text" @click="clearResults" :disabled="!isShow || sqlLoading">
-          <i class="el-icon-delete"></i>
-          清除结果
+          <i class="el-icon-s-operation"></i>
+          格式化
         </el-button>
         <el-button
           size="mini"
           type="primary"
           plain
           @click="handleCommit"
+          v-if="disableCommit"
           :disabled="!disableCommit"
         >
           <i class="el-icon-check el-icon--left"></i>
@@ -1120,13 +1102,13 @@ export default {
           type="primary"
           plain
           @click="handleBackRoll"
+          v-if="disableRollBack"
           :disabled="!disableRollBack"
         >
           <i class="el-icon-refresh-left el-icon--left"></i>
           回滚
         </el-button>
         <el-popover
-          style="margin-left: 15px"
           placement="bottom"
           width="300"
           v-model="visible2"
@@ -1146,58 +1128,60 @@ export default {
           </div>
           <el-button size="mini" slot="reference" type="primary" plain>
             <img src="@/assets/main/1-con-ico22.png" alt />
-            保存
+            保存脚本
           </el-button>
         </el-popover>
 
-        <el-button
-          size="mini"
-          @click="executeSQL('run', true)"
-          type="primary"
-          style="margin-left: 10px"
-          plain
-        >
-          <img src="@/assets/main/1-con-ico22.png" alt />
-          过程编译
-        </el-button>
-        <el-button size="mini" @click="executeSQL('plan')" type="primary" plain>
-          <img src="@/assets/main/1-con-ico22.png" alt />
-          调测
-        </el-button>
-        <el-button
-          size="mini"
-          @click="exportSql"
-          type="primary"
-          plain
-          :disabled="!this.isSuccessShow"
-        >
-          <i id="icon" class="el-icon-upload2"></i>
-          导出
-        </el-button>
-        <el-button size="mini" @click="viewLog" type="primary" plain>
+        <el-button size="mini" @click="viewLog" type="text">
           <i id="icon" class="el-icon-view"></i>
-          查看日志
+          执行历史
         </el-button>
-        <el-radio-group
-          style="margin-left: 10px"
-          v-model="radioData"
-          size="mini"
-        >
-          <el-radio label="1" border style="margin-right: 0">错误执行</el-radio>
-          <el-radio label="2" border>错误不执行</el-radio>
-        </el-radio-group>
-        <span class="sql-console-status" :class="{ 'is-running': sqlLoading }">
-          <i :class="sqlLoading ? 'el-icon-loading' : 'el-icon-time'"></i>
-          {{ consoleStatus }}<template v-if="lastResultCount"> · {{ lastResultCount }} 个结果集</template>
-          <template v-if="hasAffectedRows"> · 影响 {{ affectedRowCount }} 行</template>
-          <template v-if="hasPendingTransaction"> · <strong>事务待提交</strong></template>
-        </span>
+        <el-popover placement="bottom-start" width="360" trigger="click" v-model="recentScriptsVisible">
+          <div class="recent-sql-title">最近脚本</div>
+          <el-empty v-if="!recentSqlScripts.length" description="暂无最近脚本" :image-size="50" />
+          <div v-else class="recent-sql-list">
+            <div v-for="script in recentSqlScripts" :key="script.id" class="recent-sql-item">
+              <div class="recent-sql-preview" :title="script.sql" @click="restoreRecentSqlScript(script)">{{ script.preview }}</div>
+              <span class="recent-sql-time">{{ script.time }}</span>
+              <i class="el-icon-delete recent-sql-delete" title="删除" @click="removeRecentSqlScript(script)"></i>
+            </div>
+          </div>
+          <el-button slot="reference" size="mini" type="text" title="恢复最近脚本">
+            <i class="el-icon-time"></i>
+            最近脚本
+          </el-button>
+        </el-popover>
+        <el-dropdown @command="handleMoreAction" trigger="click">
+          <el-button size="mini" type="text">更多<i class="el-icon-arrow-down el-icon--right"></i></el-button>
+          <el-dropdown-menu slot="dropdown">
+            <el-dropdown-item command="import">导入 SQL 文件</el-dropdown-item>
+            <el-dropdown-item command="compile" :disabled="sqlLoading">过程编译</el-dropdown-item>
+            <el-dropdown-item command="plan" :disabled="sqlLoading">执行计划</el-dropdown-item>
+            <el-dropdown-item command="export" :disabled="!isSuccessShow">导出结果</el-dropdown-item>
+            <el-dropdown-item command="clear" divided>清空编辑器</el-dropdown-item>
+            <el-dropdown-item command="results" :disabled="!isShow || sqlLoading">清除结果</el-dropdown-item>
+          </el-dropdown-menu>
+        </el-dropdown>
+        <el-popover placement="bottom-end" width="280" trigger="click" v-model="executionSettingsVisible">
+          <div class="execution-setting-row"><span>单条 SQL 超时</span>
+            <el-select v-model="queryTimeoutSeconds" size="small" :disabled="sqlLoading" style="width:120px">
+              <el-option v-for="seconds in [5, 30, 60, 120]" :key="seconds" :label="seconds + ' 秒'" :value="seconds" />
+            </el-select>
+          </div>
+          <div class="execution-setting-row"><span>批量遇错</span>
+            <el-radio-group v-model="radioData" size="mini" :disabled="sqlLoading"><el-radio label="1">继续</el-radio><el-radio label="2">停止</el-radio></el-radio-group>
+          </div>
+          <el-button slot="reference" size="mini" type="text"><i class="el-icon-setting"></i> 执行设置</el-button>
+        </el-popover>
       </div>
       <draggable class="draggble2" :group="{ name: 'componentsGroup' }">
         <MonacoEditor
           ref="MonacoEditor"
-          dom="editor"
-          style="width: 100%; height: 47vh"
+          :dom="'sql-' + currentConfig.id"
+          :connection-context="currentDataSource"
+          :schema-options="schemaOptions"
+          :editor-config="{ fontSize: 12, lineHeight: 20, formatOnPaste: false }"
+          style="width: 100%; height: 100%"
         />
       </draggable>
     </div>
@@ -1213,7 +1197,7 @@ export default {
       <div class="sql_result_box">
         <el-tabs v-model="resultTab" type="border-card" v-loading="sqlLoading">
           <!-- （' + successList.length + '） -->
-          <el-tab-pane :label="`结果合计（${successList.length}）`" name="success" v-if="successList.length">
+          <el-tab-pane :label="`查询结果（${successList.length}）`" name="success" v-if="successList.length">
             <div class="tag_list">
               <span
                 class="search_list"
@@ -1229,7 +1213,7 @@ export default {
                   Allmessage = true;
                   successCurrentIndex = null;
                 "
-                >消息合计</el-tag
+                >执行消息</el-tag
               >
               <el-tag
                 v-for="(item, index) in successList"
@@ -1243,7 +1227,7 @@ export default {
                 @click="currentClick(item, index)"
               >
                 <img src="@/assets/main/1-con-ico08.png" alt />
-                {{ "消息" + (index + 1) }}
+                {{ (item.sqlType === 'SELECT' ? '结果 ' : '语句 ') + (index + 1) }}
               </el-tag>
             </div>
             <renderSearchResult
@@ -1255,19 +1239,18 @@ export default {
               @executeSQL="executeSQL"
               :queryResultData="successList[successCurrentIndex]"
               :readonly="true"
-              @setQueryResultData="
-                (newVal) => (successList[successCurrentIndex] = newVal)
-              "
+              :key="successCurrentIndex"
+              @setQueryResultData="updateResult"
             />
             <div v-else class="sql_result sql_result--success">
               <span v-if="!Allmessage">
                 {{ formatExecutionResult(successList[successCurrentIndex]) }}
               </span>
-              <div v-else v-html="lineTexts" class="sql_result_content"></div>
+              <pre v-else class="sql_result_content">{{ messageData }}</pre>
             </div>
           </el-tab-pane>
           <!-- （' + errorList.length + '） -->
-          <el-tab-pane :label="`失败合集（${errorList.length}）`" name="error" v-if="errorList.length">
+          <el-tab-pane :label="`错误（${errorList.length}）`" name="error" v-if="errorList.length">
             <div class="tag_list">
               <el-tag
                 v-for="(item, index) in errorList"
@@ -1283,19 +1266,20 @@ export default {
             <span class="sql_result" v-if="errorMsg">{{ errorMsg }}</span>
             <span
               class="sql_result"
-              v-html="
-                errorList[errorCurrentIndex] &&
-                errorList[errorCurrentIndex].message
-                  ? errorList[errorCurrentIndex].message.replace(/\n/g, '<br/>')
-                  : ''
-              "
-            ></span>
+            >{{ errorList[errorCurrentIndex] ? errorList[errorCurrentIndex].message : '' }}</span>
           </el-tab-pane>
         </el-tabs>
         <div class="page-up" @click="upAndDown">
-          <span :class="flag ? 'el-icon-caret-bottom' : 'el-icon-caret-top'"></span>
+          <span :class="resultExpanded ? 'el-icon-caret-bottom' : 'el-icon-caret-top'"></span>
         </div>
       </div>
+    </div>
+    <div class="sql-status-bar" :class="{ 'is-running': sqlLoading }">
+      <i :class="sqlLoading ? 'el-icon-loading' : 'el-icon-time'"></i>
+      {{ consoleStatus }}<template v-if="lastResultCount"> · {{ lastResultCount }} 条执行结果</template>
+      <template v-if="hasAffectedRows"> · 影响 {{ affectedRowCount }} 行</template>
+      <template v-if="disableCommit"> · 事务待提交</template>
+      <span>Ctrl+Enter / F9 执行 · Ctrl+Shift+F 格式化</span>
     </div>
     <el-dialog
       title="查看日志"
@@ -1546,8 +1530,23 @@ export default {
 <style scoped lang="scss">
 .sql_execute {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-flow: column;
+  .sql-context-bar {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    flex-shrink: 0; background: #f5f7fa; border-bottom: 1px solid #e5e9f2;
+    .context-label { color: #68728c; font-size: var(--workspace-body-font-size, 12px); }
+    .connection-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #303133; font-size: var(--workspace-body-font-size, 12px); }
+    .el-select { width: 200px; }
+    .schema-help { color: #909399; font-size: 12px; }
+  }
+  .sql-status-bar {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    padding: 8px 16px; background: #f5f7fa; border-top: 1px solid #e5e9f2; font-size: 12px; color: #68728c;
+    &.is-running { color: #006fff; }
+    span { margin-left: auto; }
+  }
   .sql_search_box {
     width: 100%;
     height: 0;
@@ -1560,7 +1559,11 @@ export default {
     .monaco_btn {
       display: flex;
       align-items: center;
-      padding: 10px 20px;
+      padding: 8px 16px;
+      gap: 8px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #e5e9f2;
+      ::v-deep .el-button { margin-left: 0; }
       ::v-deep .el-button {
         & > span {
           display: flex;
@@ -1598,9 +1601,10 @@ export default {
     display: flex;
     flex-direction: column;
     position: relative;
-    padding: 0 10px;
+    padding: 8px 0 0;
+    flex-shrink: 0;
+    max-height: calc(100% - 220px);
     box-sizing: border-box;
-    transition: all 0.3s ease 0s;
     .tableBox_top_border {
       position: absolute;
       width: 100%;
@@ -1614,7 +1618,6 @@ export default {
       width: 100%;
       background: #fff;
       // border-radius: 5px;
-      margin-bottom: 10px;
       box-sizing: border-box;
       .page-up {
         background-color: #fff;
@@ -1623,10 +1626,8 @@ export default {
         top: 5px;
         width: 40px;
         height: 30px;
-        border-radius: 20px;
+        border-radius: 4px;
         cursor: pointer;
-        transition: 0.3s;
-        box-shadow: 0 0 6px rgb(0 0 0 / 12%);
         z-index: 5;
         text-align: center;
         line-height: 30px;
@@ -1637,12 +1638,12 @@ export default {
       }
       .sql_result {
         overflow: auto;
-        font-size: 14px;
+        font-size: var(--workspace-body-font-size, 12px);
         color: #ff4d4f;
         display: flex;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
+        padding: 16px;
+        box-sizing: border-box;
+        white-space: pre-wrap;
         height: calc(100% - 48px);
         .sql_result_content{
           height: 100%;
@@ -1656,6 +1657,7 @@ export default {
         height: 100%;
         ::v-deep .el-tabs__content {
           height: calc(100% - 39px);
+          padding: 0 16px 4px;
           .el-tab-pane {
             height: 100%;
             .tag_list {
@@ -1700,6 +1702,10 @@ export default {
             .table_box {
               padding: 0;
               height: calc(100% - 32px);
+              .table-editor-workspace { min-height: 0; }
+              .table-editor-grid-heading { display: none; }
+              .table-editor-grid > .el-table { height: 100% !important; }
+              .table_bottom_box { flex-shrink: 0; }
             }
           }
         }
@@ -1771,6 +1777,9 @@ export default {
 }
 .draggble2 {
   width: 100%;
-  height: 25vh;
+  flex: 1;
+  min-height: 0;
 }
+.execution-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 16px; font-size: 13px; color: #606266; }
+@media (max-width: 1100px) { .sql_execute .sql-context-bar .schema-help { display: none; } }
 </style>

@@ -128,6 +128,17 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/data-migration',
+    component: Layout,
+    redirect: '/data-migration/index',
+    children: [{
+      path: 'index',
+      component: () => import('@/views/main/dataMigration/index'),
+      name: 'DataMigration',
+      meta: { title: '数据迁移', icon: 'documentation', noCache: true }
+    }]
+  },
+  {
     path: '/table-compare',
     component: Layout,
     redirect: '/table-compare/index',

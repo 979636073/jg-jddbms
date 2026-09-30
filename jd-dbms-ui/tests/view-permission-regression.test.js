@@ -29,10 +29,8 @@ async function main() {
   const sidebar = readComponent(workspaceFile)
   const template = compiler.compile(sidebar.template.content)
   assert.deepStrictEqual(template.errors, [])
-  const viewName = findNode(template.ast, node => node.tag === 'span' && node.attrsMap.class === 'table_name')
-  assert(viewName && viewName.events && viewName.events.click, '视图名称点击入口不存在')
-  assert(!viewName.events.click.modifiers || !viewName.events.click.modifiers.stop,
-    '视图名称不能阻断外层的打开视图事件')
+  const resourceTree = findNode(template.ast, node => node.tag === 'el-tree' && node.attrsMap.class === 'resource-tree')
+  assert(resourceTree && resourceTree.events && resourceTree.events['node-click'], '资源树对象点击入口不存在')
 
   const panel = readComponent(panelFile)
   const source = panel.script.content

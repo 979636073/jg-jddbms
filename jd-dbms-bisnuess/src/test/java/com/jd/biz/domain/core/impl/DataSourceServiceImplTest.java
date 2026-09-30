@@ -59,6 +59,16 @@ public class DataSourceServiceImplTest {
     }
 
     @Test
+    public void shouldKeepUserProvidedConnectionName() {
+        assertEquals("生产库", DataSourceServiceImpl.resolveConnectionAlias("生产库", "database.internal"));
+    }
+
+    @Test
+    public void shouldKeepLegacyAliasFallbackWhenConnectionNameIsMissing() {
+        assertEquals("@database.internal", DataSourceServiceImpl.resolveConnectionAlias(" ", "database.internal"));
+    }
+
+    @Test
     public void shouldExplainDockerLoopbackConnectionFailure() {
         String message = DataSourceServiceImpl.connectionFailureMessage(
                 "127.0.0.1", "1521", "java.net.ConnectException: Connection refused");

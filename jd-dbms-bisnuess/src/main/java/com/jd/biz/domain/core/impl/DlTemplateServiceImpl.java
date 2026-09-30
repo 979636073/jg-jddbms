@@ -190,9 +190,6 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             }
         }
         for (ExecuteResult executeResult : results) {
-            if(results.size() > 1) {
-                executeResult.setSign(results.get(1).getSign());
-            }
             executeResult.setAllMessage(allMessage.toString());
             if (!executeResult.getSuccess()) {
                 listResult.setSuccess(false);

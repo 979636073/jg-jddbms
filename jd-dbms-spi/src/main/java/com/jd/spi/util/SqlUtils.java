@@ -118,15 +118,73 @@ public class SqlUtils {
 
     public static List<String> parse(String sql, DbType dbType) {
         List<String> list = new ArrayList<>();
-        try {
-            Statements statements = CCJSqlParserUtil.parseStatements(sql);
-            // Iterate through each statement
-            for (Statement stmt : statements.getStatements()) {
-                list.add(stmt.toString());
+        if (dbType != DbType.oracle && dbType != DbType.dm) {
+            try {
+                Statements statements = CCJSqlParserUtil.parseStatements(sql);
+                for (Statement statement : statements.getStatements()) list.add(statement.toString());
+                return list;
+            } catch (Exception e) {
+                return SQLParserUtils.splitAndRemoveComment(sql, dbType);
             }
-        } catch (Exception e) {
-            list = SQLParserUtils.splitAndRemoveComment(sql, dbType);
         }
+        int start = 0;
+        char quote = 0, qEnd = 0;
+        boolean lineComment = false, blockComment = false, procedural = false, afterEnd = false, ended = false;
+        int depth = 0;
+        List<String> words = new ArrayList<>();
+        boolean oracleDialect = dbType == DbType.oracle || dbType == DbType.dm;
+        for (int i = 0; i < sql.length(); i++) {
+            char ch = sql.charAt(i), next = i + 1 < sql.length() ? sql.charAt(i + 1) : 0;
+            if (lineComment) { if (ch == '\n') lineComment = false; continue; }
+            if (blockComment) { if (ch == '*' && next == '/') { blockComment = false; i++; } continue; }
+            if (qEnd != 0) { if (ch == qEnd && next == '\'') { qEnd = 0; i++; } continue; }
+            if (quote != 0) {
+                if (ch == quote) { if (next == quote) i++; else quote = 0; }
+                else if (!oracleDialect && ch == '\\') i++;
+                continue;
+            }
+            if (ch == '-' && next == '-') { lineComment = true; i++; continue; }
+            if (ch == '/' && next == '*') { blockComment = true; i++; continue; }
+            if (oracleDialect && (ch == 'q' || ch == 'Q') && next == '\'' && i + 2 < sql.length()) {
+                char delimiter = sql.charAt(i + 2);
+                qEnd = delimiter == '[' ? ']' : delimiter == '(' ? ')' : delimiter == '{' ? '}' : delimiter == '<' ? '>' : delimiter;
+                i += 2; continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') { quote = ch; continue; }
+            if (Character.isLetter(ch) || ch == '_') {
+                int wordStart = i;
+                while (i + 1 < sql.length() && (Character.isLetterOrDigit(sql.charAt(i + 1)) || "_$#".indexOf(sql.charAt(i + 1)) >= 0)) i++;
+                String word = sql.substring(wordStart, i + 1).toUpperCase(java.util.Locale.ROOT);
+                if (words.size() < 8) words.add(word);
+                if ("BEGIN".equals(words.get(0)) || "DECLARE".equals(words.get(0)) ||
+                        ("CREATE".equals(words.get(0)) && words.size() <= 6 && Arrays.asList("PROCEDURE", "FUNCTION", "TRIGGER", "PACKAGE", "BODY").contains(word))) {
+                    if (!procedural && ("PACKAGE".equals(word) || "BODY".equals(word))) depth++;
+                    procedural = true;
+                }
+                if (procedural) {
+                    if ("END".equals(word)) { depth = Math.max(0, depth - 1); afterEnd = true; ended = depth == 0; }
+                    else if (afterEnd && Arrays.asList("IF", "LOOP", "CASE").contains(word)) afterEnd = false;
+                    else {
+                        afterEnd = false;
+                        if (Arrays.asList("BEGIN", "IF", "LOOP", "CASE").contains(word)) { depth++; ended = false; }
+                    }
+                }
+                continue;
+            }
+            // A slash on its own line is a client delimiter, not JDBC SQL.
+            if (oracleDialect && ch == '/' && sql.substring(sql.lastIndexOf('\n', i - 1) + 1, i).trim().isEmpty()
+                    && (i + 1 == sql.length() || sql.substring(i + 1).matches("^[ \\t\\r]*(?:\\n[\\s\\S]*|$)"))) {
+                if (!words.isEmpty()) list.add(sql.substring(start, i).trim());
+                start = i + 1; words.clear(); depth = 0; afterEnd = false; procedural = false; ended = false;
+                continue;
+            }
+            if (ch == ';' && (!procedural || (depth == 0 && ended))) {
+                String statement = sql.substring(start, procedural ? i + 1 : i).trim();
+                if (!words.isEmpty()) list.add(statement);
+                start = i + 1; words.clear(); depth = 0; afterEnd = false; procedural = false; ended = false;
+            }
+        }
+        if (!words.isEmpty() && StringUtils.isNotBlank(sql.substring(start))) list.add(sql.substring(start).trim());
         return list;
     }
 

@@ -9,9 +9,12 @@ import { getQueryObject } from '@/utils/index'
 NProgress.configure({ showSpinner: false })
 
 const whiteList = ['/login', '/register']
+const isWorkspaceWindow = path => /^\/workspace\/(look|query)\//.test(path)
 
 router.beforeEach((to, from, next) => {
-  NProgress.start()
+  if (!isWorkspaceWindow(to.path) || !isWorkspaceWindow(from.path)) {
+    NProgress.start()
+  }
   let urlObj = getQueryObject()
   if (urlObj.ticket_token) {
     store.dispatch('login2',urlObj.ticket_token).then(()=>{

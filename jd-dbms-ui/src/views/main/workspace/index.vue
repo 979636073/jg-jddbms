@@ -1,48 +1,91 @@
 <script>
 import NavBar from "./NavBar.vue";
-import SideBar from "./SideBar.vue";
 import JdTagsView from "@/components/JdTagsView";
 import linkServerDialog from './components/linkServerDialog';
+import SideBar from './SideBar.vue';
 
 export default {
   name: "index",
   components: {
-    SideBar,
     NavBar,
     JdTagsView,
     linkServerDialog,
+    SideBar,
   },
   data() {
     return {
       opened: true,
-      visibleDialog:false,
+      visibleDialog: false,
+      selectedDataSourceId: null,
+      dataSourceDialogMode: "create",
       headerCollapsed: false,
+      sideBarWidth: 280,
+      resizingSideBar: false,
+      resizeStartX: 0,
+      resizeStartWidth: 280,
+      objectLoading: {},
     };
   },
   mounted(){
-     const createDataCache = sessionStorage.getItem('createData')
-     const createData = createDataCache && createDataCache !== 'undefined'
-       ? JSON.parse(createDataCache)
-       : null
-     if (this.$route.path === "/workspace" && !this.$route.query?.isShow) {
-       const firstView = this.$store.getters.visitedViews2[0]
-         || (JSON.parse(localStorage.getItem("saveVisitedViews2")) || [])[0]
-       if (firstView && firstView.path) {
-         this.$router.replace({ path: firstView.path, query: firstView.query })
-         return
-       }
+     if (this.$route.path === "/workspace") {
+       if (this.$route.query?.isShow) this.openDataSourceManager()
+       this.$router.replace({ path: "/workspace/look/workspace-home" })
+       return
      }
-     if(!createData || this.$route.query?.isShow){
-       this.visibleDialog = true
-     }
-  
   },
   computed: {
+    dataInfo() {
+      return this.$store.state.workspaceData.dataInfo;
+    },
+    dataBaseInfo() {
+      return this.$store.state.workspaceData.dataBaseInfo;
+    },
     key() {
       return this.$route.path;
     },
   },
+  beforeDestroy() {
+    this.stopResizeSideBar();
+  },
   methods: {
+    startResizeSideBar(event) {
+      this.resizingSideBar = true;
+      this.resizeStartX = event.clientX;
+      this.resizeStartWidth = this.sideBarWidth;
+      window.addEventListener("mousemove", this.resizeSideBar);
+      window.addEventListener("mouseup", this.stopResizeSideBar);
+    },
+    resizeSideBar(event) {
+      if (!this.resizingSideBar) return;
+      const width = this.resizeStartWidth + event.clientX - this.resizeStartX;
+      this.sideBarWidth = Math.min(Math.max(width, 260), 720);
+    },
+    stopResizeSideBar() {
+      this.resizingSideBar = false;
+      window.removeEventListener("mousemove", this.resizeSideBar);
+      window.removeEventListener("mouseup", this.stopResizeSideBar);
+    },
+    forwardTreeEvent(method, ...args) {
+      this.$refs.workspaceContent?.[method](...args);
+    },
+    handleTreeType(...args) {
+      this.forwardTreeEvent("isType", ...args);
+    },
+    handleTreeObjects(...args) {
+      this.forwardTreeEvent("queryDetailTable", ...args);
+    },
+    setObjectLoading(loading, pageId = this.$route.params.id) {
+      this.$set(this.objectLoading, pageId, loading);
+    },
+    openRouteObject(route) {
+      return this.$refs.databaseTree.loadRouteObject(route);
+    },
+    tableRefresh(node) {
+      this.$refs.databaseTree.tableRefresh(node);
+    },
+    updateViewNameTwo(schema) {
+      this.$refs.databaseTree.getTableDataList(schema);
+    },
     toggleSideBar() {
       this.opened = !this.opened;
     },
@@ -51,6 +94,35 @@ export default {
     },
     openSideBar() {
       this.opened = true;
+    },
+    openDataSourceManager(request) {
+      this.selectedDataSourceId = request?.id || null;
+      this.dataSourceDialogMode = request?.mode || "create";
+      this.visibleDialog = true;
+    },
+    closeDataSourceManager() {
+      this.visibleDialog = false;
+      this.selectedDataSourceId = null;
+    },
+    handleDataSourceSaved(data) {
+      const createdDataSource = data?.dataSource;
+      if (!createdDataSource && data?.id) {
+        this.$store.commit("SET_DATASOURCE_CONNECTED", { id: data.id, connected: false });
+        if (String(this.$store.state.workspaceData.dataInfo?.dataSource?.id) === String(data.id)) {
+          this.$store.commit("workspaceData/SET_DATA_BASE_INFO", {});
+          this.$store.commit("workspaceData/SET_DATA_INFO", {});
+          this.$store.commit("SET_CURRENTCONNECTIONDETAILS", null);
+          sessionStorage.removeItem("createData");
+        }
+      }
+      this.closeDataSourceManager();
+      this.$EventBus.$emit("refreshDataSourceTree");
+      if (createdDataSource) this.handleDataSourceConnected(createdDataSource);
+    },
+    handleDataSourceConnected(dataSource) {
+      this.$store.commit("SET_DATASOURCE_CONNECTED", { id: dataSource.id, connected: true });
+      this.closeDataSourceManager();
+      this.$EventBus.$emit("dataSourceConnected", dataSource);
     },
   },
 };
@@ -65,18 +137,40 @@ export default {
           :opened="opened"
           :collapsed="headerCollapsed"
           @toggleHeader="headerCollapsed = !headerCollapsed"
+          @manageDataSources="openDataSourceManager"
+          @openRouteObject="openRouteObject"
         />
       </el-header>
       <div class="tag_list">
         <JdTagsView />
       </div>
-      <transition name="fade-transform" mode="out-in">
-        <keep-alive>
-          <router-view :key="key" />
-        </keep-alive>
-      </transition>
+      <div class="workspace-body">
+        <el-aside :style="{ width: sideBarWidth + 'px' }" :class="[opened ? 'show' : 'hide', { resizing: resizingSideBar }]">
+          <SideBar ref="databaseTree" :dataBaseInfo="dataBaseInfo" :dataInfo="dataInfo"
+            @isType="handleTreeType"
+            @queryDetailTable="handleTreeObjects"
+            @filterChange="forwardTreeEvent('filterChange', $event)"
+            @setDetailsObj="forwardTreeEvent('setDetailsObj', $event)"
+            @load="setObjectLoading" @isopenFn="isopenFn" @manageDataSources="openDataSourceManager" />
+          <div class="sidebar-resizer" title="拖动调整左侧宽度" @mousedown.prevent="startResizeSideBar"></div>
+        </el-aside>
+        <div v-if="!opened" class="isOpen" @click="openSideBar"><img src="@/assets/main/1-1-sub侧边.png" alt /></div>
+        <div class="workspace-content">
+          <keep-alive>
+            <router-view ref="workspaceContent" :key="key" :objectLoading="objectLoading"
+              @openRouteObject="openRouteObject" @tableRefresh="tableRefresh" @updateViewNameTwo="updateViewNameTwo" />
+          </keep-alive>
+        </div>
+      </div>
     </el-container>
-    <linkServerDialog :visibleDialog='visibleDialog'/>
+    <linkServerDialog
+      :visibleDialog="visibleDialog"
+      :selectedDataSourceId="selectedDataSourceId"
+      :mode="dataSourceDialogMode"
+      @close="closeDataSourceManager"
+      @saved="handleDataSourceSaved"
+      @connected="handleDataSourceConnected"
+    />
   </div>
 </template>
 
@@ -87,6 +181,33 @@ export default {
 .hide {
   display: none;
 }
+.workspace-body { --workspace-body-font-size: 12px; flex: 1; display: flex; height: 0; min-height: 0; }
+.workspace-content {
+  flex: 1; min-width: 0; min-height: 0; display: flex;
+  font-size: var(--workspace-body-font-size);
+  ::v-deep {
+    .el-button,
+    .el-button.el-button--mini,
+    .el-tabs__item,
+    .el-table,
+    .el-table .cell,
+    .el-input__inner,
+    .el-textarea__inner,
+    .el-form-item__label,
+    .el-checkbox__label,
+    .el-radio__label,
+    .el-pagination__total,
+    .el-pagination__jump,
+    .el-pager li {
+      font-size: var(--workspace-body-font-size);
+    }
+  }
+}
+.el-aside { position: relative; flex-shrink: 0; overflow: visible; }
+.sidebar-resizer { position: absolute; z-index: 100; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; }
+.sidebar-resizer:hover, .resizing .sidebar-resizer { background: rgba(0, 111, 255, 0.14); }
+.isOpen { width: 20px; height: 98%; margin-left: 7px; margin-right: 5px; position: relative; background: #fff; }
+.isOpen img { position: absolute; top: 40%; cursor: pointer; }
 
 .tag_list {
   // padding: 10px 0;

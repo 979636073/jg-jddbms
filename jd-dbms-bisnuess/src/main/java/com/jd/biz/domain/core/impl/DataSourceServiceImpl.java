@@ -143,7 +143,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
         dataSourceDO.setGmtCreate(DateUtil.date());
         dataSourceDO.setGmtModified(DateUtil.date());
         dataSourceDO.setUserId(ContextUtils.getUserId());
-        dataSourceDO.setAlias("@" + dataSourceDO.getHost());
+        dataSourceDO.setAlias(resolveConnectionAlias(dataSourceDO.getAlias(), dataSourceDO.getHost()));
         if (Objects.isNull(dataSourceDO.getId())) {
             this.save(dataSourceDO);
         } else {
@@ -183,6 +183,10 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
         }
         dataSourceConnectVo.setDataSource(dataSource);
         return DataResult.of(dataSourceConnectVo);
+    }
+
+    static String resolveConnectionAlias(String alias, String host) {
+        return StringUtils.defaultIfBlank(alias, "@" + host);
     }
 
     private void preWarmingData(Long dataSourceId) {

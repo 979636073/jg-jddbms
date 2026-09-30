@@ -16,6 +16,8 @@ import org.junit.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
+import java.lang.reflect.Method;
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -24,6 +26,17 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class DlTemplateServiceImplTest {
+    @Test
+    public void keepsIndividualTransactionFlagsInABatch() throws Exception {
+        ExecuteResult query = ExecuteResult.builder().success(true).sign(false).build();
+        ExecuteResult update = ExecuteResult.builder().success(true).sign(true).build();
+        ExecuteResult laterQuery = ExecuteResult.builder().success(true).sign(true).build();
+        Method rebuild = DlTemplateServiceImpl.class.getDeclaredMethod("reBuildHeader", java.util.List.class,
+                String.class, String.class, Boolean.class, Boolean.class);
+        rebuild.setAccessible(true);
+        rebuild.invoke(new DlTemplateServiceImpl(), Arrays.asList(update, query, laterQuery), "APP", "", false, false);
+        assertTrue(update.getSign()); assertFalse(query.getSign()); assertTrue(laterQuery.getSign());
+    }
 
     private static final String TEST_DB_TYPE = "JDBC_EXECUTE_RESULT_TEST";
     private Plugin previousPlugin;

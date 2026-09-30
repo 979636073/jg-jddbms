@@ -314,6 +314,8 @@ export default {
           this.filterSql = null;
           this.queryParams = { params: null, pageNum: 1, pageSize: 100 };
         }
+        if (newVal.pageNum > 0 || newVal.pageNo > 0) this.queryParams.pageNum = Number(newVal.pageNum || newVal.pageNo);
+        if (newVal.pageSize > 0) this.queryParams.pageSize = Number(newVal.pageSize);
         if (newVal.dataTable) {
           this.pageLoading = true;
           this.oldTableData = newVal.oldTableData;
@@ -2620,6 +2622,24 @@ export default {
     isShowHeader() {
       this.showCheckHeader = !this.showCheckHeader;
     },
+    clearAdvancedQuery() {
+      this.isColor = false;
+      this.searchSql = "";
+      this.pageSql = "";
+      this.filterSql = "";
+      this.searchDialogForm.columnTitle = "";
+      this.searchDialogForm.sql = "";
+      this.searchDialogForm.contentTest = "";
+    },
+    closeAdvancedQuery() {
+      this.searchDialogVisible = false;
+    },
+    confirmAdvancedQuery() {
+      this.searchDialogVisible = false;
+      this.isColor = true;
+      this.queryParams.pageNum = 1;
+      this.advancedQuery();
+    },
     advancedQuery(isColumn) {
       console.log(this.searchSql, "this.searchSql");
       this.isDialogLoading = true;
@@ -2650,9 +2670,9 @@ export default {
           JSON.stringify(this.sortObj) == "{}"
             ? undefined
             : this.sortObj.order == "descending"
-            ? true
-            : this.sortObj.order == "ascending"
             ? false
+            : this.sortObj.order == "ascending"
+            ? true
             : undefined,
         orderByColumn:
           JSON.stringify(this.sortObj) == "{}" ? undefined : this.sortObj.prop,
@@ -2661,7 +2681,7 @@ export default {
       if (params.consoleId) {
         params.sql = this.queryResultData.params.sql;
       } else if (this.pageSql) {
-        params.sql = this.queryResultData.params.sql + `WHERE ${this.pageSql}`;
+        params.sql = this.queryResultData.params.sql + ` WHERE ${this.pageSql}`;
       } else {
         params.sql = this.queryResultData.params.sql;
       }
@@ -2710,6 +2730,24 @@ export default {
       this.filterArray = "";
     },
     addSearchForm(str) {
+      if (!this.searchDialogForm.columnTitle) {
+        this.$message.warning("请选择表头字段");
+        return;
+      }
+      if (!this.searchDialogForm.sql) {
+        this.$message.warning("请选择规则");
+        return;
+      }
+      if (
+        this.searchDialogForm.sql !== "IS NULL" &&
+        this.searchDialogForm.sql !== "IS NOT NULL" &&
+        (this.searchDialogForm.contentTest === "" ||
+          this.searchDialogForm.contentTest === undefined ||
+          this.searchDialogForm.contentTest === null)
+      ) {
+        this.$message.warning("请输入内容");
+        return;
+      }
       let sql = "";
       if (
         this.searchDialogForm.sql == "LIKE" ||
@@ -2973,7 +3011,6 @@ export default {
               <span class="sort_icons" v-show="!ctrlPressed">
                 <i
                   class="el-icon-caret-top"
-                  style="margin-bottom: -7px"
                   :class="{
                     active:
                       sort.prop == header.name && sort.order == 'ascending',
@@ -3786,30 +3823,9 @@ export default {
         </div>
       </div>
       <span slot="footer">
-        <el-button
-          plain
-          @click="
-            isColor = false;
-            searchSql = '';
-            pageSql = '';
-            filterSql = '';
-            searchDialogForm.columnTitle = '';
-            searchDialogForm.sql = '';
-            searchDialogForm.contentTest = '';
-          "
-          >清 空</el-button
-        >
-        <el-button plain @click="searchDialogVisible = false">关 闭</el-button>
-        <el-button
-          plain
-          @click="
-            searchDialogVisible = false;
-            isColor = true;
-            queryParams.pageNum = 1;
-            advancedQuery();
-          "
-          >确 定</el-button
-        >
+        <el-button plain @click="clearAdvancedQuery">清 空</el-button>
+        <el-button plain @click="closeAdvancedQuery">关 闭</el-button>
+        <el-button plain @click="confirmAdvancedQuery">确 定</el-button>
       </span>
     </el-dialog>
     <el-dialog title="物化视图 DDL" :visible.sync="materializedDdlVisible" width="70%">

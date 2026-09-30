@@ -28,6 +28,7 @@ public class DataSourceCreateRequest {
     /**
      * 连接别名
      */
+    @NotBlank(message = "连接名不能为空")
     private String alias;
 
     /**

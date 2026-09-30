@@ -111,6 +111,9 @@ export default {
       options: [],
       databaseTree: [],
       databaseMaps: new Map(),
+      resourceFilter: "",
+      resourceTreeLoading: false,
+      pendingConnectedDataSource: null,
       dataTreeList: [],
       dataSourceListData: [],
       defaultProps: {
@@ -138,6 +141,11 @@ export default {
       contextMenu_top: 0,
       contextMenu_left: 0,
       context_current_item: {},
+      context_current_node: null,
+      copyTableDialogVisible: false,
+      copyTableWithData: false,
+      copySchemaOptionsLoading: false,
+      treeTableSelections: {},
       detailsObjs: {},
       detailsObj: {},
       buttonVisible: false,
@@ -206,62 +214,632 @@ export default {
   },
   mounted() {
     window.addEventListener("keydown", this.handelKeyDown);
-    // console.log(this.dataBaseInfo)
-    document.title = `${this.dataBaseInfo.type}${this.dataBaseInfo.alias}/${this.dataBaseInfo.userName}`;
-    this.getDataBaseTreeData();
-    if (this.$route.query.schemaName) {
-      // 此判断是从约束进来打开新窗口
-      this.schema = this.$route.query.schemaName;
-      this.$emit("isType", this.type, this.schema, this.activeClass);
-      if (this.$route.query.tableName && !this.isQuery) {
-        this.handelClickItem({
-          name: this.$route.query.tableName,
-          tableDetails: {},
-        }, -1, {});
-      }
-      this.getTableDataList(this.schema);
-    } else {
-      // debugger
-      if (this.$route.query.databaseName && this.$route.query.tableName) {
-        this.schema = this.$route.query.databaseName;
-        this.$emit("isType", this.type, this.schema, this.activeClass);
-        this.getTableDataList(this.schema);
-      } else {
-        this.schema = this.dataInfo.userName;
-        this.$emit("isType", this.type, this.schema, this.activeClass);
-        this.getTableDataList(this.schema);
-      }
-    }
+    this.resourceTreeReady = this.initializeResourceTree();
     this.$EventBus.$on("refreshRightTable", (page) => {
       this.refreshRightTable(page);
     });
+    this.$EventBus.$on("refreshDataSourceTree", this.initializeResourceTree);
+    this.$EventBus.$on("dataSourceConnected", this.handleDataSourceConnected);
   },
   destroyed() {
     window.removeEventListener("beforeunload", this.beforeunload);
+    window.removeEventListener("keydown", this.handelKeyDown);
   },
   //解绑事件
   beforeDestroy() {
     this.$EventBus.$off("refreshRightTable");
+    this.$EventBus.$off("refreshDataSourceTree", this.initializeResourceTree);
+    this.$EventBus.$off("dataSourceConnected", this.handleDataSourceConnected);
     clearTimeout(this.tableSearchTimer);
   },
   methods: {
-    handleClick(val,index) {
-      if(!val.children){
-        switch (val.value) {
-          case '1': // 数据模板
-            this.routerSql()
-            break;
-          case '4': // 新建窗口
-            this.newTableLable()
-            break;
+    async loadRouteObject(route) {
+      const { query, params } = route;
+      if (!query.tableName || this.$store.state.workspaceData.dataCurrentData.get(params.id)?.uniqueData) return;
+      await this.resourceTreeReady;
+      const dataSource = this.databaseTree.find(item => String(item.dataSource.id) === String(query.dataSourceId))?.dataSource;
+      if (!dataSource || !this.isDataSourceConnected(dataSource.id)) return;
+      const types = { table: "tables", view: "views", user: "users", tableSpace: "tableSpace" };
+      await this.handelClickItem({ name: query.tableName, tableDetails: { type: query.viewType, path: query.path } }, 0, {}, {
+        pageId: params.id, dataSource, databaseName: query.databaseName || "", schema: query.schemaName || query.databaseName || "", type: types[query.objectType] || "tables",
+      });
+    },
+    async initializeResourceTree() {
+      this.resourceTreeLoading = true;
+      try {
+        const res = await connectionServer.getList({
+          pageNo: 1,
+          pageSize: 10000,
+          refresh: true,
+          searchKey: "",
+        });
+        if (!res?.success) throw new Error(res?.errorMessage || "数据源列表加载失败");
+        const list = Array.isArray(res.data?.data) ? res.data.data : [];
+        this.$store.commit("SET_DATASOURCELIST", list);
+        this.databaseTree = list.map((dataSource) => this.createDataSourceNode(dataSource));
+        if (!list.length) {
+          this.$store.commit("workspaceData/SET_DATA_BASE_INFO", {});
+          this.$store.commit("workspaceData/SET_DATA_INFO", {});
+          this.$store.commit("SET_CURRENTCONNECTIONDETAILS", null);
+          sessionStorage.removeItem("createData");
         }
-        this.openIndex = null
-        this.contextMenuVisible = false
-      }else if(val.children){
-        // console.log(val);
-        this.copyschemaName = ""
-        this.openIndex =  this.openIndex == index ? null : index
+
+      } catch (e) {
+        this.databaseTree = [];
+        this.$message.error("数据源列表加载失败，请稍后重试");
+      } finally {
+        this.resourceTreeLoading = false;
+        if (this.pendingConnectedDataSource) {
+          const dataSource = this.pendingConnectedDataSource;
+          this.pendingConnectedDataSource = null;
+          this.handleDataSourceConnected(dataSource);
+        }
       }
+    },
+    createDataSourceNode(dataSource) {
+      return {
+        key: `datasource-${dataSource.id}`,
+        label: this.dataSourceDisplayName(dataSource),
+        treeNodeType: "datasource",
+        leaf: !this.isDataSourceConnected(dataSource.id),
+        dataSource,
+        extraParams: this.createExtraParams(dataSource),
+      };
+    },
+    dataSourceDisplayName(dataSource) {
+      const alias = String(dataSource?.alias || "").trim();
+      if (alias && !alias.startsWith("@")) return alias;
+      return dataSource?.user || dataSource?.userName || alias || `数据源 ${dataSource?.id}`;
+    },
+    isDataSourceConnected(id) {
+      return Boolean(this.$store.state.workspace.connectedDataSourceIds[id]);
+    },
+    async handleDataSourceConnected(dataSource) {
+      if (this.resourceTreeLoading) {
+        this.pendingConnectedDataSource = dataSource;
+        return;
+      }
+      await this.$nextTick();
+      const root = this.$refs.resourceTree?.getNode(`datasource-${dataSource.id}`);
+      if (!root) return;
+      root.data.dataSource = dataSource;
+      root.data.leaf = false;
+      root.isLeafByUser = false;
+      root.loaded = false;
+      root.updateLeafState();
+      if (this._inactive) return;
+      this.activateDataSourceContext(dataSource);
+      await this.expandResourceNode(root);
+      const hierarchy = root.childNodes.find((node) => ["schemaCollection", "databaseCollection"].includes(node.data.treeNodeType));
+      if (hierarchy) await this.expandResourceNode(hierarchy);
+    },
+    createExtraParams(dataSource, context = {}) {
+      return {
+        dataSourceId: dataSource.id,
+        dataSourceName: dataSource.alias,
+        databaseType: dataSource.type,
+        databaseName: context.databaseName || "",
+        schemaName: context.schemaName || "",
+      };
+    },
+    createHierarchyNode(dataSource) {
+      const isDatabase = Boolean(dataSource.supportDatabase);
+      return {
+        key: `datasource-${dataSource.id}-${isDatabase ? "databases" : "schemas"}`,
+        label: isDatabase ? "数据库" : "模式",
+        treeNodeType: isDatabase ? "databaseCollection" : "schemaCollection",
+        leaf: false,
+        dataSource,
+        extraParams: this.createExtraParams(dataSource),
+      };
+    },
+    createObjectGroups(dataSource, context = {}) {
+      const extraParams = this.createExtraParams(dataSource, context);
+      const prefix = [
+        dataSource.id,
+        extraParams.databaseName,
+        extraParams.schemaName,
+      ].join("-");
+      return [
+        ["tables", "数据表"],
+        ["views", "视图"],
+        ["functions", "函数"],
+        ["procedures", "存储过程"],
+        ["triggers", "触发器"],
+      ].map(([groupType, label]) => ({
+        key: `${prefix}-${groupType}`,
+        label,
+        groupType,
+        treeNodeType: "objectGroup",
+        leaf: false,
+        dataSource,
+        extraParams,
+      }));
+    },
+    createAdministrationGroups(dataSource) {
+      return [
+        ["users", "用户"],
+        ["tableSpace", "表空间"],
+      ].map(([groupType, label]) => ({
+        key: `datasource-${dataSource.id}-${groupType}`,
+        label,
+        groupType,
+        treeNodeType: "objectGroup",
+        leaf: false,
+        dataSource,
+        extraParams: this.createExtraParams(dataSource, {
+          schemaName: dataSource.user || dataSource.userName || "",
+        }),
+      }));
+    },
+    async loadResourceNode(node, resolve) {
+      const data = node.data || {};
+      if (node.level === 0) {
+        resolve(this.databaseTree);
+        return;
+      }
+      if (data.treeNodeType === "datasource") {
+        if (!this.isDataSourceConnected(data.dataSource.id)) {
+          resolve([]);
+          this.openDataSourceManager(data.dataSource, "connect");
+          return;
+        }
+        resolve([
+          this.createHierarchyNode(data.dataSource),
+          ...this.createAdministrationGroups(data.dataSource),
+        ]);
+        return;
+      }
+      if (data.treeNodeType === "schemaCollection" || data.treeNodeType === "databaseCollection") {
+        await this.loadResourceContainers(data, resolve);
+        return;
+      }
+      if (data.treeNodeType === "database") {
+        if (data.dataSource.supportSchema) {
+          await this.loadResourceSchemas(data, resolve);
+        } else {
+          resolve(this.createObjectGroups(data.dataSource, data.extraParams));
+        }
+        return;
+      }
+      if (data.treeNodeType === "schema") {
+        resolve(this.createObjectGroups(data.dataSource, data.extraParams));
+        return;
+      }
+      if (data.treeNodeType === "objectGroup") {
+        await this.loadResourceObjects(data, resolve);
+        return;
+      }
+      resolve([]);
+    },
+    async loadResourceContainers(data, resolve) {
+      const isDatabase = data.treeNodeType === "databaseCollection";
+      const api = isDatabase ? connectionServer.getDatabaseList : connectionServer.getSchemaList;
+      try {
+        const res = await api({
+          dataSourceId: data.dataSource.id,
+          dataSourceName: data.dataSource.alias,
+          refresh: false,
+        });
+        const items = Array.isArray(res.data) ? res.data : [];
+        resolve(items.map((item) => {
+          const name = item.name;
+          const context = isDatabase ? { databaseName: name } : { schemaName: name };
+          return {
+            key: `${data.dataSource.id}-${isDatabase ? "database" : "schema"}-${name}`,
+            label: name,
+            treeNodeType: isDatabase ? "database" : "schema",
+            leaf: false,
+            dataSource: data.dataSource,
+            extraParams: this.createExtraParams(data.dataSource, context),
+          };
+        }));
+      } catch (e) {
+        resolve([]);
+        this.$message.error(`${data.label}加载失败`);
+      }
+    },
+    async loadResourceSchemas(data, resolve) {
+      try {
+        const res = await connectionServer.getSchemaList({
+          dataSourceId: data.dataSource.id,
+          dataSourceName: data.dataSource.alias,
+          databaseName: data.extraParams.databaseName,
+          refresh: false,
+        });
+        const items = Array.isArray(res.data) ? res.data : [];
+        resolve(items.map((item) => ({
+          key: `${data.dataSource.id}-${data.extraParams.databaseName}-schema-${item.name}`,
+          label: item.name,
+          treeNodeType: "schema",
+          leaf: false,
+          dataSource: data.dataSource,
+          extraParams: this.createExtraParams(data.dataSource, {
+            databaseName: data.extraParams.databaseName,
+            schemaName: item.name,
+          }),
+        })));
+      } catch (e) {
+        resolve([]);
+        this.$message.error("模式加载失败");
+      }
+    },
+    async loadResourceObjects(data, resolve) {
+      const params = {
+        ...data.extraParams,
+        refresh: false,
+        requestType: data.groupType === "tables" || data.groupType === "views" ? 2 : 1,
+        pageNo: 1,
+        pageSize: data.groupType === "tables" ? 200 : 1000,
+      };
+      try {
+        let res;
+        if (data.groupType === "tables") res = await tableServer.getTableList(params);
+        else if (data.groupType === "views") res = await viewServer.getViewList(params);
+        else if (data.groupType === "functions") res = await sqlServer.getFunctionList(params);
+        else if (data.groupType === "procedures") res = await sqlServer.getProcedureList(params);
+        else if (data.groupType === "triggers") res = await sqlServer.getTriggerList(params);
+        else if (data.groupType === "users") res = await userServer.getUserList(params);
+        else if (data.groupType === "tableSpace") res = await tableSpaceServer.getTableSpaceList(params);
+        const items = Array.isArray(res?.data?.data) ? res.data.data : [];
+        resolve(items.map((item, index) => this.createObjectNode(data, item, index)));
+      } catch (e) {
+        resolve([]);
+        this.$message.error(`${data.label}加载失败`);
+      }
+    },
+    expandResourceNode(node) {
+      if (!node || node.isLeaf) return Promise.resolve(node);
+      if (node.expanded && node.loaded) return Promise.resolve(node);
+      return new Promise((resolve) => {
+        node.expand(() => this.$nextTick(() => resolve(node)), true);
+      });
+    },
+    createObjectNode(group, item, index) {
+      const typeMap = {
+        tables: "table",
+        views: "view",
+        functions: "function",
+        procedures: "processdure",
+        triggers: "trigger",
+        users: "user",
+        tableSpace: "tableSpace",
+      };
+      const name = item.name
+        || item.functionName
+        || item.procedureName
+        || item.triggerName
+        || item.userName
+        || item.tableDetails?.tableSpace
+        || `对象 ${index + 1}`;
+      const extraParams = {
+        ...group.extraParams,
+        tableName: name,
+        functionName: item.functionName,
+        procedureName: item.procedureName,
+        triggerName: item.triggerName,
+        userName: item.userName || item.name,
+        viewType: item.tableDetails?.type,
+      };
+      return {
+        key: `${group.key}-${name}`,
+        label: name,
+        treeNodeType: typeMap[group.groupType],
+        groupType: group.groupType,
+        groupKey: group.key,
+        leaf: true,
+        pinned: item.pinned,
+        comment: item.comment,
+        tableDetails: item.tableDetails || {},
+        viewType: item.tableDetails?.type,
+        dataSource: group.dataSource,
+        extraParams,
+      };
+    },
+    activateDataSourceContext(dataSource, context = {}, preserveSelection = false) {
+      if (!dataSource) return;
+      const schemaName = context.schemaName || dataSource.user || dataSource.userName || "";
+      const previousDataSourceId = this.dataInfo?.dataSource?.id;
+      const contextChanged = String(previousDataSourceId || "") !== String(dataSource.id)
+        || (schemaName && this.schema && schemaName !== this.schema);
+      if (contextChanged && !preserveSelection) {
+        this.activeClass = -1;
+        this.heightIndexs = [];
+        this.nameTbale = "";
+        this.seleCtrlKet = [];
+      }
+      const dataInfo = {
+        dateSourceId: dataSource.id,
+        dateSourceName: dataSource.alias,
+        userName: schemaName,
+        databaseName: context.databaseName || "",
+        dataSource,
+      };
+      this.schema = schemaName;
+      this.dataSourceId = dataSource.id;
+      this.$store.commit("workspaceData/SET_DATA_BASE_INFO", dataSource);
+      this.$store.commit("workspaceData/SET_DATA_INFO", dataInfo);
+      this.$store.commit("SET_CURRENTCONNECTIONDETAILS", dataSource);
+      sessionStorage.setItem("createData", JSON.stringify(dataInfo));
+      document.title = "数据库管理软件";
+    },
+    async handleResourceNodeClick(data, node) {
+      const dataSource = data.dataSource;
+      if (data.treeNodeType === "datasource" && !this.isDataSourceConnected(dataSource.id)) {
+        this.openDataSourceManager(dataSource, "connect");
+        return;
+      }
+      if (node && !node.isLeaf) {
+        if (node.expanded) node.collapse();
+        else node.expand();
+      }
+      if (dataSource) {
+        this.activateDataSourceContext(dataSource, data.extraParams || {});
+      }
+      if (["datasource", "schemaCollection", "databaseCollection"].includes(data.treeNodeType)) {
+        return;
+      }
+      if (data.treeNodeType === "schema" || data.treeNodeType === "database") {
+        this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
+        return;
+      }
+      if (data.treeNodeType === "objectGroup") {
+        this.type = data.groupType;
+        this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
+        this.$emit("isType", this.type, this.schema, this.activeClass);
+        if (["tables", "views", "users", "tableSpace"].includes(this.type)) {
+          await this.$nextTick();
+          this.getTableDataList(this.schema);
+        }
+        return;
+      }
+      this.type = data.groupType;
+      this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
+      await this.$nextTick();
+      if (data.treeNodeType === "table") {
+        this.openTableInWindow({
+          name: data.label,
+          comment: data.comment,
+          tableDetails: data.tableDetails || {},
+        }, 0, {});
+      } else if (["view", "user", "tableSpace"].includes(data.treeNodeType)) {
+        this.openTableInWindow({
+          name: data.label,
+          comment: data.comment,
+          tableDetails: data.tableDetails || {},
+          viewType: data.viewType,
+        }, 0, {}, data.treeNodeType);
+      } else if (data.treeNodeType === "function") {
+        this.openFunction(data);
+      } else if (data.treeNodeType === "processdure") {
+        this.openProcedure(data);
+      } else if (data.treeNodeType === "trigger") {
+        this.openTrigger(data);
+      }
+    },
+    handleResourceFilter(value) {
+      this.$refs.resourceTree?.filter(value);
+    },
+    resourceFilterNode(value, data) {
+      if (!value) return true;
+      return String(data.label || "").toLowerCase().includes(value.toLowerCase());
+    },
+    refreshResourceNode(node) {
+      if (!node) return;
+      if (node.data.treeNodeType === "datasource" && !this.isDataSourceConnected(node.data.dataSource.id)) {
+        this.openDataSourceManager(node.data.dataSource, "connect");
+        return;
+      }
+      node.loaded = false;
+      if (node.expanded) node.loadData();
+      else node.expand();
+    },
+    selectedTreeTableNames(groupKey) {
+      return this.treeTableSelections[groupKey] || [];
+    },
+    isTreeTableSelected(data) {
+      return this.selectedTreeTableNames(data.groupKey).includes(data.label);
+    },
+    toggleTreeTableSelection(data, selected) {
+      const names = this.selectedTreeTableNames(data.groupKey);
+      const next = selected
+        ? Array.from(new Set([...names, data.label]))
+        : names.filter((name) => name !== data.label);
+      this.$set(this.treeTableSelections, data.groupKey, next);
+    },
+    loadedTreeTableNames(node) {
+      return (node?.childNodes || [])
+        .filter((item) => item.data?.treeNodeType === "table")
+        .map((item) => item.data.label);
+    },
+    isAllLoadedTreeTablesSelected(data, node) {
+      const loaded = this.loadedTreeTableNames(node);
+      const selected = this.selectedTreeTableNames(data.key);
+      return loaded.length > 0 && loaded.every((name) => selected.includes(name));
+    },
+    toggleAllLoadedTreeTables(data, node) {
+      const loaded = this.loadedTreeTableNames(node);
+      if (!loaded.length) {
+        this.$message.warning("请先展开并加载数据表");
+        return;
+      }
+      const selected = this.selectedTreeTableNames(data.key);
+      const next = this.isAllLoadedTreeTablesSelected(data, node)
+        ? selected.filter((name) => !loaded.includes(name))
+        : Array.from(new Set([...selected, ...loaded]));
+      this.$set(this.treeTableSelections, data.key, next);
+    },
+    async deleteSelectedTreeTables(data, node) {
+      const tableNames = this.selectedTreeTableNames(data.key);
+      if (!tableNames.length) {
+        this.$message.warning("请先勾选要删除的表");
+        return;
+      }
+      try {
+        await this.$confirm(
+          `确定要删除已选的 ${tableNames.length} 张表吗？此操作不可恢复。`,
+          "批量删除表",
+          {
+            confirmButtonText: "删除",
+            cancelButtonText: "取消",
+            type: "warning",
+          }
+        );
+        const params = {
+          dataSourceId: data.extraParams.dataSourceId,
+          schemaName: data.extraParams.schemaName || data.extraParams.databaseName,
+          tableNames,
+        };
+        if (tableNames.length > BATCH_DELETE_TASK_THRESHOLD) {
+          const res = await tableServer.deleteTableDataTask(params);
+          if (!res.success) throw new Error(res.errorMessage || "提交删除任务失败");
+          this.$delete(this.treeTableSelections, data.key);
+          this.$message.success("批量删除已转入任务中心，可继续操作");
+          this.$EventBus.$emit("openTaskCenter");
+          return;
+        }
+        const res = await tableServer.deleteTableData(params);
+        if (!res.success) throw new Error(res.errorMessage || "删除失败");
+        this.$delete(this.treeTableSelections, data.key);
+        this.refreshResourceNode(node);
+        this.$message.success("删除成功");
+      } catch (error) {
+        if (error !== "cancel" && error !== "close") {
+          this.$message.error(error?.message || "删除表失败，请稍后重试");
+        }
+      }
+    },
+    openDataSourceManager(dataSource, mode) {
+      this.$emit("manageDataSources", { id: dataSource?.id, mode: mode || (dataSource ? "edit" : "create") });
+    },
+    closeDataSourceFromTree(dataSource) {
+      this.$confirm(`确定要关闭数据源“${this.dataSourceDisplayName(dataSource)}”的连接吗？`, "提示", {
+        confirmButtonText: "确定", cancelButtonText: "取消", type: "warning",
+      }).then(async () => {
+        const res = await connectionServer.closeDataSource({ id: dataSource.id });
+        if (!res.success) {
+          this.$message.error(res.errorMessage || "关闭连接失败");
+          return;
+        }
+        this.$store.commit("SET_DATASOURCE_CONNECTED", { id: dataSource.id, connected: false });
+        if (String(this.dataInfo?.dataSource?.id) === String(dataSource.id)) {
+          this.$store.commit("workspaceData/SET_DATA_BASE_INFO", {});
+          this.$store.commit("workspaceData/SET_DATA_INFO", {});
+          this.$store.commit("SET_CURRENTCONNECTIONDETAILS", null);
+          sessionStorage.removeItem("createData");
+        }
+        this.$message.success("连接已关闭");
+        this.$EventBus.$emit("refreshDataSourceTree");
+      }).catch(() => {});
+    },
+    async createConsoleForDataSource(data) {
+      if (!this.isDataSourceConnected(data.dataSource.id)) {
+        this.openDataSourceManager(data.dataSource, "connect");
+        return;
+      }
+      this.activateDataSourceContext(data.dataSource, data.extraParams || {});
+      await this.$store.dispatch("workspaceData/createConsole", {
+        pageId: this.pageId,
+        ...data.extraParams,
+      });
+    },
+    deleteDataSourceFromTree(dataSource) {
+      this.$confirm(`确定要删除数据源“${this.dataSourceDisplayName(dataSource)}”吗？`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(async () => {
+        const res = await connectionServer.deleteDataSource(dataSource.id);
+        if (res.success) {
+          this.$store.commit("SET_DATASOURCE_CONNECTED", { id: dataSource.id, connected: false });
+          this.$message.success("删除成功");
+          this.initializeResourceTree();
+        } else {
+          this.$message.error(res.errorMessage || "删除失败");
+        }
+      }).catch(() => {});
+    },
+    async addObjectFromTree(data) {
+      this.activateDataSourceContext(data.dataSource, data.extraParams || {});
+      this.type = data.groupType;
+      this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
+      await this.$nextTick();
+      this.addSideBar();
+    },
+    async deleteObjectFromTree(data, node) {
+      this.activateDataSourceContext(data.dataSource, data.extraParams || {});
+      this.type = data.groupType;
+      this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
+      if (["table", "view", "function", "processdure", "trigger"].includes(data.treeNodeType)) {
+        this.deleteTable(data, node);
+        return;
+      }
+      this.seleCtrlKet = [data.label];
+      await this.$nextTick();
+      this.deleteData();
+    },
+    resourceNodeIcon(data) {
+      const icons = {
+        datasource: "el-icon-connection",
+        databaseCollection: "el-icon-coin",
+        schemaCollection: "el-icon-folder",
+        database: "el-icon-coin",
+        schema: "el-icon-folder-opened",
+        objectGroup: "el-icon-folder",
+        table: "el-icon-tickets",
+        view: "el-icon-view",
+        function: "el-icon-set-up",
+        processdure: "el-icon-cpu",
+        trigger: "el-icon-bell",
+        user: "el-icon-user",
+        tableSpace: "el-icon-box",
+      };
+      return icons[data.treeNodeType] || "el-icon-document";
+    },
+    handleResourceContextMenu(event, data, node) {
+      if (data.treeNodeType !== "table") return;
+      this.activateDataSourceContext(data.dataSource, data.extraParams || {});
+      this.type = "tables";
+      this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
+      this.creatRightMenu({
+        name: data.label,
+        label: data.label,
+        treeNodeType: data.treeNodeType,
+        groupType: "tables",
+        extraParams: data.extraParams,
+        dataSource: data.dataSource,
+        tableDetails: data.tableDetails || {},
+      }, event, node);
+    },
+    executeResourceContextAction(action) {
+      this.contextMenuVisible = false;
+      const data = this.context_current_item;
+      if (action === "open") this.handleResourceNodeClick(data);
+      else if (action === "newWindow") this.newTableLable();
+      else if (action === "ddl") this.viewDDL(data);
+      else if (action === "template") this.routerSql();
+      else if (action === "copyName") this.CopyName(data);
+      else if (action === "copyTable") this.openCopyTableDialog(false);
+      else if (action === "copyTableWithData") this.openCopyTableDialog(true);
+      else if (action === "delete") this.deleteTable(data, this.context_current_node);
+    },
+    async openCopyTableDialog(withData) {
+      this.copyTableWithData = withData;
+      this.copyschemaName = "";
+      this.copyTableDialogVisible = true;
+      this.copySchemaOptionsLoading = true;
+      try {
+        await this.getDataBaseTreeData();
+      } finally {
+        this.copySchemaOptionsLoading = false;
+      }
+    },
+    confirmCopyTable() {
+      if (!this.copyschemaName) {
+        this.$message.warning("请选择目标模式");
+        return;
+      }
+      this.copyTable(this.copyTableWithData);
     },
     isMaterializedView(item) {
       return String(item?.tableDetails?.type || item?.viewType || item?.type || "").toUpperCase() === "MATERIALIZED VIEW";
@@ -290,7 +868,7 @@ export default {
         refresh: false,
       };
       // debugger
-      connectionServer.getSchemaList(params).then((res) => {
+      return connectionServer.getSchemaList(params).then((res) => {
         this.dataSourceListData = res.data;
         this.menuList.forEach((item) => {
           if (item.children) {
@@ -699,6 +1277,7 @@ export default {
       })
         .then(async () => {
           const send = {
+            ...nodeData.extraParams,
             dataSourceId: nodeData.extraParams?.dataSourceId,
             databaseName: nodeData.extraParams?.databaseName,
             schemaName: nodeData.extraParams?.schemaName,
@@ -1256,31 +1835,32 @@ export default {
     },
     handelKeyDown(event) {
       this.ctrlKey = event.key == "Control";
+      if (event.key === "Escape") this.contextMenuVisible = false;
     },
-    openTableInWindow(items, index, event) {
-      if (this.isQuery || !items?.name) return;
-      const hasSelectedTable = this.activeClass >= 0 && Boolean(this.nameTbale);
-      if (!hasSelectedTable) {
-        this.$router.replace({
-          path: this.$route.path,
-          query: {
-            dataSourceId: this.dataInfo.dataSource.id,
-            dataSourceName: this.dataInfo.dataSource.alias,
-            schemaName: this.schema,
-            tableName: items.name,
-            objectType: "table",
-          },
-        });
-        this.handelClickItem(items, index, event);
-        return;
-      }
-      this.$EventBus.$emit("openLookPage", {
+    openTableInWindow(items, index, event, objectType = "table") {
+      if (!items?.name) return;
+      const config = this.$store.state.workspaceData.dataCurrentData.get(this.pageId);
+      const currentName = config ? config.uniqueData?.tableName : this.$route.query.tableName;
+      const currentSchema = config ? config.uniqueData?.schemaName : this.$route.query.schemaName;
+      const hasSelectedTable = Boolean(currentName) && (!currentSchema || currentSchema === this.schema);
+      const query = {
         dataSourceId: this.dataInfo.dataSource.id,
         dataSourceName: this.dataInfo.dataSource.alias,
         schemaName: this.schema,
         tableName: items.name,
-        objectType: "table",
-      });
+        objectType,
+        viewType: items.tableDetails?.type,
+        path: items.tableDetails?.path,
+      };
+      if (!hasSelectedTable && !this.$route.path.includes("/workspace/query/")) {
+        this.$router.replace({
+          path: this.$route.path,
+          query,
+        }).catch(() => {});
+        this.handelClickItem(items, index, event);
+        return;
+      }
+      this.$EventBus.$emit("openLookPage", query);
     },
     scrollToActiveTable() {
       if (this.activeClass < 0) return;
@@ -1294,13 +1874,18 @@ export default {
       });
     },
     // 切表事件
-    async handelClickItem(items, index, event) {
+    async handelClickItem(items, index, event, target = null) {
+      const dataSource = target?.dataSource || this.dataInfo.dataSource;
+      const schema = target?.schema ?? this.schema;
+      const objectGroup = target?.type || this.type;
+      const pageId = target?.pageId || this.pageId;
+      const databaseName = target?.databaseName ?? this.dataInfo.databaseName ?? dataSource.databaseName ?? "";
       this.contextMenuVisible = false;
       this.$refs.dataSourcePop?.doClose();
       console.log(this.dataInfo, "this.dataInfo");
-      if (this.isQuery) return;
-      this.$emit("load", true);
-      if (this.type != "tables" && this.ctrlKey && event.ctrlKey) {
+      if (this.isQuery && !target) return;
+      this.$emit("load", true, pageId);
+      if (!target && objectGroup != "tables" && this.ctrlKey && event.ctrlKey) {
         if (this.heightIndexs.includes(index)) {
           this.heightIndexs = this.heightIndexs.filter((i) => i !== index);
         } else {
@@ -1312,54 +1897,56 @@ export default {
           this.seleCtrlKet.push(items.name || items.tableDetails.tableSpace);
         }
       } else {
-        this.heightIndexs = [index];
-        if (this.type != "tables") {
-          this.seleCtrlKet = [items.name || items.tableDetails.tableSpace];
+        if (!target) {
+          this.heightIndexs = [index];
+          if (objectGroup != "tables") {
+            this.seleCtrlKet = [items.name || items.tableDetails.tableSpace];
+          }
+          this.nameTbale = items.name;
+          this.activeClass = index;
         }
-        this.nameTbale = items.name;
-        this.activeClass = index;
         let type = "";
-        const materializedView = this.type == "views" && this.isMaterializedView(items);
+        const materializedView = objectGroup == "views" && this.isMaterializedView(items);
         const objectName = items.name || items.tableDetails.tableSpace;
-        const viewTitle = this.type == "tables" && this.schema
-          ? `${this.schema}.${objectName}`
+        const viewTitle = objectGroup == "tables" && schema
+          ? `${schema}.${objectName}`
           : objectName;
         this.$store.dispatch("jdTagsView/changeView", {
           title: viewTitle,
-          id: this.$route.params.id,
+          id: pageId,
         });
         this.$store.state.jdTagsView.titleMap.push({
           title: viewTitle,
-          id: this.$route.params.id,
+          id: pageId,
         });
-        if (this.type == "tables") {
+        if (objectGroup == "tables") {
           type = "editTable";
-        } else if (this.type == "views") {
+        } else if (objectGroup == "views") {
           type = materializedView ? "editTableData" : "editView";
-        } else if (this.type == "users") {
+        } else if (objectGroup == "users") {
           type = "editUser";
-        } else if (this.type == "tableSpace") {
+        } else if (objectGroup == "tableSpace") {
           type = "editTableSpace";
         }
-        if (this.type == "tables" || this.type == "views") {
+        if (objectGroup == "tables" || objectGroup == "views") {
           let send = {
-            dataSourceId: this.dataInfo.dataSource.id,
-            databaseType: this.dataInfo.dataSource.type,
-            databaseName: this.dataInfo.dataSource.databaseName,
+            dataSourceId: dataSource.id,
+            databaseType: dataSource.type,
+            databaseName: databaseName,
             hasNextPage: true,
             pageNo: 1,
             pageSize: 100,
             skipCount: false,
-            schemaName: this.schema,
-            sql: this.dataInfo.dataSource.type === "ORACLE" && this.type == "tables"
-              ? `select t.*, t.rowid as "ROWID" from "${this.schema}"."${items.name}" t`
-              : this.dataInfo.dataSource.type === "DM" && this.type == "tables"
-                ? `select t.*, t.rowid from "${this.schema}"."${items.name}" t`
-                : `select * from "${this.schema}"."${items.name}"`,
+            schemaName: schema,
+            sql: dataSource.type === "ORACLE" && objectGroup == "tables"
+              ? `select t.*, t.rowid as "ROWID" from "${schema}"."${items.name}" t`
+              : dataSource.type === "DM" && objectGroup == "tables"
+                ? `select t.*, t.rowid from "${schema}"."${items.name}" t`
+                : `select * from "${schema}"."${items.name}"`,
             tableName: items.name,
             total: 0,
-            type: this.dataInfo.dataSource.type,
-            isDataView: this.type == "views" ? false : true,
+            type: dataSource.type,
+            isDataView: objectGroup == "views" ? false : true,
           };
           await sqlServer.executeSql(send).then((res) => {
             const result = res?.data?.[0];
@@ -1369,35 +1956,35 @@ export default {
             }
             if (result.success) {
               this.$store.dispatch("workspaceData/setDataCurrentData", {
-                pageId: this.pageId,
+                pageId: pageId,
                 title: items.name,
                 type: type,
                 ...result,
                 canEdit: materializedView ? false : result.canEdit,
                 params: send,
                 uniqueData: {
-                  dataSourceId: this.dataInfo.dataSource.id,
-                  dataSourceName: this.dataInfo.dataSource.alias,
-                  databaseName: "",
+                  dataSourceId: dataSource.id,
+                  dataSourceName: dataSource.alias,
+                  databaseName: databaseName,
                   sqlInfo: null,
-                  databaseType: this.dataInfo.dataSource.type,
-                  schemaName: this.schema,
+                  databaseType: dataSource.type,
+                  schemaName: schema,
                   tableName: items.name,
                   viewType: items.tableDetails?.type,
                   isLoading: true,
-                  dataType: this.type,
+                  dataType: objectGroup,
                 },
               });
             } else {
               this.$message.error(result.message || "打开对象失败");
               this.$store.dispatch("workspaceData/setDataCurrentData", {
-                pageId: this.pageId,
+                pageId: pageId,
                 params: {},
                 title: items.name,
                 type: type,
                 uniqueData: {
-                  dataSourceId: this.dataInfo.dataSource.id,
-                  schemaName: this.schema,
+                  dataSourceId: dataSource.id,
+                  schemaName: schema,
                   tableName: items.name,
                   viewType: items.tableDetails?.type,
                   sqlInfo: null,
@@ -1407,84 +1994,84 @@ export default {
             result.success
               ? (items.checkStyle = 1)
               : (items.checkStyle = 2);
-            this.$emit("load", false);
+            this.$emit("load", false, pageId);
           }).catch(() => {
             this.$message.error("打开对象失败，请稍后重试");
           }).finally(() => {
-            this.$emit("load", false);
+            this.$emit("load", false, pageId);
           });
-        } else if (this.type == "users") {
+        } else if (objectGroup == "users") {
           let send = {
-            dataSourceId: this.dataInfo.dataSource.id,
-            databaseType: this.dataInfo.dataSource.type,
-            databaseName: this.dataInfo.databaseName,
+            dataSourceId: dataSource.id,
+            databaseType: dataSource.type,
+            databaseName: databaseName,
             hasNextPage: true,
             pageNo: 1,
             pageSize: 200,
-            schemaName: this.schema,
+            schemaName: schema,
             tableName: items.name,
             userName: items.name,
             total: 0,
-            type: this.dataInfo.dataSource.type,
+            type: dataSource.type,
           };
           userServer.getUserDetails(send).then((res) => {
-            this.$emit("load", false);
+            this.$emit("load", false, pageId);
             this.$store.dispatch("workspaceData/setDataCurrentData", {
-              pageId: this.pageId,
+              pageId: pageId,
               title: items.name,
               type: type,
               tableDetails: res.data.tableDetails,
               uniqueData: {
-                dataSourceId: this.dataInfo.dataSource.id,
-                databaseName: this.dataInfo.dataSource.alias,
+                dataSourceId: dataSource.id,
+                databaseName: dataSource.alias,
                 sqlInfo: null,
-                databaseType: this.dataInfo.dataSource.type,
+                databaseType: dataSource.type,
                 userName: items.name,
               },
             });
           }).catch(() => {
             this.$message.error("打开用户失败，请稍后重试");
           }).finally(() => {
-            this.$emit("load", false);
+            this.$emit("load", false, pageId);
           });
-        } else if (this.type == "tableSpace") {
+        } else if (objectGroup == "tableSpace") {
           let send = {
-            dataSourceId: this.dataInfo.dataSource.id,
+            dataSourceId: dataSource.id,
             path: items.tableDetails.path,
           };
           tableSpaceServer.getTableSpaceDetails(send).then((res) => {
-            this.$emit("load", false);
+            this.$emit("load", false, pageId);
             this.$store.dispatch("workspaceData/setDataCurrentData", {
-              pageId: this.pageId,
+              pageId: pageId,
               title: items.name,
               type: type,
               // tableDetails: res.data.tableDetails,
               uniqueData: {
-                dataSourceId: this.dataInfo.dataSource.id,
-                databaseName: this.dataInfo.dataSource.alias,
+                dataSourceId: dataSource.id,
+                databaseName: dataSource.alias,
                 path: items.tableDetails.path,
               },
             });
           }).catch(() => {
             this.$message.error("打开表空间失败，请稍后重试");
           }).finally(() => {
-            this.$emit("load", false);
+            this.$emit("load", false, pageId);
           });
         } else {
           this.$store.dispatch("workspaceData/setDataCurrentData", {
-            pageId: this.pageId,
+            pageId: pageId,
             title: items.name,
             type: type,
             uniqueData: {
-              dataSourceId: this.dataInfo.dataSource.id,
-              dataSourceName: this.dataInfo.dataSource.alias,
-              databaseName: "",
-              databaseType: this.dataInfo.dataSource.type,
-              schemaName: this.schema,
+              dataSourceId: dataSource.id,
+              dataSourceName: dataSource.alias,
+              databaseName: databaseName,
+              databaseType: dataSource.type,
+              schemaName: schema,
               tableName: items.name,
             },
           });
-          this.$emit("load", false);
+          this.$emit("load", false, pageId);
         }
       }
     },
@@ -1532,22 +2119,15 @@ export default {
         this.tableData.push(res.data.tableDetails);
       });
     },
-    creatRightMenu(tag, e) {
+    creatRightMenu(tag, e, node = null) {
       if (this.type == "tables") {
         e.preventDefault();
-        const menuMinHeight = 50;
-        const offsetTop = this.$el.getBoundingClientRect().top;
-        const offsetHeight = this.$el.offsetHeight;
-        const maxTop = offsetHeight - menuMinHeight;
-        const top = e.clientY - offsetTop + 120;
-        if (top > maxTop) {
-          this.contextMenu_top = maxTop;
-        } else {
-          this.contextMenu_top = top;
-        }
-        this.contextMenu_left = e.clientX;
+        const menuWidth = 220;
+        const menuHeight = 306;
+        this.contextMenu_top = Math.max(8, Math.min(e.clientY, window.innerHeight - menuHeight - 8));
+        this.contextMenu_left = Math.max(8, Math.min(e.clientX, window.innerWidth - menuWidth - 8));
         this.contextMenuVisible = true;
-        this.openIndex = null
+        this.context_current_node = node;
         this.copyschemaName = "";
         this.context_current_item = {
           dataSourceId: this.dataInfo.dataSource.id,
@@ -1572,8 +2152,11 @@ export default {
           if (res.data[0].message) {
             this.$message.error(res.data[0].message);
           } else {
+            this.copyTableDialogVisible = false;
             this.$message.success("复制成功");
-            this.getTableDataList(this.schema, true);
+            if (this.context_current_node?.parent) {
+              this.refreshResourceNode(this.context_current_node.parent);
+            }
           }
         } else {
           this.$message.error("复制失败");
@@ -1715,7 +2298,130 @@ export default {
 
 <template>
   <div class="database_tree">
-    <div class="database_form">
+    <div class="resource-explorer">
+      <div class="resource-header">
+        <span class="resource-title">数据库连接</span>
+        <span class="resource-count">{{ databaseTree.length }}</span>
+        <button class="resource-icon-button" title="刷新连接" @click="initializeResourceTree">
+          <i class="el-icon-refresh"></i>
+        </button>
+        <button class="resource-icon-button" title="新增连接" @click="openDataSourceManager()">
+          <i class="el-icon-plus"></i>
+        </button>
+      </div>
+      <el-input
+        v-model="resourceFilter"
+        class="resource-search"
+        size="mini"
+        clearable
+        prefix-icon="el-icon-search"
+        placeholder="搜索过滤库/表/用户..."
+        @input="handleResourceFilter"
+      />
+      <el-scrollbar ref="resourceTreeScrollbar" class="resource-tree-scrollbar" v-loading="resourceTreeLoading">
+        <el-tree
+          ref="resourceTree"
+          class="resource-tree"
+          :data="databaseTree"
+          :props="defaultProps"
+          :load="loadResourceNode"
+          :filter-node-method="resourceFilterNode"
+          node-key="key"
+          lazy
+          highlight-current
+          :expand-on-click-node="false"
+          @node-click="handleResourceNodeClick"
+          @node-contextmenu="handleResourceContextMenu"
+        >
+          <span slot-scope="{ node, data }" class="resource-node">
+            <span class="resource-node-main">
+              <el-checkbox
+                v-if="data.treeNodeType === 'table'"
+                class="resource-table-checkbox"
+                :value="isTreeTableSelected(data)"
+                :aria-label="`选择表 ${data.label}`"
+                @click.native.stop
+                @change="toggleTreeTableSelection(data, $event)"
+              />
+              <span
+                v-if="data.treeNodeType === 'datasource'"
+                class="connection-status"
+                :class="{ online: data.dataSource && isDataSourceConnected(data.dataSource.id) }"
+              ></span>
+              <i v-else :class="resourceNodeIcon(data)" class="resource-node-icon"></i>
+              <span class="resource-node-label" :title="data.label">{{ data.label }}</span>
+              <span v-if="data.treeNodeType === 'datasource'" class="database-type">
+                {{ data.dataSource && data.dataSource.type }}
+              </span>
+              <span
+                v-if="data.treeNodeType === 'objectGroup' && data.groupType === 'tables' && selectedTreeTableNames(data.key).length"
+                class="resource-selection-count"
+              >已选 {{ selectedTreeTableNames(data.key).length }}</span>
+            </span>
+            <span class="resource-node-actions">
+              <template v-if="data.treeNodeType === 'datasource'">
+                <button v-if="isDataSourceConnected(data.dataSource.id)" title="关闭连接" @click.stop="closeDataSourceFromTree(data.dataSource)">
+                  <i class="el-icon-switch-button"></i>
+                </button>
+                <button title="新建查询" @click.stop="createConsoleForDataSource(data)">
+                  <i class="el-icon-edit-outline"></i>
+                </button>
+                <button title="刷新" @click.stop="refreshResourceNode(node)">
+                  <i class="el-icon-refresh"></i>
+                </button>
+                <button title="编辑连接" @click.stop="openDataSourceManager(data.dataSource)">
+                  <i class="el-icon-setting"></i>
+                </button>
+                <button title="删除连接" @click.stop="deleteDataSourceFromTree(data.dataSource)">
+                  <i class="el-icon-delete"></i>
+                </button>
+              </template>
+              <template v-else-if="data.treeNodeType === 'objectGroup'">
+                <button
+                  v-if="data.groupType === 'tables'"
+                  :title="isAllLoadedTreeTablesSelected(data, node) ? '取消全选已加载表' : '全选已加载表'"
+                  @click.stop="toggleAllLoadedTreeTables(data, node)"
+                >
+                  <i :class="isAllLoadedTreeTablesSelected(data, node) ? 'el-icon-circle-check' : 'el-icon-circle-plus-outline'"></i>
+                </button>
+                <button
+                  v-if="data.groupType === 'tables'"
+                  class="danger-action"
+                  title="批量删除已选表"
+                  @click.stop="deleteSelectedTreeTables(data, node)"
+                >
+                  <i class="el-icon-delete"></i>
+                </button>
+                <button
+                  v-if="['tables', 'views', 'users', 'tableSpace'].includes(data.groupType)"
+                  title="新增"
+                  @click.stop="addObjectFromTree(data)"
+                >
+                  <i class="el-icon-plus"></i>
+                </button>
+                <button title="刷新" @click.stop="refreshResourceNode(node)">
+                  <i class="el-icon-refresh"></i>
+                </button>
+              </template>
+              <button
+                v-else-if="['table', 'view', 'function', 'processdure', 'trigger', 'user', 'tableSpace'].includes(data.treeNodeType)"
+                title="删除"
+                @click.stop="deleteObjectFromTree(data, node)"
+              >
+                <i class="el-icon-delete"></i>
+              </button>
+            </span>
+          </span>
+        </el-tree>
+        <div v-if="!resourceTreeLoading && !databaseTree.length" class="resource-empty">
+          <i class="el-icon-connection"></i>
+          <span>暂无数据源</span>
+          <el-button type="text" @click="openDataSourceManager()">新增连接</el-button>
+        </div>
+      </el-scrollbar>
+    </div>
+
+    <div v-if="false" class="database_form">
       <div class="database_title">
         <el-tooltip
           class="item"
@@ -1775,7 +2481,7 @@ export default {
         @input="handleInput"
       ></el-input>
     </div>
-    <div style="flex: 1; min-height: 0; position: relative">
+    <div v-if="false" style="flex: 1; min-height: 0; position: relative">
       <div class="database_titles">
         <el-checkbox
           v-if="type == 'tables' && !isQuery"
@@ -2024,102 +2730,77 @@ export default {
       </el-scrollbar>
     </div>
 
-    <ul
-      class="contextMenuBox"
+    <div
+      class="resource-context-menu"
       v-show="contextMenuVisible"
       :style="{ left: contextMenu_left + 'px', top: contextMenu_top + 'px' }"
+      role="menu"
+      @click.stop
     >
-      <li
-        v-for="(item,index) in menuList"
-        :key="item.name"
-        class="menu_item"
-        :class="{ 'has-children': item.children }"
-        @click.stop="handleClick(item,index)"
-      >
-        {{ item.name }}
-        <ul v-if="item.children && openIndex == index" class="submenu">
-           <el-select
-            size="mini"
-            filterable
-            v-model="copyschemaName"
-            placeholder="请选择"
-            @change="changeCopy"
-          >
-            <el-option
-              v-for="(item, index) in item.children"
-              :key="index"
-              :label="item.name"
-              :value="item.name"
-            ></el-option>
-          </el-select>
-          <!-- <li
-            v-for="child in item.children"
-            :key="child.name"
-            class="menu_item"
-            @click.stop="handleClick(child)"
-          >
-            {{ child.name }}
-          </li> -->
-        </ul>
-      </li>
-      <!-- <div>
-        <el-button @click="routerSql">数据模板</el-button>
+      <div class="context-menu-title" :title="context_current_item.name">
+        <i class="el-icon-tickets"></i>
+        <span>{{ context_current_item.name }}</span>
       </div>
-      <div>
-        <el-popover
-          placement="bottom"
-          title="模式名"
-          width="200"
-          trigger="click"
-          ref="dataSourcePop"
-        >
-          <el-select
-            size="mini"
-            filterable
-            v-model="copyschemaName"
-            @visible-change="(val)=>handleCascaderChange(val,false)"
-            placeholder="请选择"
-          >
-            <el-option
-              v-for="(item, index) in dataSourceListData"
-              :key="index"
-              :label="item.name"
-              :value="item.name"
-            ></el-option>
-          </el-select>
-          <el-button slot="reference">复制表</el-button>
-        </el-popover>
+      <button role="menuitem" @click="executeResourceContextAction('open')">
+        <i class="el-icon-folder-opened"></i><span>打开</span>
+      </button>
+      <button role="menuitem" @click="executeResourceContextAction('newWindow')">
+        <i class="el-icon-copy-document"></i><span>在新页签打开</span>
+      </button>
+      <div class="context-menu-divider"></div>
+      <button role="menuitem" @click="executeResourceContextAction('ddl')">
+        <i class="el-icon-document"></i><span>查看 DDL</span>
+      </button>
+      <button role="menuitem" @click="executeResourceContextAction('template')">
+        <i class="el-icon-edit-outline"></i><span>数据模板</span>
+      </button>
+      <button role="menuitem" @click="executeResourceContextAction('copyTable')">
+        <i class="el-icon-document-copy"></i><span>复制表结构</span>
+      </button>
+      <button role="menuitem" @click="executeResourceContextAction('copyTableWithData')">
+        <i class="el-icon-files"></i><span>复制表及数据</span>
+      </button>
+      <button role="menuitem" @click="executeResourceContextAction('copyName')">
+        <i class="el-icon-document-copy"></i><span>复制表名</span>
+      </button>
+      <div class="context-menu-divider"></div>
+      <button class="danger" role="menuitem" @click="executeResourceContextAction('delete')">
+        <i class="el-icon-delete"></i><span>删除表</span>
+      </button>
+    </div>
+    <el-dialog
+      :title="copyTableWithData ? '复制表及数据' : '复制表结构'"
+      :visible.sync="copyTableDialogVisible"
+      width="380px"
+      append-to-body
+      :close-on-click-modal="false"
+    >
+      <div class="copy-table-dialog-copy">
+        <div class="copy-source-name">源表：{{ context_current_item.name }}</div>
+        <el-form label-position="top" size="small">
+          <el-form-item label="目标模式">
+            <el-select
+              v-model="copyschemaName"
+              v-loading="copySchemaOptionsLoading"
+              filterable
+              style="width: 100%"
+              placeholder="请选择目标模式"
+            >
+              <el-option
+                v-for="item in dataSourceListData"
+                :key="item.name"
+                :label="item.name"
+                :value="item.name"
+              ></el-option>
+            </el-select>
+          </el-form-item>
+        </el-form>
       </div>
-      <div>
-        <el-popover
-          placement="bottom"
-          title="模式名"
-          width="200"
-          trigger="click"
-          ref="dataSourcePop"
-        >
-          <el-select
-            size="mini"
-            filterable
-            v-model="copyschemaName"
-            @visible-change="(val)=>handleCascaderChange(val,true)"
-            placeholder="请选择"
-          >
-            <el-option
-              v-for="(item, index) in dataSourceListData"
-              :key="index"
-              :label="item.name"
-              :value="item.name"
-            ></el-option>
-          </el-select>
-          <el-button slot="reference">复制表及数据</el-button>
-        </el-popover>
-        <el-button @click="copyTable(true)">复制表及数据</el-button> -->
-      <!-- </div>
-      <div>
-        <el-button @click="newTableLable">新建窗口</el-button>
-      </div> -->
-    </ul>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="copyTableDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmCopyTable">开始复制</el-button>
+      </span>
+    </el-dialog>
     <CreateOption ref="createOption" />
     <SqlPreview ref="sqlPreview" :title="DDLTitle" />
     <addTableSpaceVue
@@ -2172,56 +2853,83 @@ export default {
   top: 30%;
   cursor: pointer;
 }
-.contextMenuBox,
-.submenu {
-  margin: 0;
+.resource-context-menu {
+  position: fixed;
+  z-index: 3000;
+  width: 212px;
+  padding: 6px;
+  border: 1px solid #dfe4ec;
+  border-radius: 6px;
   background: #fff;
-  z-index: 99;
-  min-width: 120px;
-  max-height: 400px;
-  position: absolute;
-  list-style-type: none;
-  padding: 5px 0;
-  border-radius: 4px;
+  box-shadow: 0 10px 28px rgba(38, 51, 77, 0.18);
+  color: #34425a;
   font-size: 12px;
-  font-weight: 400;
-  color: #333;
-  border: 1px solid #eee;
-  box-shadow: 2px 2px 3px 0 rgba(0, 0, 0, 0.3);
-  .menu_item {
-    padding: 5px 15px;
-    cursor: pointer;
-    white-space: nowrap;
-    position: relative;
-    text-align: center;
-    &:hover {
-      background: #eee;
-    }
-  }
-  .has-children {
-    .submenu {
-      top: 0;
-      left: 100%;
-       overflow: auto;
-      // display: none;
-    }
-    // &:hover {
-    //   .submenu {
-    //     display: block;
-    //     overflow: auto;
-    //   }
-    // }
-  }
-  // .el-button {
-  //   width: 100%;
-  //   margin: 0;
-  //   padding: 7px 16px;
-  //   cursor: pointer;
-  //   border: none;
-  //   &:hover {
-  //     background: #eee;
-  //   }
-  // }
+}
+.context-menu-title {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px;
+  color: #7a879b;
+  font-size: 11px;
+  font-weight: 600;
+}
+.context-menu-title i {
+  margin-right: 7px;
+  color: #5f75a0;
+}
+.context-menu-title span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.resource-context-menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #34425a;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.resource-context-menu button i {
+  width: 18px;
+  margin-right: 7px;
+  color: #6e7e96;
+  text-align: center;
+}
+.resource-context-menu button:hover {
+  background: #edf4ff;
+  color: #006fff;
+}
+.resource-context-menu button:hover i {
+  color: #006fff;
+}
+.resource-context-menu button.danger,
+.resource-context-menu button.danger i {
+  color: #d64a4a;
+}
+.resource-context-menu button.danger:hover {
+  background: #fff1f1;
+}
+.context-menu-divider {
+  height: 1px;
+  margin: 5px 3px;
+  background: #edf0f5;
+}
+.copy-source-name {
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  border: 1px solid #e4e9f1;
+  border-radius: 4px;
+  background: #f7f9fc;
+  color: #4b5970;
+  font-size: 12px;
 }
 .itemWrap {
   width: max-content;
@@ -2293,6 +3001,206 @@ export default {
   .table_img {
     padding-left: 7px;
   }
+}
+.resource-explorer {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid #e5e9f2;
+  background: #fff;
+}
+.resource-header {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid #edf0f5;
+}
+.resource-title {
+  color: #25324b;
+  font-size: 13px;
+  font-weight: 600;
+}
+.resource-count {
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #f0f3f8;
+  color: #7a869a;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.resource-icon-button,
+.resource-node-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #7b8799;
+  cursor: pointer;
+}
+.resource-icon-button:hover,
+.resource-node-actions button:hover {
+  background: #edf4ff;
+  color: #006fff;
+}
+.resource-header .resource-icon-button:first-of-type {
+  margin-left: auto;
+}
+.resource-search {
+  padding: 8px;
+}
+.resource-tree-scrollbar {
+  flex: 1;
+  min-height: 0;
+}
+.resource-node {
+  display: flex;
+  align-items: center;
+  width: calc(100% - 6px);
+  min-width: 0;
+  height: 26px;
+}
+.resource-node-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+.connection-status {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #b7bec9;
+}
+.connection-status.online {
+  background: #38b26c;
+  box-shadow: 0 0 0 2px #e3f6ea;
+}
+.resource-node-icon {
+  width: 16px;
+  margin-right: 5px;
+  color: #6d7b91;
+  text-align: center;
+}
+.resource-node-label {
+  overflow: hidden;
+  color: #435169;
+  font-size: var(--workspace-body-font-size, 12px);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.resource-table-checkbox {
+  flex: 0 0 auto;
+  margin-right: 6px;
+}
+.resource-selection-count {
+  flex: 0 0 auto;
+  margin-left: 7px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #eaf2ff;
+  color: #3476d4;
+  font-size: 10px;
+  line-height: 16px;
+}
+.database-type {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid #d9e2f0;
+  border-radius: 3px;
+  color: #8591a6;
+  font-size: 9px;
+  line-height: 15px;
+}
+.resource-node-actions {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  padding-left: 4px;
+  background: inherit;
+}
+.resource-node:hover .resource-node-actions {
+  display: flex;
+}
+.resource-node-actions button {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+}
+.resource-node-actions button.danger-action:hover {
+  background: #fff1f1;
+  color: #d64a4a;
+}
+.resource-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  flex-direction: column;
+  color: #9aa4b5;
+  font-size: 12px;
+}
+.resource-empty > i {
+  margin-bottom: 6px;
+  font-size: 24px;
+}
+::v-deep .resource-search .el-input__inner {
+  height: 28px;
+  border-color: #dfe4ec;
+  border-radius: 3px;
+  background: #f8f9fb;
+  font-size: 12px;
+}
+::v-deep .resource-tree-scrollbar .el-scrollbar__wrap {
+  overflow-x: auto;
+}
+::v-deep .resource-tree-scrollbar .el-scrollbar__view {
+  min-width: 100%;
+}
+::v-deep .resource-tree .el-tree-node__content {
+  height: 28px;
+  min-width: max-content;
+  padding-right: 4px;
+}
+::v-deep .resource-tree .el-tree-node__content:hover {
+  background: #f2f6fb;
+}
+::v-deep .resource-tree .el-tree-node.is-current > .el-tree-node__content {
+  background: #eaf2ff;
+}
+::v-deep .resource-tree .el-tree-node__expand-icon {
+  color: #8793a6;
+  font-size: 12px;
+}
+::v-deep .resource-tree .el-tree-node__expand-icon.is-leaf {
+  width: 0;
+  margin: 0;
+  padding: 0;
+  visibility: hidden;
+}
+::v-deep .resource-table-checkbox .el-checkbox__label {
+  display: none;
+}
+::v-deep .resource-table-checkbox .el-checkbox__inner {
+  width: 13px;
+  height: 13px;
+}
+::v-deep .resource-table-checkbox .el-checkbox__inner::after {
+  left: 4px;
+  top: 1px;
 }
 .database_tree {
   height: 100%;

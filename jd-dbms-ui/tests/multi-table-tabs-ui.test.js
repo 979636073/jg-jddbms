@@ -93,9 +93,11 @@ assert.strictEqual(invalidOpen.errors.length, 1)
 const sideBarFile = path.join(__dirname, '../src/views/main/workspace/SideBar.vue')
 const sideBarSource = fs.readFileSync(sideBarFile, 'utf8')
 assertScriptParses(sideBarFile)
-assert(sideBarSource.includes("@click.stop=\"type == 'tables' ? openTableInWindow(item, index, $event) : handelClickItem(item, index, $event)\""), '普通表整行点击应进入多页签打开流程')
-assert(sideBarSource.includes('this.handelClickItem({\n          name: this.$route.query.tableName'), '路由目标表应直接加载，不依赖首批表列表命中')
+assert(sideBarSource.includes('@node-click="handleResourceNodeClick"'), '资源树整行点击应进入统一对象打开流程')
+assert(sideBarSource.includes('async loadRouteObject(route)'), '右侧新窗口应显式加载路由对象，不依赖创建另一棵树')
 assert(!sideBarSource.includes('this.filterName = this.$route.query.tableName'), '路由目标表不应写入搜索框或过滤列表')
+assert(!sideBarSource.includes('revealResourceObject'), '页签打开和切换不能重置共享树的展开与选中状态')
+assert(!sideBarSource.includes('activated()'), '共享树不能在每次页签激活时恢复其他树上下文')
 assert(sideBarSource.includes('searchKey: routeTableName'), '首批列表未命中时应精确取回路由目标表')
 assert(sideBarSource.includes('(!routeSchema || routeSchema === this.schema)'), '只应在路由模式与当前模式一致时恢复目标表')
 assert(sideBarSource.includes('ref="objectListScrollbar"'), '表列表应提供滚动定位引用')
@@ -142,7 +144,7 @@ const blankState = {
   dataInfo: { dataSource: { id: 7, alias: '生产库' } },
   $route: { path: '/workspace/look/blank', query: {} },
   $store: { state: { workspaceData: { dataCurrentData: new Map([['blank', { uniqueData: false }]]) } } },
-  $router: { replace(target) { blankCalls.replace.push(target) } },
+  $router: { replace(target) { blankCalls.replace.push(target); return Promise.resolve() } },
   $EventBus: { $emit() { blankCalls.emit += 1 } },
   handelClickItem() { blankCalls.load += 1 },
 }
@@ -151,12 +153,42 @@ assert.strictEqual(blankCalls.replace.length, 1, '空白窗口应直接承载首
 assert.strictEqual(blankCalls.load, 1)
 assert.strictEqual(blankCalls.emit, 0)
 
+const overviewCalls = { replace: [], load: 0, emit: 0 }
+const overviewState = {
+  ...blankState,
+  $route: { path: '/workspace/look/blank', query: { schemaName: 'APP', tableName: 'ORDERS' } },
+  $router: { replace(target) { overviewCalls.replace.push(target); return Promise.resolve() } },
+  $EventBus: { $emit() { overviewCalls.emit += 1 } },
+  handelClickItem() { overviewCalls.load += 1 },
+}
+sideBar.methods.openTableInWindow.call(overviewState, { name: 'ORDERS' }, 0, {})
+assert.strictEqual(overviewCalls.load, 1, '返回总览后再次点击原表必须重新打开，不能被旧路由表名拦截')
+assert.strictEqual(overviewCalls.emit, 0, '总览窗口应直接承载所选表，不额外创建页签')
+
+const restoredObjects = []
+const overviewView = { ...existingView }
+const overviewOpen = createNavState([overviewView], new Map([['existing', { uniqueData: false }]]))
+overviewOpen.state.$route.path = overviewView.path
+overviewOpen.state.$emit = (name, route) => restoredObjects.push({ name, route })
+navBar.methods.sqlDetailTableData.call(overviewOpen.state, { schemaName: 'APP', tableName: 'ORDERS' })
+assert.strictEqual(restoredObjects.length, 1, '复用停留在总览的表页签时必须显式打开对象')
+assert.strictEqual(restoredObjects[0].name, 'openRouteObject')
+assert.strictEqual(restoredObjects[0].route.params.id, 'existing')
+
+const cachedObjects = []
+const cachedOpen = createNavState([existingView], new Map([['existing', { uniqueData: { tableName: 'ORDERS' } }]]))
+cachedOpen.state.$route.path = existingView.path
+cachedOpen.state.$emit = () => cachedObjects.push(true)
+navBar.methods.sqlDetailTableData.call(cachedOpen.state, { schemaName: 'APP', tableName: 'ORDERS' })
+assert.strictEqual(cachedObjects.length, 0, '已有表数据页签不能因复用而重新查询')
+
 const populatedCalls = []
 const populatedState = {
   ...blankState,
   activeClass: 2,
   nameTbale: 'CUSTOMERS',
   $route: { path: '/workspace/look/current', query: { tableName: 'CUSTOMERS' } },
+  $store: { state: { workspaceData: { dataCurrentData: new Map([['blank', { uniqueData: { schemaName: 'APP', tableName: 'CUSTOMERS' } }]]) } } },
   $EventBus: { $emit(name, payload) { populatedCalls.push({ name, payload }) } },
 }
 sideBar.methods.openTableInWindow.call(populatedState, { name: 'ORDERS' }, 2, {})
@@ -169,7 +201,7 @@ const switchedSchemaState = {
   schema: 'ARCHIVE',
   $route: { path: '/workspace/look/current', query: { schemaName: 'APP', tableName: 'CUSTOMERS' } },
   $store: { state: { workspaceData: { dataCurrentData: new Map([['blank', { uniqueData: { schemaName: 'APP', tableName: 'CUSTOMERS' } }]]) } } },
-  $router: { replace(target) { switchedSchemaCalls.replace.push(target) } },
+  $router: { replace(target) { switchedSchemaCalls.replace.push(target); return Promise.resolve() } },
   $EventBus: { $emit() { switchedSchemaCalls.emit += 1 } },
   handelClickItem() { switchedSchemaCalls.load += 1 },
 }

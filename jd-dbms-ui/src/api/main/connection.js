@@ -31,6 +31,14 @@ function getDetails(id) {
   })
 }
 
+function connect(params) {
+  return request({
+    url: '/api/connection/datasource/connect',
+    method: 'get',
+    params
+  })
+}
+
 
 function remove(id) {
   return request({
@@ -108,6 +116,7 @@ export default {
   closeDataSource,
   getList,
   getDetails,
+  connect,
   remove,
   clone,
   getDatabaseList,

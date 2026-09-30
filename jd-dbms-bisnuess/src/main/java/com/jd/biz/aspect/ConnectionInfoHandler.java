@@ -131,15 +131,18 @@ public class ConnectionInfoHandler {
             Object proceed = proceedingJoinPoint.proceed();
             if (proceed instanceof ListResult) {
                 ListResult<?> result = (ListResult<?>) proceed;
-                if (CollUtil.isNotEmpty(result.getData()) && result.getData().get(0) instanceof ExecuteResultVO) {
-                    ExecuteResultVO executeResult = (ExecuteResultVO) result.getData().get(0);
-                    isClose = StrUtil.isBlank(executeResult.getSessionId());
+                if (CollUtil.isNotEmpty(result.getData())) {
+                    isClose = result.getData().stream().noneMatch(item -> item instanceof ExecuteResultVO
+                            && StrUtil.isNotBlank(((ExecuteResultVO) item).getSessionId()));
                 }
             }
             return proceed;
         } finally {
             if (isClose) {
                 Chat2DBContext.removeContext();
+            } else {
+                // 连接交给事务会话管理；线程池的下一个请求不能继承或关闭它。
+                Chat2DBContext.detachContext();
             }
         }
     }

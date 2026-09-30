@@ -1,468 +1,257 @@
 <template>
-  <el-dialog
-    title="连接数据源"
-    :visible.sync="visibleDialog"
-    width="92%"
-    :close-on-click-modal="false"
-    :close-on-press-escape="false"
-    :before-close="handleClose"
-  >
-    <div class="dialogBox">
-      <div class="tableData">
-        <el-table
-          :data="tableData"
-          style="width: 100%"
-          height="350"
-          highlight-current-row
-          @row-click="rowClick"
-          :header-cell-style="{ background: '#f1f3f9', color: '#68728c' }"
-        >
-          <el-table-column prop="user" label="用户" sortable></el-table-column>
-          <el-table-column
-            prop="url"
-            label="数据源"
-            width="300"
-            show-overflow-tooltip
-          ></el-table-column>
-          <el-table-column prop="status" label="状态" align="center">
-            <template slot-scope="scope">
-              <div v-if="scope.row.status" class="iconTitle">
-                <i class="dotClass"></i>
-                <span style="color: springgreen">已连接</span>
-              </div>
-              <div v-else class="iconTitle">
-                <i class="notDotClass"></i>
-                <span style="color: #ff5733">未连接</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="200" align="center">
-            <template slot-scope="scope">
-              <el-button
-                size="mini"
-                type="warning"
-                v-if="scope.row.status"
-                @click.stop="closeDataSource(scope.row, scope.$index)"
-              >
-                <span style="font-size: 12px">关闭连接</span>
-              </el-button>
-              <el-button
-                size="mini"
-                type="danger"
-                @click.stop="deleteDataSource(scope.row, scope.$index)"
-              >
-                <span style="font-size: 12px">删除</span>
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div class="formData">
-        <el-form
-          label-position="top"
-          label-width="80px"
-          size="mini"
-          :model="formData"
-          :rules="fromDataRules"
-          ref="formData"
-        >
-          <el-form-item prop="radio">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-radio v-model="formData.type" label="DM">DM</el-radio>
-              </el-col>
-              <el-col :span="12">
-                <el-radio v-model="formData.type" label="ORACLE"
-                  >Oracle</el-radio
-                >
-              </el-col>
-            </el-row>
-          </el-form-item>
-          <el-form-item label="用户名/模式名" prop="username">
-            <el-input
-              v-model="formData.username"
-              placeholder="请输入用户"
-            ></el-input>
-          </el-form-item>
-          <el-form-item label="密码" prop="password">
-            <el-input
-              v-model="formData.password"
-              show-password
-              placeholder="请输入密码"
-            ></el-input>
-          </el-form-item>
-          <div style="width: 100%">
-            <el-form-item prop="isSave">
-              <el-checkbox v-model="formData.isSave">保存密码</el-checkbox>
+  <el-dialog :title="dialogTitle" :visible="visibleDialog" width="600px" top="8vh"
+    custom-class="datasource-dialog" :close-on-click-modal="false" :before-close="handleClose" @open="initializeForm">
+    <div v-loading="loading" class="datasource-content">
+      <p class="dialog-hint">{{ dialogHint }}</p>
+      <el-form ref="formData" :model="formData" :rules="fromDataRules"
+        :disabled="isReadonly || connecting || loading" label-position="top" size="small">
+        <el-form-item label="连接名" prop="connectionName">
+          <el-input v-model.trim="formData.connectionName" maxlength="50" placeholder="例如：生产库、测试库" />
+        </el-form-item>
+        <el-form-item label="数据库类型" prop="type">
+          <el-radio-group v-model="formData.type" @change="handleTypeChange">
+            <el-radio label="DM">达梦 DM</el-radio>
+            <el-radio label="ORACLE">Oracle</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="16">
+            <el-form-item label="主机地址" prop="host">
+              <el-input v-model.trim="formData.host" placeholder="IP 地址或主机名" />
             </el-form-item>
-          </div>
-          <el-row :gutter="20">
-            <el-col :span="16">
-              <el-form-item label="主机号" prop="host" class="is-required">
-                <el-input
-                  v-model="formData.host"
-                  placeholder="请输入服务地址"
-                ></el-input>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="端口" prop="port" class="is-required">
-                <el-input v-model="formData.port"></el-input>
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-alert
-            v-if="isLoopbackHost"
-            class="host-warning"
-            title="Docker 部署提示"
-            description="127.0.0.1 或 localhost 指向后端容器；连接宿主机数据库请使用 host.docker.internal。"
-            type="warning"
-            show-icon
-            :closable="false"
-          ></el-alert>
-          <template v-if="formData.type == 'ORACLE'">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <span style="color: red">*</span>
-                <el-radio
-                  style="margin-left: 5px"
-                  v-model="formData.radio"
-                  label="serviceName"
-                  >Server Name</el-radio
-                >
-              </el-col>
-              <el-col :span="12">
-                <el-radio v-model="formData.radio" label="sid">SID</el-radio>
-              </el-col>
-            </el-row>
-            <el-form-item style="margin-top: 5px" prop="input">
-              <el-input v-model="formData.input"></el-input>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="端口" prop="port">
+              <el-input v-model.trim="formData.port" placeholder="端口号" />
             </el-form-item>
-          </template>
-          <!-- <el-form-item label="状态">
-            <el-tag type="success" v-if="isStatus">已连接</el-tag>
-            <el-tag type="danger" v-else>未连接</el-tag>
-          </el-form-item> -->
-        </el-form>
-      </div>
+          </el-col>
+        </el-row>
+        <template v-if="formData.type === 'ORACLE'">
+          <el-form-item label="Oracle 连接方式">
+            <el-radio-group v-model="formData.radio">
+              <el-radio label="serviceName">Service Name</el-radio>
+              <el-radio label="sid">SID</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item :label="formData.radio === 'sid' ? 'SID' : 'Service Name'" prop="input">
+            <el-input v-model.trim="formData.input" placeholder="请输入服务名称或 SID" />
+          </el-form-item>
+        </template>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="用户名" prop="username">
+              <el-input v-model.trim="formData.username" placeholder="请输入用户名" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="密码" prop="password">
+              <el-input v-model="formData.password" type="password" :show-password="!isReadonly"
+                :placeholder="isReadonly ? '使用已保存的密码' : mode === 'edit' ? '留空保留原密码' : '请输入密码'" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item v-if="mode === 'create'">
+          <el-checkbox v-model="formData.isSave">保存密码</el-checkbox>
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="!isReadonly && isLoopbackHost" title="Docker 部署提示"
+        description="127.0.0.1 或 localhost 指向后端容器；连接宿主机数据库请使用 host.docker.internal。"
+        type="warning" show-icon :closable="false" />
     </div>
     <div slot="footer" class="dialog-footer">
-      <el-button @click="clearForm">清空</el-button>
-      <el-button @click="saveConnection('test')">测试连接</el-button>
-      <el-button type="primary" @click="saveConnection('save')">保存并连接</el-button>
+      <el-button :disabled="connecting" @click="handleClose">取消</el-button>
+      <el-button v-if="!isReadonly" :disabled="loading || connecting" @click="saveConnection('test')">测试连接</el-button>
+      <el-button type="primary" :loading="connecting" :disabled="loading || (mode !== 'create' && !detailsReady)" @click="submit">
+        {{ isReadonly ? '连接' : mode === 'edit' ? '保存' : '保存并连接' }}
+      </el-button>
     </div>
   </el-dialog>
 </template>
 
 <script>
 import connectionServer from "@/api/main/connection";
-import { v4 as uuidv4 } from "uuid";
+
+function emptyForm() {
+  return { id: "", connectionName: "", username: "", password: "", host: "", port: "", type: "", radio: "", input: "", isSave: false };
+}
 
 export default {
   props: {
-    visibleDialog: {
-      type: Boolean,
-      default: true,
-    },
-  },
-  computed: {
-    isLoopbackHost() {
-      const host = (this.formData.host || "").trim().toLowerCase();
-      return host === "127.0.0.1" || host === "localhost";
-    },
-  },
-  watch: {
-    visibleDialog(val) {
-      if (val) {
-        this.queryDataSoureList();
-      }
-    },
-    "formData.type"(val) {
-      if (val == "ORACLE") {
-        this.formData.port = "1521";
-      } else {
-        this.formData.port = "5236";
-      }
-      this.getDriverList();
-    },
-    "formData.radio"(val) {
-      if (val == "sid") {
-        this.formData.serverName = "";
-      } else {
-        this.formData.sid = "";
-      }
-    },
+    visibleDialog: { type: Boolean, default: false },
+    selectedDataSourceId: { type: [String, Number], default: null },
+    mode: { type: String, default: "create" },
   },
   data() {
-    var hostValidator = (rule, value, callback) => {
-      const ipv4Regex =
-        /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-      const hostnameRegex =
-        /^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
-      if (!value) {
-        return callback(new Error("主机地址不能为空!"));
-      } else if (
-        !ipv4Regex.test(value) &&
-        (!hostnameRegex.test(value) || /^[0-9.]+$/.test(value))
-      ) {
-        callback(new Error("请输入正确的IP地址或主机名!"));
-      } else {
-        callback();
-      }
+    const hostValidator = (rule, value, callback) => {
+      const ipv4 = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+      const hostname = /^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+      if (!value) callback(new Error("主机地址不能为空"));
+      else if (!ipv4.test(value) && (!hostname.test(value) || /^[0-9.]+$/.test(value))) callback(new Error("请输入正确的 IP 地址或主机名"));
+      else callback();
     };
-    var postRegex = (rule, value, callback) => {
-      const port = parseInt(value);
-      if (!value) {
-        return callback(new Error("端口号不能为空!"));
-      } else if (isNaN(port)) {
-        return callback(new Error("端口号应为纯数字!"));
-      } else if (port < 1 || port > 65535) {
-        return callback(new Error("请输入正确的端口!"));
-      } else {
-        callback();
-      }
+    const portValidator = (rule, value, callback) => {
+      if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 65535) callback(new Error("请输入 1 到 65535 之间的端口号"));
+      else callback();
     };
     return {
-      localKey: "AllCreateData",
-      formData: {
-        id: "",
-        username: "",
-        password: "",
-        port: "5236",
-        host: "",
-        type: "DM",
-        input: "",
-        radio: "",
-        isSave: "",
-        sid: "",
-        serverName: "",
-      },
-      fromDataRules: {
-        password: [{ required: true, message: "请输入密码", trigger: "blur" }],
-        username: [
-          { required: true, message: "请输入用户名", trigger: "blur" },
-        ],
-        host: [{ validator: hostValidator, trigger: "blur" }],
-        port: [{ validator: postRegex, trigger: "blur" }],
-        input: [{ required: true, message: "请输入", trigger: "blur" }],
-      },
-      tableData: [],
-      driverConfig: { jdbcDriver: "", jdbcDriverClass: "" },
+      formData: emptyForm(),
+      originalDataSource: {},
+      driverConfig: {},
+      loading: false,
       connecting: false,
+      detailsReady: false,
+      fromDataRules: {
+        connectionName: [{ required: true, message: "请输入连接名", trigger: "blur" }],
+        type: [{ required: true, message: "请选择数据库类型", trigger: "change" }],
+        username: [{ required: true, message: "请输入用户名", trigger: "blur" }],
+        password: [{ validator: (rule, value, callback) => {
+          if (this.mode === "create" && !value) callback(new Error("请输入密码"));
+          else callback();
+        }, trigger: "blur" }],
+        host: [{ validator: hostValidator, trigger: "blur" }],
+        port: [{ validator: portValidator, trigger: "blur" }],
+        input: [{ required: true, message: "请输入服务名称或 SID", trigger: "blur" }],
+      },
     };
   },
-  mounted() {
-    this.getDriverList();
+  computed: {
+    isReadonly() { return this.mode === "connect"; },
+    dialogTitle() { return this.isReadonly ? "连接数据源" : this.mode === "edit" ? "修改数据源" : "新增数据源"; },
+    dialogHint() {
+      return this.isReadonly ? "确认连接以下数据源，连接成功后加载数据库。连接信息仅供查看。"
+        : this.mode === "edit" ? "修改连接配置并保存。密码留空时保留原密码。"
+        : "填写新的连接信息，保存并连接后显示在左侧树中。";
+    },
+    isLoopbackHost() {
+      return ["127.0.0.1", "localhost"].includes((this.formData.host || "").toLowerCase());
+    },
   },
   methods: {
     handleClose() {
-      this.visibleDialog = false;
+      if (!this.connecting) this.$emit("close");
     },
-    queryDataSoureList() {
+    async initializeForm() {
+      this.formData = emptyForm();
+      this.originalDataSource = {};
+      this.driverConfig = {};
+      this.detailsReady = false;
+      this.$nextTick(() => this.$refs.formData?.clearValidate());
+      if (this.mode === "create") return;
+      this.loading = true;
+      const selectedId = this.selectedDataSourceId;
+      try {
+        const res = await connectionServer.getDetails(selectedId);
+        if (!this.visibleDialog || String(selectedId) !== String(this.selectedDataSourceId)) return;
+        if (!res.success || !res.data) throw new Error(res.errorMessage || "数据源信息加载失败");
+        const row = res.data;
+        this.originalDataSource = row;
+        this.driverConfig = row.driverConfig || {};
+        this.formData = {
+          id: row.id,
+          connectionName: row.alias && !row.alias.startsWith("@") ? row.alias : row.user,
+          username: row.user,
+          password: this.isReadonly ? "********" : "",
+          host: row.host,
+          port: row.port,
+          type: row.type,
+          radio: row.sid ? "sid" : "serviceName",
+          input: row.sid || row.serviceName || "",
+          isSave: Boolean(row.isSave),
+        };
+        this.detailsReady = true;
+      } catch (error) {
+        this.$message.error(error.message || "数据源信息加载失败");
+      } finally {
+        this.loading = false;
+      }
+    },
+    handleTypeChange(type) {
+      this.formData.port = type === "ORACLE" ? "1521" : "5236";
+      this.formData.radio = type === "ORACLE" ? "serviceName" : "";
+      this.formData.input = "";
+      this.driverConfig = {};
+    },
+    async getDriverConfig() {
+      if (this.driverConfig.jdbcDriver) return;
+      const res = await connectionServer.getDriverList({ dbType: this.formData.type });
+      if (!res.success || !res.data?.defaultDriverConfig) throw new Error(res.errorMessage || "驱动配置加载失败");
+      this.driverConfig = res.data.defaultDriverConfig;
+    },
+    submit() {
+      if (this.isReadonly) return this.connectDataSource();
+      return this.saveConnection(this.mode === "edit" ? "update" : "save");
+    },
+    async connectDataSource() {
+      if (this.connecting || this.loading || !this.detailsReady) return;
+      this.connecting = true;
+      try {
+        const res = await connectionServer.connect({ id: this.selectedDataSourceId });
+        if (!res.success) throw new Error(res.errorMessage || "数据库连接失败");
+        this.$message.success("连接成功");
+        this.$emit("connected", this.originalDataSource);
+      } catch (error) {
+        this.$message.error(error.message || "数据库连接失败");
+      } finally {
+        this.connecting = false;
+      }
+    },
+    buildParams() {
+      const row = this.originalDataSource;
+      const form = this.formData;
       const params = {
-        pageNo: 1,
-        pageSize: 10000,
-        refresh: true,
-        searchKey: "",
+        alias: this.formData.connectionName,
+        id: form.id || undefined,
+        connectionEnvType: row.envType || "DAILY",
+        envType: row.envType || "DAILY",
+        environmentId: row.environmentId,
+        driverConfig: this.driverConfig,
+        user: form.username,
+        host: form.host,
+        port: form.port,
+        password: form.password || row.password || "",
+        checked: form.isSave,
+        type: form.type,
+        url: `jdbc:${form.type === "DM" ? "dm://" : "oracle:thin:@"}${form.host}:${form.port}`,
+        extendInfo: row.extendInfo || [{ key: "zeroDateTimeBehavior", value: "convertToNull" }],
+        ssh: row.ssh || { use: false },
+        sid: "",
+        serviceName: "",
       };
-      connectionServer.getList(params).then((res) => {
-        if (!res.success) {
-          this.tableData = [];
-          this.$message.error(res.errorMessage || res.errorCode || "数据源列表加载失败");
-          return;
-        }
-        const dataSourceList = res.data && Array.isArray(res.data.data)
-          ? res.data.data
-          : [];
-        this.tableData = dataSourceList;
-        this.$store.commit("SET_DATASOURCELIST", dataSourceList);
-      }).catch(() => {
-        this.tableData = [];
-      });
-    },
-    closeDataSource(row) {
-      this.$confirm("确定要关闭该数据源吗?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning",
-      })
-        .then(() => {
-          connectionServer.closeDataSource({ id: row.id }).then((res) => {
-            if (res.success) {
-              this.queryDataSoureList();
-            }
-          });
-        })
-        .catch(() => {});
-    },
-    deleteDataSource(row) {
-      this.$confirm("确定要删除该数据源吗?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning",
-      })
-        .then(() => {
-          connectionServer.deleteDataSource(row.id).then((res) => {
-            if (res.success) {
-              this.queryDataSoureList();
-            }
-          });
-        })
-        .catch(() => {});
-    },
-    // 行点击事件
-    rowClick(row) {
-      let {
-        user: username,
-        host,
-        port,
-        password,
-        isSave,
-        type,
-        sid,
-        serviceName,
-        id,
-      } = row;
-
-      this.formData.username = username;
-      this.formData.host = host;
-      this.formData.port = port;
-      this.formData.password = password;
-      this.formData.isSave = isSave;
-      this.formData.type = type;
-      this.formData.id = id;
-      // this.isStatus = row.status ? true:false;
-      if (type != "DM") {
-        if (sid) {
-          this.formData.radio = "sid";
-          this.formData.input = sid;
+      if (form.type === "ORACLE") {
+        if (form.radio === "sid") {
+          params.sid = form.input;
+          params.url += ":" + form.input;
+          params.serviceType = "0";
         } else {
-          this.formData.radio = "serviceName";
-          this.formData.input = serviceName;
+          params.serviceName = form.input;
+          params.url += "/" + form.input;
+          params.serviceType = "1";
         }
       }
+      return params;
     },
-
-    getDriverList() {
-      // 获取驱动列表
-      connectionServer
-        .getDriverList({ dbType: this.formData.type })
-        .then((res) => {
-          let { jdbcDriver, jdbcDriverClass } = res.data.defaultDriverConfig;
-          this.driverConfig.jdbcDriver = jdbcDriver;
-          this.driverConfig.jdbcDriverClass = jdbcDriverClass;
-        });
-    },
-
-    clearForm() {
-      this.$refs.formData.resetFields();
-      // this.isStatus = false;
-      this.formData.id = "";
-      if (this.formData.type == "ORACLE") {
-        this.formData.port = "1521";
-      } else {
-        this.formData.port = "5236";
-      }
-    },
-
-    getCache() {
-      let cache = localStorage.getItem(this.localKey);
-      return cache ? JSON.parse(cache) : [];
-    },
-
-    setCache(arr) {
-      localStorage.setItem(this.localKey, JSON.stringify(arr));
-    },
-
-    updateCache(newObj) {
-      let cache = this.getCache();
-      let exist = cache.some((item) => item.dateSourceId == newObj.dateSourceId);
-      console.log(cache,exist,'cache');
-      if (!exist) {
-        cache.push(newObj);
-        this.setCache(cache);
-      }
-    },
-
     saveConnection(flag) {
-      if (this.connecting) return;
-      this.$refs.formData.validate((valid) => {
-        if (valid) {
-          if (flag === "save") this.connecting = true;
-          const params = {
-            alias: this.formData.port,
-            connectionEnvType: "DAILY",
-            driverConfig: {
-              ...this.driverConfig,
-            },
-            user: this.formData.username,
-            host: this.formData.host,
-            port: this.formData.port,
-            password: this.formData.password,
-            checked: this.formData.isSave,
-            id: this.formData.id,
-            type: this.formData.type,
-            url: `jdbc:${
-              this.formData.type == "DM" ? "dm://" : "oracle:thin:@"
-            }${this.formData.host}:${this.formData.port}`,
-            extendInfo: [
-              { key: "zeroDateTimeBehavior", value: "convertToNull" },
-            ],
-            ssh: {
-              authenticationType: "1",
-              hostName: "",
-              keyFile: null,
-              localPort: "",
-              passphrase: "",
-              password: "",
-              port: this.formData.port,
-              rhost: null,
-              rport: null,
-              use: false,
-              userName: "",
-            },
-          };
-          if (this.formData.type != "DM") {
-            if (this.formData.radio === "sid") {
-              params.sid = this.formData.input;
-              params.url += ":" + params.sid;
-            } else {
-              params.serviceName = this.formData.input;
-              params.url += "/" + params.serviceName;
-            }
+      if (this.connecting || this.loading || this.isReadonly || (this.mode === "edit" && !this.detailsReady)) return;
+      this.$refs.formData.validate(async (valid) => {
+        if (!valid) return;
+        this.connecting = true;
+        try {
+          await this.getDriverConfig();
+          const res = await connectionServer[flag](this.buildParams());
+          if (!res.success) throw new Error(res.errorMessage || res.errorCode || "操作失败");
+          if (flag === "test") {
+            this.$message.success("测试连接成功");
+          } else if (flag === "update") {
+            this.$message.success("保存成功");
+            this.$emit("saved", { id: this.formData.id });
+          } else {
+            this.$message.success("保存并连接成功");
+            this.$emit("saved", res.data);
           }
-
-          connectionServer[flag](params).then((res) => {
-            if (res.success) {
-           
-              sessionStorage.setItem("createData", JSON.stringify(res.data));
-              if (flag == "test") {
-                this.$message({
-                  message: "测试连接成功",
-                  type: "success",
-                });
-              } else {
-                let pageId = uuidv4();
-                this.updateCache(res.data) // 存储所有新建连接
-                this.$parent.visibleDialog = false;
-                this.dataBaseInfo = res.data;
-                this.$store.commit(
-                  "workspaceData/SET_DATA_BASE_INFO",
-                  res.data.dataSource
-                );
-                this.$store.commit("workspaceData/SET_DATA_INFO", res.data);
-                localStorage.removeItem("saveVisitedViews2");
-                this.$store.dispatch("jdTagsView/delAllViews", {});
-                this.$router.replace({ path: "/workspace/look/" + pageId });
-              }
-            } else {
-              this.$message.error(
-                res.errorMessage || res.errorCode || "数据库连接失败"
-              );
-            }
-          }).finally(() => {
-            if (flag === "save") this.connecting = false;
-          });
+        } catch (error) {
+          this.$message.error(error.message || "操作失败");
+        } finally {
+          this.connecting = false;
         }
       });
     },
@@ -470,56 +259,19 @@ export default {
 };
 </script>
 
-<style lang='scss' scoped>
-::v-deep .el-dialog {
-  max-width: 1100px;
+<style lang="scss" scoped>
+::v-deep .datasource-dialog {
+  max-width: calc(100vw - 32px);
   .el-dialog__body {
-    padding: 10px;
-    max-height: calc(100vh - 180px);
-    overflow: auto;
-    .dialogBox {
-      display: flex;
-      width: 100%;
-      .tableData {
-        flex: 1;
-        min-width: 0;
-        margin-right: 10px;
-      }
-
-      .iconTitle {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        .dotClass {
-          background: springgreen;
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          display: block;
-          margin-right: 10px;
-        }
-        .notDotClass {
-          background: #ff5733;
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          display: block;
-          margin-right: 10px;
-        }
-      }
-
-      .formData {
-        flex: 0 0 350px;
-      }
-    }
+    padding: 20px 24px 8px;
+    max-height: calc(84vh - 120px);
+    overflow-y: auto;
   }
+  .el-dialog__footer { padding: 16px 24px; border-top: 1px solid #ebeef5; }
+  .el-form-item { margin-bottom: 20px; }
+  .el-form-item__label { padding-bottom: 8px; line-height: 20px; color: #68728c; }
+  .el-input.is-disabled .el-input__inner { color: #303133; background: #f5f7fa; }
+  .el-radio__input.is-disabled + .el-radio__label { color: #68728c; }
 }
-
-@media (max-width: 1150px) {
-  ::v-deep .el-dialog .el-dialog__body .dialogBox {
-    flex-direction: column;
-    .tableData { margin-right: 0; }
-    .formData { flex: 0 0 auto; width: 100%; }
-  }
-}
+.dialog-hint { margin: 0 0 20px; color: #68728c; font-size: 13px; line-height: 20px; }
 </style>

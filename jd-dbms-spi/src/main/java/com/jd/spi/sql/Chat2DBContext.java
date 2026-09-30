@@ -161,6 +161,10 @@ public class Chat2DBContext {
         }
     }
 
+    public static void detachContext() {
+        CONNECT_INFO_THREAD_LOCAL.remove();
+    }
+
     public static void close() {
         removeContext();
     }

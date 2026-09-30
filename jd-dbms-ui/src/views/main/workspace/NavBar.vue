@@ -309,11 +309,20 @@ export default {
         const openedSchemaName = query.schemaName || query.databaseName || uniqueData.schemaName || uniqueData.databaseName;
         const openedTableName = query.tableName || uniqueData.tableName;
         return String(openedDataSourceId) === String(dataSourceId) &&
-          openedSchemaName === schemaName && openedTableName === tableName;
+          openedSchemaName === schemaName && openedTableName === tableName &&
+          (query.objectType || "table") === (data.objectType || "table");
       });
       if (openedView) {
+        const openOverviewObject = () => {
+          const pageId = openedView.params?.id || openedView.path.split("/").pop();
+          if (this.$store.state.workspaceData.dataCurrentData.get(pageId)?.uniqueData === false) {
+            this.$emit("openRouteObject", { params: { id: pageId }, query: openedView.query || {} });
+          }
+        };
         if (openedView.path !== this.$route.path) {
-          this.$router.push({ path: openedView.path, query: openedView.query }).catch(() => {});
+          this.$router.push({ path: openedView.path, query: openedView.query }).then(openOverviewObject).catch(() => {});
+        } else {
+          openOverviewObject();
         }
         return;
       }
@@ -326,7 +335,9 @@ export default {
           dataSourceName,
           schemaName,
           tableName,
-          objectType: "table",
+          objectType: data.objectType || "table",
+          viewType: data.viewType,
+          path: data.path,
         },
       });
     },
@@ -423,20 +434,34 @@ export default {
       if (item.route) {
         this.$router.push({ path: item.route });
       } else if (item.name === "新建连接") {
-        window.open("/workspace?isShow=true");
+        this.$emit("manageDataSources");
       } else if (item.name === "新建查询") {
+        if (!this.dataInfo?.dataSource?.id) {
+          this.$message.warning("请先在左侧资源树中选择数据源");
+          return;
+        }
         let pageId = uuidv4();
         this.$store.commit("SET_ISCLOSEALL", false);
+        const consoleContext = {
+          dataSourceId: this.dataInfo.dataSource.id,
+          dataSourceName: this.dataInfo.dataSource.alias,
+          databaseType: this.dataInfo.dataSource.type,
+          databaseName: this.$store.state.workspaceData.dataBaseInfo.databaseName || "",
+          schemaName: this.$store.state.workspaceData.dataBaseInfo.schemaName || this.dataInfo.userName,
+        };
         await this.$store
           .dispatch("workspaceData/createConsole", {
             pageId,
-            dataSourceId: this.dataInfo.dataSource.id,
-            dataSourceName: this.dataInfo.dataSource.alias,
-            databaseType: this.dataInfo.dataSource.type,
+            ...consoleContext,
           })
           .then((res) => {
             this.$router.push({
               path: "/workspace/query/" + pageId,
+              query: {
+                dataSourceId: consoleContext.dataSourceId,
+                databaseName: consoleContext.databaseName,
+                schemaName: consoleContext.schemaName,
+              },
             });
           });
       } else if (item.name == "新建窗口") {
@@ -1071,6 +1096,9 @@ export default {
       <el-dropdown-menu slot="dropdown">
         <router-link to="/user/profile">
           <el-dropdown-item>个人中心</el-dropdown-item>
+        </router-link>
+        <router-link to="/data-migration/index">
+          <el-dropdown-item>数据迁移</el-dropdown-item>
         </router-link>
         <el-dropdown-item @click.native="logManagement">
           <span>日志管理</span>

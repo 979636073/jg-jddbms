@@ -25,7 +25,6 @@ export default {
   data() {
     return {
       editor: null,
-      color: null,
       suggestion: null,
       formatProvider: null,
       fieldList: [],
@@ -54,7 +53,6 @@ export default {
     if (this.editor) {
       this.clearMistake()
       this.editor.dispose()
-      this.color.dispose()
       this.suggestion.dispose()
       this.formatProvider.dispose()
     }
@@ -119,6 +117,7 @@ export default {
         // 触发条件，也可以不写，不写的话只要输入满足配置的label就会提示；仅支持单字符
         triggerCharacters: ['.', ' '],
         provideCompletionItems: async (model, position) => {
+          if (model !== this.editor.getModel()) return { suggestions: [] }
           let suggestions = []
 
           // 数据表查询字段提示
@@ -179,42 +178,11 @@ export default {
         }
       })
 
-      //自定义文本颜色,也可以不设置，自带也有颜色区分
-      let reg = '/'
-      language.keywords.forEach((keyword) => {
-        reg += `${keyword}|`
-      })
-      reg += '/'
-      this.color = monaco.languages.setMonarchTokensProvider('sql', {
-        ignoreCase: true,
-        tokenizer: {
-          root: [
-            [
-              reg,
-              { token: 'keyword' },
-            ], //蓝色
-            [
-              /[+]|[-]|[*]|[/]|[%]|[>]|[<]|[=]|[!]|[:]|[&&]|[||]/,
-              { token: 'string' },
-            ], //红色
-            [/'.*?'|".*?"/, { token: 'string.escape' }], //橙色
-            [/#--.*?\--#/, { token: 'comment' }], //绿色
-            [/null/, { token: 'regexp' }], //粉色
-            [/[{]|[}]/, { token: 'type' }], //青色
-            [/[\u4e00-\u9fa5]/, { token: 'predefined' }],//亮粉色
-            [/''/, { token: 'invalid' }],//红色
-            [/[\u4e00-\u9fa5]/, { token: 'number.binary' }],//浅绿
-            [/(?!.*[a-zA-Z])[0-9]/, { token: 'number.hex' }], //浅绿
-            [/[(]|[)]/, { token: 'number.octal' }], //浅绿
-            [/[\u4e00-\u9fa5]/, { token: 'number.float' }],//浅绿
-          ]
-        }
-      })
-
       // 改写插件自带格式化功能
       const self = this
       this.formatProvider = monaco.languages.registerDocumentFormattingEditProvider('sql', {
         provideDocumentFormattingEdits(model) {
+          if (model !== self.editor.getModel()) return []
           return [{
             text: self.formatSql(1),
             range: model.getFullModelRange()

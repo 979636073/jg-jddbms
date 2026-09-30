@@ -6,6 +6,7 @@ const workspace = {
     isCloseAll:false,
     sessionObj:{}, // 关闭新建查询窗口入参
     dataSourceList: [],
+    connectedDataSourceIds: {},
     databaseList: [],
     // 当前选中数据表
     currentTable: null,
@@ -18,6 +19,9 @@ const workspace = {
   },
 
   mutations: {
+    SET_DATASOURCE_CONNECTED: (state, { id, connected }) => {
+      state.connectedDataSourceIds = { ...state.connectedDataSourceIds, [id]: connected }
+    },
     SET_ISCLOSEALL :(state, isCloseAll) =>{
       state.isCloseAll = isCloseAll
     },

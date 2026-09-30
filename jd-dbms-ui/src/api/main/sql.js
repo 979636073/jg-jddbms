@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { splitSqlStatements } from '@/utils/sqlScript'
 
 function getTableList(data) {
   return request({
@@ -72,6 +73,9 @@ function executeSql(data) {
   return request({
     url: '/api/rdb/dml/execute',
     method: 'post',
+    timeout: data.queryTimeoutSeconds
+      ? (data.queryTimeoutSeconds * Math.max(splitSqlStatements(data.sql).length, 1) + 15) * 1000
+      : 60000,
     data: data
   })
 }

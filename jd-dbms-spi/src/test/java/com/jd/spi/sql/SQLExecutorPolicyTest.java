@@ -15,6 +15,18 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class SQLExecutorPolicyTest {
+    @Test
+    public void recognizesNativeQueriesWhenTheParserDoesNotUnderstandThem() {
+        assertTrue(SQLExecutor.isReadQuery("-- note\nSELECT LEVEL FROM dual CONNECT BY LEVEL <= 405"));
+        assertTrue(SQLExecutor.isReadQuery("/* hint */ WITH t AS (SELECT 1 FROM dual) SELECT * FROM t"));
+        assertFalse(SQLExecutor.isReadQuery("BEGIN NULL; END;"));
+    }
+    @Test
+    public void recognizesMultilineCommentedDmlAndMergeTransactions() {
+        assertTrue(SQLExecutor.parseSqlCommit(java.util.Arrays.asList("-- note\nUPDATE T\nSET V = 1")));
+        assertTrue(SQLExecutor.parseSqlCommit(java.util.Arrays.asList("/* note */ MERGE INTO T USING S ON (T.ID=S.ID) WHEN MATCHED THEN UPDATE SET T.V=S.V")));
+        assertFalse(SQLExecutor.parseSqlCommit(java.util.Arrays.asList("SELECT 'insert' FROM dual")));
+    }
 
     @Test
     public void shouldBoundPageNumberAndPageSize() {

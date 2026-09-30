@@ -922,51 +922,17 @@ public class SQLExecutor implements CommandExecutor {
         List<ExecuteResult> result = new ArrayList<>();
         String type = Chat2DBContext.getConnectInfo().getDbType();
         DbType dbType = JdbcUtils.parse2DruidDbType(type);
-        List<String> sqlList = new ArrayList<>();
-        if(command.getIsExecuteCompile()){
-            try {
-                ExecuteResult executeResult =null;
-                if(sql.toUpperCase(Locale.ROOT).contains("END;")){
-                    String[] split =null;
-                    if (sql.contains("end;")){
-                        split =sql.split("end");
-                    }else if(sql.contains("END;")){
-                        split =sql.split("END;");
-                    }
-                    if (Objects.isNull(split)){
-                        throw new BusinessException("过程编译SQL不合法");
-                    }
-                    for (int i=0;i < split.length;i++){
-                        if (i==0){
-                            executeResult = SQLExecutor.getInstance().execute(split[i] + " END;",Chat2DBContext.getConnection(),new DefaultValueHandler());
-                        }else{
-                            sqlList.add(split[i]);
-                        }
-                    }
-                }
-                result.add(executeResult);
-            }catch (Exception e){
-                log.warn("SQL解析失败（长度={}）", StringUtils.length(sql), e);
-                ExecuteResult executeResult = new ExecuteResult();
-                executeResult.setSuccess(Boolean.FALSE);
-                executeResult.setMessage(e.getMessage());
-                result.add(executeResult);
-            }
-        }else{
-            //切分sql
-            sqlList = SqlUtils.parse(command.getScript(),dbType);
-        }
+        List<String> sqlList = SqlUtils.parse(command.getScript(), dbType);
         if (CollectionUtils.isEmpty(sqlList)) {
             throw new BusinessException("dataSource.sqlAnalysisError");
         }
         // 解析SQL
-        Boolean sign = parseSqlCommit(sqlList);
-        command.setSign(sign);
         // Execute SQL
         try {
             for (String originalSql : sqlList) {
                 try {
-                    ExecuteResult executeResult = executeSQL(originalSql.replaceAll("\\. \\.", ".."), dbType, command);
+                    command.setSign(parseSqlCommit(Collections.singletonList(originalSql)));
+                    ExecuteResult executeResult = executeSQL(originalSql, dbType, command);
                     // session会话ID
                     if (StrUtil.isNotBlank(executeResult.getSessionId())) {
                         command.setSessionId(executeResult.getSessionId());
@@ -1004,18 +970,10 @@ public class SQLExecutor implements CommandExecutor {
                 && !Boolean.TRUE.equals(result.getSuccess()));
     }
 
-    private Boolean parseSqlCommit(List<String> sqlList) {
+    static Boolean parseSqlCommit(List<String> sqlList) {
         for (String originalSql : sqlList) {
-            String sql = originalSql.trim().toLowerCase(Locale.ROOT);
-            if (Pattern.matches("^insert\\s+.*", sql)) {
-                return true;
-            } else
-            if (Pattern.matches("^update\\s+.*", sql)) {
-                return true;
-            } else
-            if (Pattern.matches("^delete\\s+.*", sql)) {
-                return true;
-            }
+            String sql = originalSql.replaceAll("(?s)/\\*.*?\\*/|--[^\\r\\n]*", " ").trim();
+            if (Pattern.compile("(?is)^(insert|update|delete|merge|begin|declare)\\b").matcher(sql).find()) return true;
         }
         return false;
     }
@@ -1038,7 +996,9 @@ public class SQLExecutor implements CommandExecutor {
                 log.warn("分页SQL执行失败（长度={}）", StringUtils.length(originalSql), e);
             }
         }
-        if (!supportDruid || (sqlStatement instanceof SQLSelectStatement)) {
+        boolean readQuery = !supportDruid || sqlStatement instanceof SQLSelectStatement
+                || (("DM".equalsIgnoreCase(type) || "ORACLE".equalsIgnoreCase(type)) && isReadQuery(originalSql));
+        if (readQuery) {
             pageNo = normalizePageNo(param.getPageNo());
             pageSize = Boolean.TRUE.equals(param.getPageSizeAll())
                     ? EasyToolsConstant.MAX_PAGE_SIZE
@@ -1053,7 +1013,7 @@ public class SQLExecutor implements CommandExecutor {
         }
 
         ExecuteResult executeResult = null;
-        if (SqlTypeEnum.SELECT.getCode().equals(sqlType) && !SqlUtils.hasPageLimit(originalSql, dbType)) {
+        if (sqlStatement instanceof SQLSelectStatement && !SqlUtils.hasPageLimit(originalSql, dbType)) {
             String pageLimit = Chat2DBContext.getSqlBuilder().pageLimit(originalSql, offset, pageNo, count);
             if (StringUtils.isNotBlank(pageLimit)) {
 //                executeResult = execute(originalSql, offset, count);
@@ -1215,6 +1175,7 @@ public class SQLExecutor implements CommandExecutor {
                                 new SQLException("待提交事务的数据库连接已失效，请重新执行并确认数据"), executionId, null);
                     }
                     connection = Chat2DBContext.getConnection();
+                    applySelectedSchema(connection, Chat2DBContext.getConnectInfo());
                     connectionVo.setConnection(connection);
                 }
                 if (connectionVo.getSign()) {
@@ -1226,6 +1187,7 @@ public class SQLExecutor implements CommandExecutor {
                 }
             } else {
                 connection = Chat2DBContext.getConnection();
+                applySelectedSchema(connection, Chat2DBContext.getConnectInfo());
                 connectionVo = new ConnectionVo();
                 connectionVo.setConnection(connection);
                 connectionVo.setSign(sign);
@@ -1242,7 +1204,7 @@ public class SQLExecutor implements CommandExecutor {
             executeResult.setSessionId(session_id);
             executeResult.setSign(sign);
         } catch (SQLException e) {
-            if (connection != null) {
+            if (newSession && connection != null) {
                 try {
                     connection.rollback();
                 } catch (SQLException ex) {
@@ -1251,15 +1213,24 @@ public class SQLExecutor implements CommandExecutor {
             }
             log.warn("事务SQL执行失败（长度={}）", StringUtils.length(sql), e);
             executeResult = buildFailureResult(sql, e, executionId, session_id);
-            if (connectionVo != null) {
-                connectionVo.setSign(false);
-            }
+            executeResult.setSign(connectionVo != null && Boolean.TRUE.equals(connectionVo.getSign()));
             if (newSession) {
                 closeSession(session_id, connectionVo);
                 executeResult.setSessionId(null);
+                executeResult.setSign(false);
             }
         }
         return executeResult;
+    }
+
+    static void applySelectedSchema(Connection connection, ConnectInfo info) throws SQLException {
+        if (StringUtils.isBlank(info.getSchemaName())
+                || !("ORACLE".equalsIgnoreCase(info.getDbType()) || "DM".equalsIgnoreCase(info.getDbType()))) {
+            return;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ALTER SESSION SET CURRENT_SCHEMA = \"" + info.getSchemaName().replace("\"", "\"\"") + "\"");
+        }
     }
 
     private ExecuteResult buildFailureResult(String sql, SQLException exception, String executionId,
@@ -1289,6 +1260,11 @@ public class SQLExecutor implements CommandExecutor {
 
     static int normalizePageNo(Integer pageNo) {
         return pageNo == null || pageNo < 1 ? 1 : pageNo;
+    }
+
+    static boolean isReadQuery(String sql) {
+        String prefix = sql.replaceAll("(?s)/\\*.*?\\*/|--[^\\r\\n]*", " ").trim();
+        return Pattern.compile("(?is)^(select|with)\\b").matcher(prefix).find();
     }
 
     static int normalizePageSize(Integer pageSize) {

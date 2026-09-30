@@ -52,6 +52,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -80,6 +81,16 @@ public class RdbDmlController {
 
     public static ExecutorService executorService = Executors.newFixedThreadPool(10);
 
+    static String prepareDataViewSql(String sql) {
+        String upperSql = sql.toUpperCase(Locale.ROOT);
+        int fromIndex = upperSql.indexOf("FROM");
+        String selectList = fromIndex < 0 ? upperSql : upperSql.substring(0, fromIndex);
+        if (selectList.matches("(?s).*\\bROWID\\b.*")) {
+            return sql;
+        }
+        return String.format(Constants.SELECT_Y, sql);
+    }
+
     /**
      * 增删改查等数据运维
      * @param request
@@ -97,9 +108,7 @@ public class RdbDmlController {
             request.setSql(sql);
         }
         if (request.getIsDataView() && StrUtil.isNotBlank(request.getSql())) {
-            String sql = request.getSql();
-            sql = String.format(Constants.SELECT_Y, sql);
-            request.setSql(sql);
+            request.setSql(prepareDataViewSql(request.getSql()));
         }
         if (!Boolean.TRUE.equals(request.getConfirmDangerousSql())) {
             DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());

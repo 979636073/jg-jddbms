@@ -2,16 +2,39 @@
 import tableServer from "@/api/main/table";
 import * as monaco from "monaco-editor/esm/vs/editor/edcore.main";
 import "monaco-editor/esm/vs/basic-languages/sql/sql.contribution";
-import { language } from "monaco-editor/esm/vs/basic-languages/sql/sql";
+import { language, conf } from "monaco-editor/esm/vs/basic-languages/sql/sql";
 import { format } from "sql-formatter";
 import { editorDefaultOptions } from "./monacoEditorConfig";
+import { sqlAtCursor } from "@/utils/sqlScript";
 
-let suggestionFlag = true;
+// Oracle / DM 的 q 引用包含单引号，普通 SQL 着色器会误把后续脚本全部当成字符串。
+const SQL_LANGUAGE = "jddbms-sql";
+monaco.languages.register({ id: SQL_LANGUAGE });
+monaco.languages.setLanguageConfiguration(SQL_LANGUAGE, conf);
+monaco.languages.setMonarchTokensProvider(SQL_LANGUAGE, {
+  ...language,
+  tokenizer: {
+    ...language.tokenizer,
+    strings: [
+      [/[qQ]'\[/, { token: "string", next: "@oracleBracketString" }],
+      [/[qQ]'\{/, { token: "string", next: "@oracleBraceString" }],
+      [/[qQ]'\(/, { token: "string", next: "@oracleParenString" }],
+      [/[qQ]'</, { token: "string", next: "@oracleAngleString" }],
+      ...language.tokenizer.strings
+    ],
+    oracleBracketString: [[/\]'/, "string", "@pop"], [/./, "string"]],
+    oracleBraceString: [[/\}'/, "string", "@pop"], [/./, "string"]],
+    oracleParenString: [[/\)'/, "string", "@pop"], [/./, "string"]],
+    oracleAngleString: [[/>'/, "string", "@pop"], [/./, "string"]]
+  }
+});
 
 export default {
   name: "index",
   props: {
     dom: String,
+    connectionContext: { type: Object, default: () => ({}) },
+    schemaOptions: { type: Array, default: () => [] },
     editorConfig: {
       type: Object,
       default: () => {}
@@ -28,23 +51,11 @@ export default {
   data() {
     return {
       editor: null,
-      color: null,
       suggestion: null,
       formatProvider: null,
-      syntaxCheckTimer: null,
-      schemaName: "", // 输入的模式名
-      tableName: "",
-      tableList: [],
-      // 定义一些自定义的字段名建议，包括一些常用的 SQL 字段
-      customColumns: [
-        { name: "id", dataType: "int" },
-        { name: "name", dataType: "varchar" },
-        { name: "age", dataType: "int" },
-        { name: "created_at", dataType: "timestamp" },
-        { name: "updated_at", dataType: "timestamp" },
-        { name: "is_active", dataType: "boolean" },
-        { name: "description", dataType: "text" }
-      ]
+      tableCache: {},
+      columnCache: {},
+      ownerPageId: this.$route.params.id
     };
   },
   computed: {
@@ -52,6 +63,9 @@ export default {
       return this.$route.params.id;
     },
     databaseList() {
+      if (this.connectionContext.dataSourceId) {
+        return [...new Set([this.connectionContext.schemaName, ...this.schemaOptions].filter(Boolean))];
+      }
       let data = this.$store.state.workspaceData.dataSourceData.map(
         item => item.name
       );
@@ -62,7 +76,11 @@ export default {
     },
     currentDataSource() {
       // return this.$store.state.workspace.currentConnectionDetails
-      return this.dataCurrentDataMap.get(this.pageId);
+      return this.dataCurrentDataMap.get(this.ownerPageId);
+    },
+    queryContext() {
+      return this.connectionContext.dataSourceId ? this.connectionContext :
+        (this.currentDataSource && this.currentDataSource.uniqueData) || {};
     },
     dataInfo() {
       return this.$store.state.workspaceData.dataInfo;
@@ -73,17 +91,13 @@ export default {
     // document.addEventListener("mousedown", this.mouseDownEditor);
   },
   beforeDestroy() {
-    if (this.syntaxCheckTimer) {
-      clearTimeout(this.syntaxCheckTimer);
-      this.syntaxCheckTimer = null;
-    }
     if (this.editor) {
       this.clearMistake();
       this.editor.dispose();
       if (this.suggestion) {
         this.suggestion.dispose();
       }
-      this.formatProvider.dispose();
+      if (this.formatProvider) this.formatProvider.dispose();
     }
     document.removeEventListener("mousedown", this.mouseDownEditor);
   },
@@ -98,24 +112,25 @@ export default {
     },
     initEditor() {
       this.editor = monaco.editor.create(
-        document.getElementById(this.dom + "code"),
+        this.$refs.editorHost,
         {
           ...editorDefaultOptions,
-          ...this.editorConfig
+          ...this.editorConfig,
+          language: SQL_LANGUAGE
         }
       );
 
       // console.log(this.editor,'111111111');
       this.initSuggestions();
-      this.initColor();
       //自定义文本颜色,也可以不设置，自带也有颜色区分
 
       // 改写插件自带格式化功能
       const self = this;
       this.formatProvider = monaco.languages.registerDocumentFormattingEditProvider(
-        "sql",
+        SQL_LANGUAGE,
         {
           provideDocumentFormattingEdits(model) {
+            if (model !== self.editor.getModel()) return [];
             return [
               {
                 text: self.formatSql(1),
@@ -144,7 +159,7 @@ export default {
             // console.log('跳转');
             let tableName = selectedText.split(".")[1];
             setTimeout(() => {
-              this.$EventBus.$emit("openLookPage", { databaseName, tableName });
+              this.$EventBus.$emit("openLookPage", { databaseName, tableName, dataSourceId: this.queryContext.dataSourceId });
             }, 300);
           } else {
             this.$message.error("未找到该模式或表名!");
@@ -156,213 +171,58 @@ export default {
         // console.log('value', this.editor.getValue())
       });
 
-      this.editor.onDidChangeModelContent(() => {
-        if (this.syntaxCheckTimer) clearTimeout(this.syntaxCheckTimer);
-        this.syntaxCheckTimer = setTimeout(() => {
-          try {
-            format(this.editor.getValue());
-            this.clearMistake();
-          } catch (e) {
-            const { message } = e;
-            const list = message.split(".")[0].split(" ");
-            const line = list.indexOf("line");
-            const column = list.indexOf("column");
-            const unexpected = list.indexOf("Unexpected");
-            const str = list[unexpected + 1] ? list[unexpected + 1].replace(/"/g, "") : "";
-            if (line < 0 || column < 0 || unexpected < 0) return;
-            this.markMistake(
-              {
-                startLineNumber: Number(list[line + 1]),
-                endLineNumber: Number(list[line + 1]),
-                startColumn: Number(list[column + 1]),
-                endColumn: Number(list[column + 1]) + str.length
-              },
-              "Error",
-              message
-            );
-          }
-        }, 300);
-      });
     },
 
     initSuggestions() {
-      if (suggestionFlag == false) return;
-      // 自动补全提示
-      this.suggestion = monaco.languages.registerCompletionItemProvider("sql", {
-        // 触发条件，也可以不写，不写的话只要输入满足配置的label就会提示；仅支持单字符
+      this.suggestion = monaco.languages.registerCompletionItemProvider(SQL_LANGUAGE, {
         triggerCharacters: [".", " ", ","],
-        provideCompletionItems: async (model, position) => {
-          let suggestions = [];
-
-          // 数据表查询字段提示
+        provideCompletionItems: async (model, position, completionContext, token) => {
+          if (model !== this.editor.getModel()) return { suggestions: [] };
+          const word = model.getWordUntilPosition(position);
+          const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+            startColumn: word.startColumn, endColumn: word.endColumn };
           if (this.columnList.length) {
-            let _columnList = this.columnList.map(item => {
-              return {
-                label: item,
-                kind: monaco.languages.CompletionItemKind.Field,
-                insertText: item,
-                detail: "字段名"
-              };
-            });
-            return {
-              suggestions: _columnList
-            };
+            return { suggestions: this.columnList.map(item => ({ label: item, insertText: item,
+              kind: monaco.languages.CompletionItemKind.Field, range })) };
           }
-          const { lineNumber, column } = position;
-          // 光标前文本
-          const textBeforePointer = model.getValueInRange({
-            startLineNumber: lineNumber,
-            startColumn: 0,
-            endLineNumber: lineNumber,
-            endColumn: column
-          });
-          const textBeforePointerMulti = model.getValueInRange({
-            startLineNumber: 1,
-            startColumn: 0,
-            endLineNumber: lineNumber,
-            endColumn: column
-          });
-          // 光标后文本
-          const textAfterPointer = model.getValueInRange({
-            startLineNumber: lineNumber,
-            startColumn: column,
-            endLineNumber: lineNumber,
-            endColumn: model.getLineMaxColumn(model.getLineCount())
-          });
-          const textAfterPointerMulti = model.getValueInRange({
-            startLineNumber: lineNumber,
-            startColumn: column,
-            endLineNumber: model.getLineCount(),
-            endColumn: model.getLineMaxColumn(model.getLineCount())
-          });
-          const oldTokens = textBeforePointer.trim().split(/\s+/);
-          const oldLastToken = oldTokens[oldTokens.length - 1];
-          const tokens = textBeforePointer
-            .toLocaleLowerCase()
-            .trim()
-            .split(/\s+/);
-          const lastToken = tokens[tokens.length - 1]; // 获取最后一段非空字符串
-          let tableInfo = oldLastToken.split(".");
-          let schemaName = tableInfo[1] ? tableInfo[0] : "";
-          let tableName = tableInfo[1] ? tableInfo[1] : tableInfo[0];
-          // debugger
-
-          if (lastToken.endsWith(".")) {
-            // <库名>.<表名> || <别名>.<字段>
-            const tokenNoDot =
-              oldLastToken.indexOf('"') != -1
-                ? oldLastToken.slice(1, oldLastToken.length - 2)
-                : oldLastToken.slice(0, oldLastToken.length - 1);
-            if (
-              this.databaseList.find(
-                db => db === tokenNoDot.replace(/^.*,/g, "")
-              )
-            ) {
-              // <库名>.<表名>联想
-              suggestions = [
-                ...(await this.getTableSuggest(tokenNoDot.replace(/^.*,/g, "")))
-              ];
-              // } else if (this.getTableNameAndTableAlia(textBeforePointerMulti.split(';')[textBeforePointerMulti.split(';').length - 1] + textAfterPointerMulti.split(';')[0])) {
-              //   const tableInfoList = this.getTableNameAndTableAlia(textBeforePointerMulti.split(';')[textBeforePointerMulti.split(';').length - 1] + textAfterPointerMulti.split(';')[0])
-              //   const currentTable = tableInfoList.find(item => item.tableAlia === tokenNoDot.replace(/^.*,/g, ''))
-              //   // <别名>.<字段>联想
-              //   if (currentTable && currentTable.tableName) {
-              //     suggestions = await this.getTableColumnSuggestByTableAlia(currentTable.tableName)
-              //   } else {
-              //     suggestions = []
-              //   }
-            } else {
-              suggestions = [];
-            }
-          } else if (
-            lastToken === "from" ||
-            lastToken === "join" ||
-            /(from|join)\s+.*?\s?,\s*$/.test(
-              textBeforePointer.replace(/.*?/gm, "").toLowerCase()
-            )
-          ) {
-            // 库名联想
-            suggestions = this.getDBSuggest();
-            console.log(suggestions, "suggestions 库名联想");
-          } else if (
-            [
-              "select",
-              "where",
-              "order by",
-              "group by",
-              "by",
-              "and",
-              "or",
-              "having",
-              "distinct",
-              "on"
-            ].includes(lastToken.replace(/.*?/g, "")) ||
-            (schemaName && tableName) ||
-            /(select|where|order by|group by|by|and|or|having|distinct|on)\s+.*?\s?,\s*$/.test(
-              textBeforePointer.toLowerCase()
-            )
-          ) {
-            // 字段联想
-            if (
-              this.databaseList.find(
-                db => db.toLocaleLowerCase() === schemaName.toLocaleLowerCase()
-              ) &&
-              this.tableList.find(
-                table =>
-                  table.name.toLocaleLowerCase() ===
-                  tableName.toLocaleLowerCase()
-              )
-            ) {
-              suggestions = [
-                ...(await this.getParamSuggest(schemaName, tableName))
-              ];
-            } else {
-              suggestions = [
-                ...(await this.getParamSuggest(schemaName, tableName))
-              ];
-            }
-          } else {
-            // 默认联想
-            suggestions = [...this.getDBSuggest(), ...this.getSQLSuggest()];
-            suggestions = Array.from(
-              new Map(suggestions.map(item => [item.label, item])).values()
-            );
-            console.log(suggestions, "suggestions 默认联想");
+          const before = model.getValue().slice(0, model.getOffsetAt(position));
+          const statement = sqlAtCursor(model.getValue(), model.getOffsetAt(position));
+          const normalizeName = name => name.startsWith('"') ? name.slice(1, -1) :
+            /^(ORACLE|DM)$/i.test(this.queryContext.databaseType || this.queryContext.type || '') ? name.toUpperCase() : name;
+          const identifier = '(?:"[^"]+"|[a-zA-Z_][\\w$#]*)';
+          const tableRegex = new RegExp('\\b(?:FROM|JOIN|UPDATE|INTO)\\s+(' + identifier +
+            '(?:\\s*\\.\\s*' + identifier + ')?)(?:\\s+(?:AS\\s+)?(' + identifier + '))?', 'gi');
+          const tables = [];
+          const cteRegex = new RegExp('(?:\\bWITH|,)\\s+(' + identifier + ')\\s*(?:\\([^)]*\\)\\s*)?AS\\s*\\(', 'gi');
+          const ctes = new Set();
+          let match;
+          while ((match = cteRegex.exec(statement))) ctes.add(match[1].replace(/^"|"$/g, '').toUpperCase());
+          while ((match = tableRegex.exec(statement))) {
+            const names = match[1].split('.').map(name => normalizeName(name.trim()));
+            if (names.length === 1 && ctes.has(names[0].toUpperCase())) continue;
+            const alias = (match[2] || '').replace(/^"|"$/g, '');
+            tables.push({ schema: names.length > 1 ? names[0] : this.queryContext.schemaName,
+              name: names[names.length - 1],
+              alias: /^(WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|ON|GROUP|ORDER|HAVING|UNION|SET)$/i.test(alias) ? '' : alias });
           }
-          return {
-            suggestions
-          };
-        }
-      });
-      suggestionFlag = false;
-    },
-    initColor() {
-      let reg = "/";
-      language.keywords.forEach(keyword => {
-        reg += `${keyword}|`;
-      });
-      reg += "/";
-
-      this.color = monaco.languages.setMonarchTokensProvider("sql", {
-        ignoreCase: true,
-        tokenizer: {
-          root: [
-            [reg, { token: "keyword" }], //蓝色
-            [
-              /[+]|[-]|[*]|[/]|[%]|[>]|[<]|[=]|[!]|[:]|[&&]|[||]/,
-              { token: "string" }
-            ], //红色
-            [/'.*?'|".*?"/, { token: "string.escape" }], //橙色
-            [/#--.*?\--#/, { token: "comment" }], //绿色
-            [/null/, { token: "regexp" }], //粉色
-            [/[{]|[}]/, { token: "type" }], //青色
-            [/[\u4e00-\u9fa5]/, { token: "predefined" }], //亮粉色+
-            [/''/, { token: "invalid" }], //红色
-            [/[\u4e00-\u9fa5]/, { token: "number.binary" }], //浅绿
-            [/(?!.*[a-zA-Z])[0-9]/, { token: "number.hex" }], //浅绿
-            [/[(]|[)]/, { token: "number.octal" }], //浅绿
-            [/[\u4e00-\u9fa5]/, { token: "number.float" }] //浅绿
-          ]
+          let suggestions = [];
+          try {
+            const qualifier = before.match(/("[^"]+"|[a-zA-Z_][\w$#]*)\s*\.\s*(?:"?[^"\s.,()]*)$/);
+            if (qualifier) {
+              const name = normalizeName(qualifier[1]);
+              const table = tables.find(item => [item.alias, item.name].some(value => value.toUpperCase() === name.toUpperCase()));
+              suggestions = table ? await this.getParamSuggest(table.schema, table.name) : await this.getTableSuggest(name);
+            } else if (/\b(FROM|JOIN|UPDATE|INTO)\s+[^\s.,()]*$/i.test(before)) {
+              suggestions = [...this.getDBSuggest(), ...await this.getTableSuggest(this.queryContext.schemaName)];
+            } else {
+              const columns = await Promise.all(tables.map(table => this.getParamSuggest(table.schema, table.name)));
+              suggestions = [...columns.flat(), ...this.getDBSuggest(), ...this.getSQLSuggest()];
+            }
+          } catch (error) {
+            suggestions = this.getSQLSuggest();
+          }
+          if (token.isCancellationRequested) return { suggestions: [] };
+          return { suggestions: [...new Map(suggestions.map(item => [item.label, { ...item, range }])).values()] };
         }
       });
     },
@@ -402,20 +262,24 @@ export default {
     },
     // 表名
     async getTableSuggest(schemaName) {
-      if (this.schemaName !== schemaName) {
-        this.schemaName = schemaName;
+      if (!schemaName || !this.queryContext.dataSourceId) return [];
+      const key = [this.queryContext.dataSourceId, this.queryContext.databaseName, schemaName].join('/');
+      if (!this.tableCache[key]) {
         let send = {
-          dataSourceId: this.dataInfo.dataSource.id,
-          databaseName: this.dataInfo.dataSource.alias,
-          databaseType: this.dataInfo.dataSource.type,
-          schemaName: this.schemaName,
-          refresh: true,
-          requestType: 1
+          dataSourceId: this.queryContext.dataSourceId,
+          databaseName: this.queryContext.databaseName,
+          databaseType: this.queryContext.databaseType || this.queryContext.type,
+          schemaName,
+          refresh: false,
+          requestType: 1,
+          pageNo: 1,
+          pageSize: 1000
         };
         let res = await tableServer.getTableList(send);
-        this.tableList = res.data.data;
+        if (!res.success) return [];
+        this.tableCache[key] = res.data.data || [];
       }
-      return this.tableList.map(item => ({
+      return this.tableCache[key].map(item => ({
         label: item.name,
         kind: monaco.languages.CompletionItemKind.Constant,
         insertText: '"' + item.name + '"',
@@ -424,12 +288,12 @@ export default {
     },
     // 字段名
     async getParamSuggest(schemaName, tableName) {
-      if (schemaName && tableName) {
-        if (this.tableName !== tableName) {
-          this.tableName = tableName;
+      if (!schemaName || !tableName || !this.queryContext.dataSourceId) return [];
+      const key = [this.queryContext.dataSourceId, this.queryContext.databaseName, schemaName, tableName].join('/');
+      if (!this.columnCache[key]) {
           let send = {
-            dataSourceId: this.dataInfo.dataSource.id,
-            databaseName: this.dataInfo.dataSource.alias,
+            dataSourceId: this.queryContext.dataSourceId,
+            databaseName: this.queryContext.databaseName,
             schemaName:
               schemaName.indexOf('"') != -1
                 ? schemaName.slice(1, schemaName.length - 1)
@@ -440,11 +304,11 @@ export default {
                 : tableName
           };
           let res = await tableServer.getAllFieldByTable(send);
-          this.customColumns = res.data;
-        }
+          if (!res.success) return [];
+          this.columnCache[key] = res.data || [];
       }
       // 将自定义字段列表转换为代码提示的格式
-      const suggestions = this.customColumns.map(column => ({
+      const suggestions = this.columnCache[key].map(column => ({
         label: column.name,
         kind: monaco.languages.CompletionItemKind.Field, // 表示字段类型
         insertText: '"' + column.name + '"',
@@ -488,33 +352,20 @@ export default {
     // 父组件设置值
     setValue(content) {
       // console.log(this.editor.getValue(),'this.editor.getValue();');
-      if (content) {
-        this.editor.setValue(content);
-      }
+      this.editor.setValue(String(content || ""));
+    },
+    getCurrentStatement() {
+      const model = this.editor.getModel();
+      return sqlAtCursor(model.getValue(), model.getOffsetAt(this.editor.getPosition()));
     },
     // 格式化代码
     formatSql(needValue) {
       this.clearMistake();
       try {
-        this.setValue(format(this.editor.getValue()));
+        const type = this.queryContext.databaseType || this.queryContext.type || "";
+        this.setValue(format(this.editor.getValue(), { language: /ORACLE|DM/i.test(type) ? "plsql" : "sql" }));
       } catch (e) {
-        const { message } = e;
-        const list = message.split(".")[0].split(" ");
-        const line = list.indexOf("line");
-        const column = list.indexOf("column");
-        const Unexpected = list.indexOf("Unexpected");
-        let str = list[Unexpected + 1].replace(/"/g, "");
-
-        this.markMistake(
-          {
-            startLineNumber: Number(list[line + 1]),
-            endLineNumber: Number(list[line + 1]),
-            startColumn: Number(list[column + 1]),
-            endColumn: Number(list[column + 1]) + str.length
-          },
-          "Error",
-          message
-        );
+        this.$message.warning("格式化器不支持此语法，已保留原 SQL；仍可交由数据库执行");
       }
       if (needValue) {
         return this.editor.getValue();
@@ -537,32 +388,13 @@ export default {
     // 清除错误信息
     clearMistake() {
       monaco.editor.setModelMarkers(this.editor.getModel(), "eslint", []);
-    },
-    handleEditorClick() {
-      if (this.editor) {
-        console.log("视角状态");
-        let tempInput = document.createElement("input");
-        tempInput.style.position = "absolute";
-        tempInput.style.left = "-1000px";
-        tempInput.style.top = "0";
-        tempInput.style.opacity = "0";
-        tempInput.style.height = "0";
-        tempInput.style.width = "0";
-        tempInput.style.pointerEvents = "none";
-        document.body.appendChild(tempInput);
-        tempInput.focus();
-        setTimeout(() => {
-          document.body.removeChild(tempInput);
-          this.editor.focus();
-        }, 50);
-      }
     }
   }
 };
 </script>
 
 <template>
-  <div @mousedown="handleEditorClick" :id="dom + 'code'"></div>
+  <div ref="editorHost" :id="dom + 'code'"></div>
 </template>
 
 <style scoped lang="scss">
