@@ -4,6 +4,7 @@ import com.jd.biz.domain.repository.entity.DataSourceAccessDO;
 import com.baomidou.mybatisplus.core.mapper.Mapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.apache.ibatis.annotations.Param;
+import java.util.List;
 
 /**
  * Data Source Access Mapper
@@ -19,4 +20,7 @@ public interface DataSourceAccessCustomMapper extends Mapper<DataSourceAccessDO>
         @Param("dataSourceSearchKey") String dataSourceSearchKey);
 
     DataSourceAccessDO checkTeamPermission( @Param("dataSourceId") Long dataSourceId, @Param("userId") Long userId);
+
+    List<DataSourceAccessDO> selectEffectiveGrants(@Param("dataSourceId") Long dataSourceId,
+                                                     @Param("userId") Long userId);
 }

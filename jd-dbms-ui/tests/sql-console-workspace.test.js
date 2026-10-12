@@ -113,7 +113,7 @@ async function main() {
   assert.strictEqual(metadataRequests[1].dataSourceId, 9, '不同连接不能串用元数据缓存')
 
   const sideBar = load('views/main/workspace/SideBar.vue', { connectionServer: {}, sqlServer: {}, viewServer: {}, tableServer: {}, userServer: {}, tableSpaceServer: {},
-    SqlPreview: {}, CreateOption: {}, addTableSpaceVue: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {}, database: {} })
+    SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {}, database: {} })
   assert.strictEqual(sideBar.activated, undefined, '共享树不能随右侧窗口激活重置状态')
   console.log('SQL 控制台与窗口缓存回归通过')
 }

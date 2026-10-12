@@ -1,6 +1,10 @@
 package com.jd.web.controller.system;
 
 import java.util.List;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -33,6 +37,9 @@ public class SysMenuController extends BaseController
     @Autowired
     private ISysMenuService menuService;
 
+    @Autowired
+    private RoleGrantGuard roleGrantGuard;
+
     /**
      * 获取菜单列表
      */
@@ -60,7 +67,7 @@ public class SysMenuController extends BaseController
     @GetMapping("/treeselect")
     public AjaxResult treeselect(SysMenu menu)
     {
-        List<SysMenu> menus = menuService.selectMenuList(menu, getUserId());
+        List<SysMenu> menus = roleMenuCandidates();
         return success(menuService.buildMenuTreeSelect(menus));
     }
 
@@ -70,11 +77,33 @@ public class SysMenuController extends BaseController
     @GetMapping(value = "/roleMenuTreeselect/{roleId}")
     public AjaxResult roleMenuTreeselect(@PathVariable("roleId") Long roleId)
     {
-        List<SysMenu> menus = menuService.selectMenuList(getUserId());
+        List<SysMenu> menus = roleMenuCandidates();
         AjaxResult ajax = AjaxResult.success();
         ajax.put("checkedKeys", menuService.selectMenuListByRoleId(roleId));
         ajax.put("menus", menuService.buildMenuTreeSelect(menus));
         return ajax;
+    }
+
+    private List<SysMenu> businessMenus(List<SysMenu> menus)
+    {
+        Set<Long> pages = new HashSet<>(Arrays.asList(1L, 2L, 3L, 2000L, 100L, 101L,
+                106L, 108L, 500L, 501L, 2001L, 2002L));
+        Set<Long> actions = new HashSet<>(Arrays.asList(100L, 101L, 500L, 501L, 106L, 2001L, 2002L));
+        return menus.stream().filter(item -> pages.contains(item.getMenuId()) ||
+                ("F".equals(item.getMenuType()) && actions.contains(item.getParentId())))
+                .collect(Collectors.toList());
+    }
+
+    private List<SysMenu> roleMenuCandidates() {
+        List<SysMenu> ownMenus = menuService.selectMenuList(getUserId());
+        if (!roleGrantGuard.canDelegateDatabaseActions()) return businessMenus(ownMenus);
+        if (com.jd.common.core.domain.entity.SysUser.isAdmin(getUserId())) return businessMenus(ownMenus);
+        Set<Long> allowed = ownMenus.stream().map(SysMenu::getMenuId).collect(Collectors.toSet());
+        allowed.add(2002L);
+        for (long id = 2100L; id <= 2107L; id++) allowed.add(id);
+        return businessMenus(menuService.selectMenuList(1L)).stream()
+                .filter(item -> allowed.contains(item.getMenuId()))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -85,6 +114,7 @@ public class SysMenuController extends BaseController
     @PostMapping
     public AjaxResult add(@Validated @RequestBody SysMenu menu)
     {
+        roleGrantGuard.requireSuperAdmin();
         if (!menuService.checkMenuNameUnique(menu))
         {
             return error("新增菜单'" + menu.getMenuName() + "'失败，菜单名称已存在");
@@ -105,6 +135,7 @@ public class SysMenuController extends BaseController
     @PutMapping
     public AjaxResult edit(@Validated @RequestBody SysMenu menu)
     {
+        roleGrantGuard.requireSuperAdmin();
         if (!menuService.checkMenuNameUnique(menu))
         {
             return error("修改菜单'" + menu.getMenuName() + "'失败，菜单名称已存在");
@@ -129,6 +160,7 @@ public class SysMenuController extends BaseController
     @DeleteMapping("/{menuId}")
     public AjaxResult remove(@PathVariable("menuId") Long menuId)
     {
+        roleGrantGuard.requireSuperAdmin();
         if (menuService.hasChildByMenuId(menuId))
         {
             return warn("存在子菜单,不允许删除");

@@ -280,7 +280,7 @@ export default {
             newPassWord: this.userFrom.newPassWord,
             defaultTableSpace: this.userFrom.defaultTableSpace,
             tempTableSpace: this.userFrom.tempTableSpace,
-            roleList: this.userInfo.userRoleList,
+            roleList: this.userRoleList.filter(role => role.isGranted),
             dataSourceId: this.dataBaseInfo.id,
           };
           userServer.addUserRole(params).then((res) => {

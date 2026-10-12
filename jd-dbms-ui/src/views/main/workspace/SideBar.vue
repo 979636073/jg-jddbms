@@ -7,7 +7,12 @@ import userServer from "@/api/main/user";
 import tableSpaceServer from "@/api/main/tableSpace";
 import SqlPreview from "@/views/main/workspace/components/DataSource/SqlPreview.vue";
 import CreateOption from "./components/CreateOption/index.vue";
+import DataSourceSharingDialog from "./components/DataSourceSharingDialog.vue";
+import TableTransferDialog from "./components/TableTransferDialog.vue";
+import SchemaSqlTransferDialog from "./components/SchemaSqlTransferDialog.vue";
+import DmpTransferDialog from "./components/DmpTransferDialog.vue";
 import addTableSpaceVue from "./components/siedBarDialog/addTableSpace.vue";
+import addSchema from "./components/siedBarDialog/addSchema.vue";
 import addUser from "./components/siedBarDialog/addUser.vue";
 import addTable from "./components/siedBarDialog/addtable.vue";
 import addView from "./components/siedBarDialog/addView.vue";
@@ -53,8 +58,13 @@ export default {
   dicts: ["model_type"],
   components: {
     CreateOption,
+    DataSourceSharingDialog,
+    TableTransferDialog,
+    SchemaSqlTransferDialog,
+    DmpTransferDialog,
     SqlPreview,
     addTableSpaceVue,
+    addSchema,
     addUser,
     addTable,
     addView,
@@ -112,7 +122,11 @@ export default {
       databaseTree: [],
       databaseMaps: new Map(),
       resourceFilter: "",
+      resourceFilterTimer: null,
       resourceTreeLoading: false,
+      resourceChangeQueue: {},
+      resourceChangeVersions: {},
+      resourceChangeTimer: null,
       pendingConnectedDataSource: null,
       dataTreeList: [],
       dataSourceListData: [],
@@ -122,6 +136,11 @@ export default {
         isLeaf: "leaf",
       },
       editDialogVisible: false,
+      schemaDialogVisible: false,
+      sharingDialogVisible: false,
+      sharingDataSourceId: null,
+      schemaDialogDataSource: {},
+      schemaDialogNodeKey: "",
       tableDialogVisibl: false,
       viewDialogVisible: false,
       userDialogVisible: false,
@@ -138,10 +157,21 @@ export default {
       spaceInfo: {},
       userInfo: {},
       contextMenuVisible: false,
+      contextMenuKind: "table",
       contextMenu_top: 0,
       contextMenu_left: 0,
       context_current_item: {},
       context_current_node: null,
+      tableTransferVisible: false,
+      tableTransferOperation: "export",
+      tableTransferContext: {},
+      schemaSqlVisible: false,
+      schemaSqlOperation: "export",
+      schemaSqlContext: {},
+      dmpTransferVisible: false,
+      dmpTransferOperation: "export",
+      dmpTransferScope: "table",
+      dmpTransferContext: {},
       copyTableDialogVisible: false,
       copyTableWithData: false,
       copySchemaOptionsLoading: false,
@@ -166,6 +196,9 @@ export default {
     },
     currentDataSource() {
       return this.$store.state.workspace.currentConnectionDetails;
+    },
+    currentUserId() {
+      return this.$store.state.user.id;
     },
     currentTable() {
       return this.$store.state.workspace.currentTable;
@@ -220,10 +253,12 @@ export default {
     });
     this.$EventBus.$on("refreshDataSourceTree", this.initializeResourceTree);
     this.$EventBus.$on("dataSourceConnected", this.handleDataSourceConnected);
+    window.addEventListener("workspace-resource-mutation", this.handleResourceMutation);
   },
   destroyed() {
     window.removeEventListener("beforeunload", this.beforeunload);
     window.removeEventListener("keydown", this.handelKeyDown);
+    window.removeEventListener("workspace-resource-mutation", this.handleResourceMutation);
   },
   //解绑事件
   beforeDestroy() {
@@ -231,6 +266,8 @@ export default {
     this.$EventBus.$off("refreshDataSourceTree", this.initializeResourceTree);
     this.$EventBus.$off("dataSourceConnected", this.handleDataSourceConnected);
     clearTimeout(this.tableSearchTimer);
+    clearTimeout(this.resourceChangeTimer);
+    clearTimeout(this.resourceFilterTimer);
   },
   methods: {
     async loadRouteObject(route) {
@@ -415,14 +452,18 @@ export default {
     async loadResourceContainers(data, resolve) {
       const isDatabase = data.treeNodeType === "databaseCollection";
       const api = isDatabase ? connectionServer.getDatabaseList : connectionServer.getSchemaList;
+      const version = this.resourceVersion(data.dataSource.id, isDatabase ? 'databases' : 'schemas');
+      const refresh = Boolean(data.refreshOnce) || version > (data.loadedVersion || 0);
+      data.refreshOnce = false;
+      data.loadedVersion = version;
       try {
         const res = await api({
           dataSourceId: data.dataSource.id,
           dataSourceName: data.dataSource.alias,
-          refresh: false,
+          refresh,
         });
         const items = Array.isArray(res.data) ? res.data : [];
-        resolve(items.map((item) => {
+        const children = items.map((item) => {
           const name = item.name;
           const context = isDatabase ? { databaseName: name } : { schemaName: name };
           return {
@@ -433,22 +474,30 @@ export default {
             dataSource: data.dataSource,
             extraParams: this.createExtraParams(data.dataSource, context),
           };
-        }));
+        });
+        data.containerChildren = children;
+        const query = this.resourceFilter || "";
+        const offset = query ? 0 : (data.containerOffset || 0);
+        resolve(this.containerPageChildren(data, query, offset));
       } catch (e) {
         resolve([]);
         this.$message.error(`${data.label}加载失败`);
       }
     },
     async loadResourceSchemas(data, resolve) {
+      const version = this.resourceVersion(data.dataSource.id, 'schemas');
+      const refresh = Boolean(data.refreshOnce) || version > (data.loadedVersion || 0);
+      data.refreshOnce = false;
+      data.loadedVersion = version;
       try {
         const res = await connectionServer.getSchemaList({
           dataSourceId: data.dataSource.id,
           dataSourceName: data.dataSource.alias,
           databaseName: data.extraParams.databaseName,
-          refresh: false,
+          refresh,
         });
         const items = Array.isArray(res.data) ? res.data : [];
-        resolve(items.map((item) => ({
+        data.containerChildren = items.map((item) => ({
           key: `${data.dataSource.id}-${data.extraParams.databaseName}-schema-${item.name}`,
           label: item.name,
           treeNodeType: "schema",
@@ -458,17 +507,26 @@ export default {
             databaseName: data.extraParams.databaseName,
             schemaName: item.name,
           }),
-        })));
+        }));
+        const query = this.resourceFilter || "";
+        const offset = query ? 0 : (data.containerOffset || 0);
+        resolve(this.containerPageChildren(data, query, offset));
       } catch (e) {
         resolve([]);
         this.$message.error("模式加载失败");
       }
     },
     async loadResourceObjects(data, resolve) {
+      const version = this.resourceVersion(data.dataSource.id, data.groupType);
+      const refresh = Boolean(data.refreshOnce) || version > (data.loadedVersion || 0);
+      data.refreshOnce = false;
+      data.loadedVersion = version;
       const params = {
-        ...data.extraParams,
-        refresh: false,
-        requestType: data.groupType === "tables" || data.groupType === "views" ? 2 : 1,
+          ...data.extraParams,
+          refresh,
+          // The table list reads this flag when deciding whether to bypass its Redis cache.
+          ...(data.groupType === "tables" ? { isRefreshCache: refresh } : {}),
+          requestType: ["tables", "views", "tableSpace"].includes(data.groupType) ? 2 : 1,
         pageNo: 1,
         pageSize: data.groupType === "tables" ? 200 : 1000,
       };
@@ -481,11 +539,132 @@ export default {
         else if (data.groupType === "triggers") res = await sqlServer.getTriggerList(params);
         else if (data.groupType === "users") res = await userServer.getUserList(params);
         else if (data.groupType === "tableSpace") res = await tableSpaceServer.getTableSpaceList(params);
+        if (res?.success === false) {
+          data.refreshOnce = true;
+          resolve(data.cachedChildren || []);
+          this.$message.error(res.errorMessage || `${data.label}加载失败，请重试`);
+          return;
+        }
         const items = Array.isArray(res?.data?.data) ? res.data.data : [];
-        resolve(items.map((item, index) => this.createObjectNode(data, item, index)));
+        const children = items.map((item, index) => this.createObjectNode(data, item, index));
+        const total = Number(res?.data?.total);
+        if (["users", "views"].includes(data.groupType)) {
+          data.objectChildren = children;
+          data.cachedChildren = null;
+          resolve(this.objectGroupPageChildren(data, this.resourceFilter, 0));
+          return;
+        }
+        if (data.groupType === "tables" && Number.isFinite(total) && items.length < total) {
+          children.push(this.createLoadMoreTablesNode(data, items.length, total));
+        }
+        data.cachedChildren = null;
+        resolve(children);
       } catch (e) {
-        resolve([]);
-        this.$message.error(`${data.label}加载失败`);
+        data.refreshOnce = true;
+        resolve(data.cachedChildren || []);
+        this.$message.error(e?.message || `${data.label}加载失败，请重试`);
+      }
+    },
+    createLoadMoreTablesNode(group, loadedCount, total) {
+      return {
+        key: `${group.key}-load-more-${loadedCount}`,
+        label: `加载更多表（已加载 ${loadedCount} / ${total}）`,
+        treeNodeType: "loadMoreTables",
+        leaf: true,
+        groupType: "tables",
+        dataSource: group.dataSource,
+        extraParams: group.extraParams,
+        loadedCount,
+        total,
+      };
+    },
+    containerPageChildren(data, query, offset) {
+      const keyword = String(query || "").trim().toLowerCase();
+      const all = data.containerChildren || [];
+      const matches = keyword
+        ? all.filter(item => String(item.label || "").toLowerCase().includes(keyword))
+        : all;
+      const pageSize = 100;
+      const start = Math.max(0, Math.min(offset, Math.max(0, Math.ceil(matches.length / pageSize) - 1) * pageSize));
+      const result = matches.slice(start, start + pageSize);
+      const label = data.treeNodeType === "databaseCollection" ? "数据库" : "模式";
+      if (start > 0) {
+        result.unshift({ key: `${data.key}-page-prev`, label: `上一批${label}`, treeNodeType: "containerPage",
+          leaf: true, offset: start - pageSize });
+      }
+      if (start + pageSize < matches.length) {
+        result.push({ key: `${data.key}-page-next`,
+          label: `下一批${label}（${start + pageSize} / ${matches.length}）`,
+          treeNodeType: "containerPage", leaf: true, offset: start + pageSize });
+      }
+      data.containerOffset = start;
+      data.containerQuery = keyword;
+      return result;
+    },
+    showContainerPage(data, query, offset) {
+      const tree = this.$refs.resourceTree;
+      const parent = tree?.getNode(data.key);
+      if (!parent?.loaded) return;
+      const children = this.containerPageChildren(data, query, offset);
+      [...parent.childNodes].forEach(child => tree.remove(child.data));
+      children.forEach(child => tree.append(child, data));
+      this.$nextTick(() => tree.filter(this.resourceFilter));
+    },
+    objectGroupPageChildren(data, query, offset) {
+      const keyword = String(query || "").trim().toLowerCase();
+      const matches = keyword
+        ? (data.objectChildren || []).filter(item => item.label.toLowerCase().includes(keyword))
+        : (data.objectChildren || []);
+      const pageSize = 100;
+      const start = Math.max(0, Math.min(offset, Math.max(0, Math.ceil(matches.length / pageSize) - 1) * pageSize));
+      const children = matches.slice(start, start + pageSize);
+      const label = data.groupType === "views" ? "视图" : "用户";
+      if (start > 0) children.unshift({ key: `${data.key}-object-prev`, label: `上一批${label}`, treeNodeType: "objectGroupPage", leaf: true, offset: start - pageSize });
+      if (start + pageSize < matches.length) children.push({ key: `${data.key}-object-next`, label: `下一批${label}（${start + pageSize} / ${matches.length}）`, treeNodeType: "objectGroupPage", leaf: true, offset: start + pageSize });
+      return children;
+    },
+    showObjectGroupPage(data, query, offset) {
+      const tree = this.$refs.resourceTree;
+      const parent = tree?.getNode(data.key);
+      if (!parent?.loaded) return;
+      const children = this.objectGroupPageChildren(data, query, offset);
+      [...parent.childNodes].forEach(child => tree.remove(child.data));
+      children.forEach(child => tree.append(child, data));
+      this.$nextTick(() => tree.filter(this.resourceFilter));
+    },
+    async loadMoreResourceTables(data, node) {
+      if (data.loading || !node?.parent) return;
+      const group = node.parent;
+      const tree = this.$refs.resourceTree;
+      const oldLabel = data.label;
+      this.$set(data, "loading", true);
+      this.$set(data, "label", "正在加载更多表…");
+      try {
+        const res = await tableServer.getTableList({
+          ...group.data.extraParams,
+          requestType: 2,
+          pageNo: Math.floor(data.loadedCount / 200) + 1,
+          pageSize: 200,
+          isRefreshCache: false,
+        });
+        if (res?.success === false) throw new Error(res.errorMessage || "加载更多表失败");
+        const items = Array.isArray(res?.data?.data) ? res.data.data : [];
+        if (!items.length) throw new Error("没有读取到下一页表，请刷新后重试");
+        if (tree.getNode(group.key) !== group) return;
+        tree.remove(data);
+        items.forEach((item, index) => tree.append(
+          this.createObjectNode(group.data, item, data.loadedCount + index), group.data,
+        ));
+        const loadedCount = data.loadedCount + items.length;
+        const total = Number(res?.data?.total);
+        if (Number.isFinite(total) && loadedCount < total) {
+          tree.append(this.createLoadMoreTablesNode(group.data, loadedCount, total), group.data);
+        }
+      } catch (error) {
+        this.$message.error(error?.message || "加载更多表失败，请重试");
+      } finally {
+        this.$set(data, "loading", false);
+        this.$set(data, "label", oldLabel);
       }
     },
     expandResourceNode(node) {
@@ -564,6 +743,18 @@ export default {
       document.title = "数据库管理软件";
     },
     async handleResourceNodeClick(data, node) {
+      if (data.treeNodeType === "objectGroupPage") {
+        this.showObjectGroupPage(node.parent.data, this.resourceFilter, data.offset);
+        return;
+      }
+      if (data.treeNodeType === "containerPage") {
+        this.showContainerPage(node.parent.data, this.resourceFilter, data.offset);
+        return;
+      }
+      if (data.treeNodeType === "loadMoreTables") {
+        await this.loadMoreResourceTables(data, node);
+        return;
+      }
       const dataSource = data.dataSource;
       if (data.treeNodeType === "datasource" && !this.isDataSourceConnected(dataSource.id)) {
         this.openDataSourceManager(dataSource, "connect");
@@ -584,6 +775,7 @@ export default {
         return;
       }
       if (data.treeNodeType === "objectGroup") {
+        this.detailDataSource = [];
         this.type = data.groupType;
         this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
         this.$emit("isType", this.type, this.schema, this.activeClass);
@@ -618,10 +810,37 @@ export default {
       }
     },
     handleResourceFilter(value) {
-      this.$refs.resourceTree?.filter(value);
+      clearTimeout(this.resourceFilterTimer);
+      this.resourceFilterTimer = setTimeout(() => this.applyResourceFilter(value), 120);
+    },
+    applyResourceFilter(value) {
+      const tree = this.$refs.resourceTree;
+      if (!tree) return;
+      const containers = [];
+      const objectGroups = [];
+      const visit = node => {
+        if (!node) return;
+        if (node.data?.containerChildren) containers.push(node.data);
+        if (node.data?.objectChildren) objectGroups.push(node.data);
+        (node.childNodes || []).forEach(visit);
+      };
+      this.databaseTree.forEach(root => visit(tree.getNode(root.key)));
+      const keyword = String(value || "").trim().toLowerCase();
+      containers.forEach(data => {
+        if (!keyword || data.containerChildren.some(child => child.label.toLowerCase().includes(keyword))) {
+          this.showContainerPage(data, keyword, 0);
+        }
+      });
+      objectGroups.forEach(data => {
+        if (!keyword || data.objectChildren.some(child => child.label.toLowerCase().includes(keyword))) {
+          this.showObjectGroupPage(data, keyword, 0);
+        }
+      });
+      this.$nextTick(() => tree.filter(value));
     },
     resourceFilterNode(value, data) {
       if (!value) return true;
+      if (["containerPage", "objectGroupPage"].includes(data.treeNodeType)) return true;
       return String(data.label || "").toLowerCase().includes(value.toLowerCase());
     },
     refreshResourceNode(node) {
@@ -630,9 +849,66 @@ export default {
         this.openDataSourceManager(node.data.dataSource, "connect");
         return;
       }
+      this.invalidateResourceNode(node, true);
+    },
+    invalidateResourceNode(node, expandIfCollapsed = false) {
+      if (!node) return;
+      if (node.data.treeNodeType === "objectGroup" && node.loaded) {
+        node.data.cachedChildren = node.childNodes.map(child => child.data);
+      }
+      node.data.refreshOnce = true;
       node.loaded = false;
       if (node.expanded) node.loadData();
-      else node.expand();
+      else if (expandIfCollapsed) node.expand();
+    },
+    resourceVersion(dataSourceId, group) {
+      return this.resourceChangeVersions[`${dataSourceId}:${group}`] || 0;
+    },
+    handleResourceMutation(event) {
+      const change = event.detail;
+      if (!change?.dataSourceId || !change.groups?.length) return;
+      const key = String(change.dataSourceId);
+      const previous = this.resourceChangeQueue[key];
+      this.resourceChangeQueue[key] = previous ? {
+        ...change,
+        schemaName: previous.schemaName === change.schemaName ? change.schemaName : '',
+        databaseName: previous.databaseName === change.databaseName ? change.databaseName : '',
+        groups: [...new Set([...previous.groups, ...change.groups])],
+      } : change;
+      if (this.resourceChangeTimer) return;
+      this.resourceChangeTimer = setTimeout(() => this.flushResourceMutations(), 120);
+    },
+    flushResourceMutations() {
+      this.resourceChangeTimer = null;
+      const changes = Object.values(this.resourceChangeQueue);
+      this.resourceChangeQueue = {};
+      for (const change of changes) {
+        for (const group of change.groups) {
+          const key = `${change.dataSourceId}:${group}`;
+          this.resourceChangeVersions[key] = (this.resourceChangeVersions[key] || 0) + 1;
+        }
+        const root = this.$refs.resourceTree?.getNode(`datasource-${change.dataSourceId}`);
+        if (!root) continue;
+        const groups = new Set(change.groups);
+        const visit = (node) => {
+          const data = node.data || {};
+          if ((data.treeNodeType === 'schemaCollection' && groups.has('schemas'))
+              || (data.treeNodeType === 'databaseCollection' && groups.has('databases'))
+              || (data.treeNodeType === 'database' && groups.has('schemas'))) {
+            this.invalidateResourceNode(node);
+            return;
+          }
+          if (data.treeNodeType === 'objectGroup' && groups.has(data.groupType)) {
+            const isGlobal = ['users', 'tableSpace'].includes(data.groupType);
+            if ((isGlobal || !change.schemaName || change.schemaName === data.extraParams?.schemaName)
+                && (!change.databaseName || change.databaseName === data.extraParams?.databaseName)) {
+              this.invalidateResourceNode(node);
+            }
+          }
+          [...(node.childNodes || [])].forEach(visit);
+        };
+        visit(root);
+      }
     },
     selectedTreeTableNames(groupKey) {
       return this.treeTableSelections[groupKey] || [];
@@ -712,6 +988,16 @@ export default {
     openDataSourceManager(dataSource, mode) {
       this.$emit("manageDataSources", { id: dataSource?.id, mode: mode || (dataSource ? "edit" : "create") });
     },
+    canManageDataSource(dataSource) {
+      const roles = this.$store.state.user.roles || [];
+      return dataSource && (roles.includes('admin') || roles.includes('dbms_security') ||
+        (String(dataSource.userId) === String(this.currentUserId) &&
+          (roles.includes('dbms_developer') || roles.includes('dbms_datasource'))));
+    },
+    openSharing(dataSource) {
+      this.sharingDataSourceId = dataSource.id;
+      this.sharingDialogVisible = true;
+    },
     closeDataSourceFromTree(dataSource) {
       this.$confirm(`确定要关闭数据源“${this.dataSourceDisplayName(dataSource)}”的连接吗？`, "提示", {
         confirmButtonText: "确定", cancelButtonText: "取消", type: "warning",
@@ -733,15 +1019,7 @@ export default {
       }).catch(() => {});
     },
     async createConsoleForDataSource(data) {
-      if (!this.isDataSourceConnected(data.dataSource.id)) {
-        this.openDataSourceManager(data.dataSource, "connect");
-        return;
-      }
-      this.activateDataSourceContext(data.dataSource, data.extraParams || {});
-      await this.$store.dispatch("workspaceData/createConsole", {
-        pageId: this.pageId,
-        ...data.extraParams,
-      });
+      this.$emit("newQuery", data);
     },
     deleteDataSourceFromTree(dataSource) {
       this.$confirm(`确定要删除数据源“${this.dataSourceDisplayName(dataSource)}”吗？`, "提示", {
@@ -765,6 +1043,52 @@ export default {
       this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
       await this.$nextTick();
       this.addSideBar();
+    },
+    addSchemaFromTree(data, node) {
+      this.activateDataSourceContext(data.dataSource, data.extraParams || {});
+      this.schemaDialogDataSource = data.dataSource;
+      this.schemaDialogNodeKey = node.key;
+      this.schemaDialogVisible = true;
+    },
+    schemaCreated() {
+      const node = this.$refs.resourceTree?.getNode(this.schemaDialogNodeKey);
+      this.refreshResourceNode(node);
+    },
+    isProtectedSchema(data) {
+      const name = String(data.label || '').toUpperCase();
+      const connectedUser = String(data.dataSource?.user || data.dataSource?.userName || '').toUpperCase();
+      return name === connectedUser || ['SYS', 'SYSDBA', 'SYSAUDITOR', 'SYSSSO', 'CTISYS', 'MONITOR_ADMIN'].includes(name);
+    },
+    async deleteSchemaFromTree(data, node) {
+      if (this.isProtectedSchema(data)) {
+        this.$message.warning('系统模式和当前连接用户所属模式不能删除');
+        return;
+      }
+      try {
+        await this.$prompt(
+          `删除模式“${data.label}”会同时删除其中的全部对象，且无法恢复。请输入模式名称以确认。`,
+          '删除模式',
+          {
+            confirmButtonText: '删除模式',
+            cancelButtonText: '取消',
+            type: 'warning',
+            inputPlaceholder: data.label,
+            inputValidator: value => value === data.label || '模式名称不一致',
+          }
+        );
+        const res = await connectionServer.deleteSchema({
+          dataSourceId: data.dataSource.id,
+          databaseName: data.extraParams.databaseName || '',
+          schemaName: data.label,
+        });
+        if (!res.success) throw new Error(res.errorMessage || '删除模式失败');
+        this.refreshResourceNode(node.parent);
+        this.$message.success('模式已删除');
+      } catch (error) {
+        if (error !== 'cancel' && error !== 'close') {
+          this.$message.error(error?.message || '删除模式失败，请检查数据库权限');
+        }
+      }
     },
     async deleteObjectFromTree(data, node) {
       this.activateDataSourceContext(data.dataSource, data.extraParams || {});
@@ -793,10 +1117,21 @@ export default {
         trigger: "el-icon-bell",
         user: "el-icon-user",
         tableSpace: "el-icon-box",
+        loadMoreTables: "el-icon-more",
       };
       return icons[data.treeNodeType] || "el-icon-document";
     },
     handleResourceContextMenu(event, data, node) {
+      if (data.treeNodeType === "schema") {
+        event.preventDefault();
+        this.contextMenuKind = "schema";
+        this.context_current_item = { name: data.label };
+        this.schemaSqlContext = { id: data.dataSource.id, schema: data.label, type: data.dataSource.type };
+        this.contextMenu_left = Math.max(8, Math.min(event.clientX, window.innerWidth - 228));
+        this.contextMenu_top = Math.max(8, Math.min(event.clientY, window.innerHeight - 180));
+        this.contextMenuVisible = true;
+        return;
+      }
       if (data.treeNodeType !== "table") return;
       this.activateDataSourceContext(data.dataSource, data.extraParams || {});
       this.type = "tables";
@@ -821,7 +1156,33 @@ export default {
       else if (action === "copyName") this.CopyName(data);
       else if (action === "copyTable") this.openCopyTableDialog(false);
       else if (action === "copyTableWithData") this.openCopyTableDialog(true);
+      else if (action === "import" || action === "export") this.openTableTransfer(action);
       else if (action === "delete") this.deleteTable(data, this.context_current_node);
+    },
+    openTableTransfer(operation) {
+      this.tableTransferOperation = operation;
+      this.tableTransferContext = {
+        id: this.context_current_item.dataSourceId,
+        schema: this.context_current_item.schemaName,
+        table: this.context_current_item.name,
+        type: this.dataInfo.dataSource?.type || "数据库",
+      };
+      this.tableTransferVisible = true;
+    },
+    openSchemaSqlTransfer(operation) {
+      this.contextMenuVisible = false;
+      this.schemaSqlOperation = operation;
+      this.schemaSqlVisible = true;
+    },
+    openSchemaDmpTransfer(operation) {
+      this.contextMenuVisible = false;
+      this.dmpTransferOperation = operation;
+      this.dmpTransferScope = "schema";
+      this.dmpTransferContext = { ...this.schemaSqlContext };
+      this.dmpTransferVisible = true;
+    },
+    refreshTransferredTable() {
+      if (this.context_current_node && this.context_current_node.parent) this.refreshResourceNode(this.context_current_node.parent);
     },
     async openCopyTableDialog(withData) {
       this.copyTableWithData = withData;
@@ -1433,7 +1794,7 @@ export default {
         // 模式切换只加载表名列表；表详情在点击具体表时再按需加载
         refresh: false,
         // 默认表列表需要展示注释、行数、创建时间和最后结构变化时间。
-        requestType: this.type == "tables" || this.type == "views" ? 2 : 1,
+        requestType: ["tables", "views", "users", "tableSpace"].includes(this.type) ? 2 : 1,
         pageNo: 1,
         // 首屏只加载一页名称，避免达梦返回数万条对象后阻塞浏览器渲染。
         pageSize: 200,
@@ -1456,7 +1817,7 @@ export default {
         }
         if (requestId !== this.tableSearchRequestId) return;
         if (!res || !res.success) {
-          this.$message.error(res?.errorCode || res?.errorMessage || "加载失败");
+          this.$message.error(res?.errorMessage || res?.errorCode || "加载失败");
           return;
         }
         let data = res.data.data || [];
@@ -1472,16 +1833,33 @@ export default {
             valid: details.valid,
             path: details.path,
             type: details.type,
+            status: details.status,
+            totalSize: details.totalSize,
+            freeSize: details.freeSize,
+            useSize: details.useSize,
+            usageRate: details.usageRate,
+            expandUpperLimit: details.expandUpperLimit,
           };
           detailDataSource.push({
             name: item.name,
             schema: details.schema,
             tableSpace: details.tableSpace,
+            userId: details.userId,
+            accountStatus: details.accountStatus,
+            defaultTableSpace: details.defaultTableSpace,
+            tempTableSpace: details.tempTableSpace,
             comment: item.comment || details.comment,
             numRows: details.numRows,
             created: details.created,
             lastDDL: details.lastDDL,
             type: details.type,
+            path: details.path,
+            status: details.status,
+            totalSize: details.totalSize,
+            freeSize: details.freeSize,
+            useSize: details.useSize,
+            usageRate: details.usageRate,
+            expandUpperLimit: details.expandUpperLimit,
           });
           return {
             name: item.name,
@@ -2122,8 +2500,9 @@ export default {
     creatRightMenu(tag, e, node = null) {
       if (this.type == "tables") {
         e.preventDefault();
+        this.contextMenuKind = "table";
         const menuWidth = 220;
-        const menuHeight = 306;
+        const menuHeight = 400;
         this.contextMenu_top = Math.max(8, Math.min(e.clientY, window.innerHeight - menuHeight - 8));
         this.contextMenu_left = Math.max(8, Math.min(e.clientX, window.innerWidth - menuWidth - 8));
         this.contextMenuVisible = true;
@@ -2333,7 +2712,8 @@ export default {
           @node-click="handleResourceNodeClick"
           @node-contextmenu="handleResourceContextMenu"
         >
-          <span slot-scope="{ node, data }" class="resource-node">
+          <span slot-scope="{ node, data }" class="resource-node"
+            :class="{ 'resource-node-datasource': data.treeNodeType === 'datasource' }">
             <span class="resource-node-main">
               <el-checkbox
                 v-if="data.treeNodeType === 'table'"
@@ -2358,19 +2738,24 @@ export default {
                 class="resource-selection-count"
               >已选 {{ selectedTreeTableNames(data.key).length }}</span>
             </span>
+            <button v-if="data.treeNodeType === 'datasource'" class="resource-query-button"
+              type="button" title="在此数据库新建 SQL 查询" aria-label="新建查询"
+              @click.stop="createConsoleForDataSource(data)">
+              <i class="el-icon-monitor" aria-hidden="true"></i>
+            </button>
             <span class="resource-node-actions">
               <template v-if="data.treeNodeType === 'datasource'">
                 <button v-if="isDataSourceConnected(data.dataSource.id)" title="关闭连接" @click.stop="closeDataSourceFromTree(data.dataSource)">
                   <i class="el-icon-switch-button"></i>
-                </button>
-                <button title="新建查询" @click.stop="createConsoleForDataSource(data)">
-                  <i class="el-icon-edit-outline"></i>
                 </button>
                 <button title="刷新" @click.stop="refreshResourceNode(node)">
                   <i class="el-icon-refresh"></i>
                 </button>
                 <button title="编辑连接" @click.stop="openDataSourceManager(data.dataSource)">
                   <i class="el-icon-setting"></i>
+                </button>
+                <button v-if="canManageDataSource(data.dataSource)" title="共享授权" @click.stop="openSharing(data.dataSource)">
+                  <i class="el-icon-user"></i>
                 </button>
                 <button title="删除连接" @click.stop="deleteDataSourceFromTree(data.dataSource)">
                   <i class="el-icon-delete"></i>
@@ -2403,6 +2788,22 @@ export default {
                   <i class="el-icon-refresh"></i>
                 </button>
               </template>
+              <template v-else-if="data.treeNodeType === 'schemaCollection' && data.dataSource.type === 'DM'">
+                <button title="新增模式" @click.stop="addSchemaFromTree(data, node)">
+                  <i class="el-icon-plus"></i>
+                </button>
+                <button title="刷新" @click.stop="refreshResourceNode(node)">
+                  <i class="el-icon-refresh"></i>
+                </button>
+              </template>
+              <button
+                v-else-if="data.treeNodeType === 'schema' && data.dataSource.type === 'DM' && !isProtectedSchema(data)"
+                class="danger-action"
+                title="删除模式"
+                @click.stop="deleteSchemaFromTree(data, node)"
+              >
+                <i class="el-icon-delete"></i>
+              </button>
               <button
                 v-else-if="['table', 'view', 'function', 'processdure', 'trigger', 'user', 'tableSpace'].includes(data.treeNodeType)"
                 title="删除"
@@ -2732,7 +3133,7 @@ export default {
 
     <div
       class="resource-context-menu"
-      v-show="contextMenuVisible"
+      v-show="contextMenuVisible && contextMenuKind === 'table'"
       :style="{ left: contextMenu_left + 'px', top: contextMenu_top + 'px' }"
       role="menu"
       @click.stop
@@ -2754,6 +3155,12 @@ export default {
       <button role="menuitem" @click="executeResourceContextAction('template')">
         <i class="el-icon-edit-outline"></i><span>数据模板</span>
       </button>
+      <button role="menuitem" @click="executeResourceContextAction('import')">
+        <i class="el-icon-upload2"></i><span>导入</span>
+      </button>
+      <button role="menuitem" @click="executeResourceContextAction('export')">
+        <i class="el-icon-download"></i><span>导出</span>
+      </button>
       <button role="menuitem" @click="executeResourceContextAction('copyTable')">
         <i class="el-icon-document-copy"></i><span>复制表结构</span>
       </button>
@@ -2767,6 +3174,14 @@ export default {
       <button class="danger" role="menuitem" @click="executeResourceContextAction('delete')">
         <i class="el-icon-delete"></i><span>删除表</span>
       </button>
+    </div>
+    <div class="resource-context-menu" v-show="contextMenuVisible && contextMenuKind === 'schema'"
+      :style="{ left: contextMenu_left + 'px', top: contextMenu_top + 'px' }" role="menu" @click.stop>
+      <div class="context-menu-title" :title="context_current_item.name"><i class="el-icon-folder"></i><span>{{ context_current_item.name }}</span></div>
+      <button role="menuitem" @click="openSchemaSqlTransfer('import')"><i class="el-icon-upload2"></i><span>导入 SQL</span></button>
+      <button role="menuitem" @click="openSchemaSqlTransfer('export')"><i class="el-icon-download"></i><span>导出 SQL</span></button>
+      <button role="menuitem" @click="openSchemaDmpTransfer('import')"><i class="el-icon-upload2"></i><span>导入 DMP</span></button>
+      <button role="menuitem" @click="openSchemaDmpTransfer('export')"><i class="el-icon-download"></i><span>导出 DMP</span></button>
     </div>
     <el-dialog
       :title="copyTableWithData ? '复制表及数据' : '复制表结构'"
@@ -2802,7 +3217,21 @@ export default {
       </span>
     </el-dialog>
     <CreateOption ref="createOption" />
+    <TableTransferDialog :visible="tableTransferVisible" :operation="tableTransferOperation" :table-info="tableTransferContext"
+      @close="tableTransferVisible = false" @imported="refreshTransferredTable" />
+    <SchemaSqlTransferDialog :visible="schemaSqlVisible" :operation="schemaSqlOperation" :context="schemaSqlContext"
+      @close="schemaSqlVisible = false" />
+    <DmpTransferDialog :visible="dmpTransferVisible" :operation="dmpTransferOperation" :scope="dmpTransferScope" :context="dmpTransferContext"
+      @close="dmpTransferVisible = false" />
+    <DataSourceSharingDialog :visible="sharingDialogVisible" :data-source-id="sharingDataSourceId"
+      @close="sharingDialogVisible = false" @changed="initializeResourceTree" />
     <SqlPreview ref="sqlPreview" :title="DDLTitle" />
+    <addSchema
+      :visible="schemaDialogVisible"
+      :dataSource="schemaDialogDataSource"
+      @close="schemaDialogVisible = false"
+      @created="schemaCreated"
+    />
     <addTableSpaceVue
       :editDialogVisible="editDialogVisible"
       @editHandleCloseFn="editHandleCloseFn"
@@ -3035,6 +3464,7 @@ export default {
   text-align: center;
 }
 .resource-icon-button,
+.resource-query-button,
 .resource-node-actions button {
   display: inline-flex;
   align-items: center;
@@ -3049,6 +3479,7 @@ export default {
   cursor: pointer;
 }
 .resource-icon-button:hover,
+.resource-query-button:hover,
 .resource-node-actions button:hover {
   background: #edf4ff;
   color: #006fff;
@@ -3064,6 +3495,7 @@ export default {
   min-height: 0;
 }
 .resource-node {
+  position: relative;
   display: flex;
   align-items: center;
   width: calc(100% - 6px);
@@ -3075,6 +3507,9 @@ export default {
   align-items: center;
   min-width: 0;
   flex: 1;
+}
+.resource-node-datasource .resource-node-main {
+  padding-right: 24px;
 }
 .connection-status {
   width: 8px;
@@ -3125,12 +3560,33 @@ export default {
   font-size: 9px;
   line-height: 15px;
 }
+.resource-query-button {
+  position: absolute;
+  top: 3px;
+  right: 0;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  color: #3476d4;
+  font-size: 13px;
+}
+.resource-query-button:focus-visible {
+  outline: 2px solid #3476d4;
+  outline-offset: 1px;
+}
 .resource-node-actions {
+  position: absolute;
+  top: 3px;
+  right: 0;
+  z-index: 1;
   display: none;
-  flex: 0 0 auto;
   align-items: center;
-  padding-left: 4px;
-  background: inherit;
+  padding: 0 2px;
+  background: #fff;
+  box-shadow: -4px 0 5px #fff;
+}
+.resource-node-datasource .resource-node-actions {
+  right: 24px;
 }
 .resource-node:hover .resource-node-actions {
   display: flex;
@@ -3190,6 +3646,10 @@ export default {
   margin: 0;
   padding: 0;
   visibility: hidden;
+}
+::v-deep .resource-tree > .el-tree-node > .el-tree-node__content > .el-tree-node__expand-icon.is-leaf {
+  width: 24px;
+  flex: 0 0 24px;
 }
 ::v-deep .resource-table-checkbox .el-checkbox__label {
   display: none;

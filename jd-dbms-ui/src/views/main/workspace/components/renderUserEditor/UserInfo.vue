@@ -36,8 +36,12 @@ export default {
     };
   },
   mounted() {
-    this.getTableSpaceList();
-    this.isLock = this.basicForm.accountStatus == 'OPEN'
+    if (this.currentConfig?.uniqueData?.dataSourceId) this.getTableSpaceList();
+    this.isLock = this.basicForm?.accountStatus === 'OPEN'
+  },
+  watch: {
+    'basicForm.accountStatus'(status) { this.isLock = status === 'OPEN'; },
+    'currentConfig.uniqueData.dataSourceId'() { this.getTableSpaceList(); },
   },
   methods: {
     showPwd(id) {
@@ -62,6 +66,7 @@ export default {
       }
     },
     getTableSpaceList() {
+      if (!this.currentConfig?.uniqueData?.dataSourceId) return;
       const params = {
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
         requestType: 0,

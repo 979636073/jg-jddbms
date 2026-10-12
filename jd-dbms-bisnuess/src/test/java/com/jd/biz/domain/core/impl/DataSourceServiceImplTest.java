@@ -69,12 +69,11 @@ public class DataSourceServiceImplTest {
     }
 
     @Test
-    public void shouldExplainDockerLoopbackConnectionFailure() {
+    public void shouldExplainLoopbackConnectionFailureWithoutDeploymentDetails() {
         String message = DataSourceServiceImpl.connectionFailureMessage(
                 "127.0.0.1", "1521", "java.net.ConnectException: Connection refused");
 
-        assertTrue(message.contains("host.docker.internal"));
-        assertTrue(message.contains("127.0.0.1:1521"));
+        assertEquals("无法连接到数据库，请检查主机地址、端口和数据库服务状态", message);
     }
 
     @Test
@@ -86,7 +85,7 @@ public class DataSourceServiceImplTest {
 
     @Test
     public void shouldExplainUnknownHostFailure() {
-        assertEquals("无法解析数据库主机：missing.database.internal",
+        assertEquals("无法解析数据库主机，请检查主机地址",
                 DataSourceServiceImpl.connectionFailureMessage(
                         "missing.database.internal", "5236", "UnknownHostException: missing.database.internal"));
     }

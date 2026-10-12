@@ -4058,12 +4058,6 @@ export default {
     display: block;
   }
   .table-custom-class {
-    .el-table__body-wrapper {
-      overflow: unset !important;
-    }
-    .el-table__header-wrapper {
-      overflow: unset !important;
-    }
     .sort_header {
       display: flex;
       align-items: center;

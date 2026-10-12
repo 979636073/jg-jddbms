@@ -97,7 +97,7 @@ async function main() {
       async closeDataSource(params) { calls.push(['close', params]); return { success: true } },
     },
     sqlServer: {}, viewServer: {}, tableServer: {}, userServer: {}, tableSpaceServer: {},
-    SqlPreview: {}, CreateOption: {}, addTableSpaceVue: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {}, database: {},
+    SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {}, database: {},
     sessionStorage: { removeItem() {} },
   }
   const { component: sidebar } = loadComponent('views/main/workspace/SideBar.vue', sideContext)

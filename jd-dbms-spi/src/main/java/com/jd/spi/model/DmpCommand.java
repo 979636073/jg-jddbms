@@ -24,6 +24,12 @@ public final class DmpCommand {
         return executable;
     }
 
+    public DmpCommand withOption(String option) {
+        List<String> arguments = new ArrayList<>(optionArguments);
+        arguments.add(option);
+        return new DmpCommand(executable, credentialArgument, arguments);
+    }
+
     public List<String> toProcessArguments() {
         List<String> arguments = new ArrayList<>(optionArguments.size() + 2);
         arguments.add(executable);

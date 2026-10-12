@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
 import com.google.common.collect.Lists;
+import com.jd.common.tools.base.wrapper.result.PageResult;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.plugin.oracle.builder.OracleSqlBuilder;
 import com.jd.plugin.oracle.type.OracleColumnDefaultValueEnum;
@@ -81,7 +82,78 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     private static String SELECT_TABLE_SQL = "SELECT A.OWNER, A.TABLE_NAME, B.COMMENTS " +
             "FROM ALL_TABLES A LEFT JOIN ALL_TAB_COMMENTS B ON  A.OWNER = B.OWNER  AND A.TABLE_NAME = B.TABLE_NAME\n" +
-            "where A.OWNER = '%s' AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS M WHERE M.OWNER = A.OWNER AND M.MVIEW_NAME = A.TABLE_NAME) ";
+             "where A.OWNER = '%s' AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS M WHERE M.OWNER = A.OWNER AND M.MVIEW_NAME = A.TABLE_NAME) ";
+
+    @Override
+    public PageResult<Table> tableDetailsPage(Connection connection, String databaseName, String schemaName,
+                                               String searchKey, int pageNo, int pageSize) {
+        String pattern = StringUtils.isBlank(searchKey) ? null : searchKey.trim().toUpperCase(Locale.ROOT);
+        String from = " FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER " +
+                "AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' " +
+                "WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS m " +
+                "WHERE m.OWNER = t.OWNER AND m.MVIEW_NAME = t.TABLE_NAME)" +
+                (pattern == null ? "" : " AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 " +
+                        "OR INSTR(UPPER(c.COMMENTS), ?) > 0)");
+        try {
+            long total;
+            try (PreparedStatement count = connection.prepareStatement("SELECT COUNT(*)" + from)) {
+                bindTablePageFilter(count, schemaName, pattern);
+                try (ResultSet rows = count.executeQuery()) {
+                    rows.next();
+                    total = rows.getLong(1);
+                }
+            }
+            String sql = "SELECT * FROM (SELECT x.*, ROWNUM rn FROM (" +
+                    "SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, " +
+                    "t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME" +
+                    from.replace("WHERE t.OWNER", "LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER " +
+                            "AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER") +
+                    " ORDER BY t.TABLE_NAME) x WHERE ROWNUM <= ?) WHERE rn > ?";
+            List<Table> tables = new ArrayList<>();
+            try (PreparedStatement page = connection.prepareStatement(sql)) {
+                int next = bindTablePageFilter(page, schemaName, pattern);
+                long offset = (long) (pageNo - 1) * pageSize;
+                page.setLong(next++, offset + pageSize);
+                page.setLong(next, offset);
+                try (ResultSet rows = page.executeQuery()) {
+                    while (rows.next()) {
+                        Table table = new Table();
+                        TableDetails details = new TableDetails();
+                        String name = rows.getString("TABLE_NAME");
+                        table.setName(name);
+                        table.setSchemaName(rows.getString("OWNER"));
+                        table.setDatabaseName(databaseName);
+                        table.setComment(rows.getString("COMMENTS"));
+                        details.setName(name);
+                        details.setSchema(table.getSchemaName());
+                        details.setDataBaseName(databaseName);
+                        details.setTableSpace(rows.getString("TABLESPACE_NAME"));
+                        details.setLastAnalyzed(rows.getString("LAST_ANALYZED"));
+                        details.setNumRows(rows.getString("NUM_ROWS"));
+                        details.setComment(table.getComment());
+                        details.setCreated(rows.getString("CREATED"));
+                        details.setLastDDL(rows.getString("LAST_DDL_TIME"));
+                        table.setTableDetails(details);
+                        tables.add(table);
+                    }
+                }
+            }
+            return PageResult.of(tables, total, pageNo, pageSize);
+        } catch (SQLException e) {
+            throw new BusinessException("table.page.query.failed", new Object[]{e.getMessage()});
+        }
+    }
+
+    private static int bindTablePageFilter(PreparedStatement statement, String schemaName, String pattern)
+            throws SQLException {
+        int next = 1;
+        statement.setString(next++, schemaName);
+        if (pattern != null) {
+            statement.setString(next++, pattern);
+            statement.setString(next++, pattern);
+        }
+        return next;
+    }
 
     @Override
     public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName) {
@@ -160,10 +232,30 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     private static String getObjectRule = "SELECT GRANTEE,OWNER,TABLE_NAME,GRANTOR,PRIVILEGE,GRANTABLE FROM DBA_TAB_PRIVS WHERE GRANTEE = '%s' AND TABLE_NAME = '%s' AND OWNER = '%s'";
 
+    @Override
+    public List<TableObjectRoleData> userObjectRoles(Connection connection, String userName) {
+        String sql = "SELECT GRANTEE,OWNER,TABLE_NAME,PRIVILEGE,GRANTABLE FROM DBA_TAB_PRIVS WHERE GRANTEE = '"
+                + userName.replace("'", "''") + "' ORDER BY OWNER,TABLE_NAME,PRIVILEGE";
+        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+            List<TableObjectRoleData> list = new ArrayList<>();
+            while (resultSet.next()) {
+                TableObjectRoleData privilege = new TableObjectRoleData();
+                privilege.setUserName(resultSet.getString("GRANTEE"));
+                privilege.setOwner(resultSet.getString("OWNER"));
+                privilege.setTableName(resultSet.getString("TABLE_NAME"));
+                privilege.setDesc(resultSet.getString("PRIVILEGE"));
+                privilege.setRule(true);
+                privilege.setToRule("YES".equalsIgnoreCase(resultSet.getString("GRANTABLE")));
+                list.add(privilege);
+            }
+            return list;
+        });
+    }
+
 
     @Override
     public List<TableObjectRoleData> allObjectRole(Connection connection, String userName, String schemaName, String tableName) {
-        String sql = String.format(getObjectRule, userName, tableName, schemaName);
+        String sql = String.format(getObjectRule, userName.replace("'", "''"), tableName.replace("'", "''"), schemaName.replace("'", "''"));
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             List<TableObjectRoleData> list = new ArrayList<>();
             while (resultSet.next()) {
@@ -178,6 +270,47 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             }
             return list;
         });
+    }
+
+    @Override
+    public Map<String, List<TableObjectRoleData>> allObjectRoles(Connection connection, String userName,
+                                                                 String schemaName, List<String> tableNames) {
+        Map<String, List<TableObjectRoleData>> result = new LinkedHashMap<>();
+        for (String tableName : tableNames) {
+            result.put(tableName, new ArrayList<>());
+        }
+        if (result.isEmpty()) {
+            return result;
+        }
+        String placeholders = String.join(",", Collections.nCopies(result.size(), "?"));
+        String sql = "SELECT GRANTEE, OWNER, TABLE_NAME, PRIVILEGE, GRANTABLE FROM DBA_TAB_PRIVS " +
+                "WHERE GRANTEE = ? AND OWNER = ? AND TABLE_NAME IN (" + placeholders + ")";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, userName);
+            statement.setString(2, schemaName);
+            int parameter = 3;
+            for (String tableName : result.keySet()) {
+                statement.setString(parameter++, tableName);
+            }
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    TableObjectRoleData privilege = new TableObjectRoleData();
+                    privilege.setDesc(rows.getString("PRIVILEGE"));
+                    privilege.setUserName(rows.getString("GRANTEE"));
+                    privilege.setOwner(rows.getString("OWNER"));
+                    privilege.setTableName(rows.getString("TABLE_NAME"));
+                    privilege.setRule(true);
+                    privilege.setToRule("YES".equalsIgnoreCase(rows.getString("GRANTABLE")));
+                    List<TableObjectRoleData> roles = result.get(privilege.getTableName());
+                    if (roles != null) {
+                        roles.add(privilege);
+                    }
+                }
+            }
+            return result;
+        } catch (SQLException e) {
+            throw new BusinessException("user.objectRole.queryFailed", new Object[]{e.getMessage()});
+        }
     }
 
 
@@ -265,6 +398,12 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             }
             return functions;
         });
+    }
+
+    @Override
+    public List<Procedure> procedures(Connection connection, String databaseName, String schemaName) {
+        // Oracle JDBC has no catalog for procedures; passing the XE service name hides them.
+        return super.procedures(connection, null, schemaName);
     }
 
     @Override
@@ -800,9 +939,9 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
 
 
-    private static String TABLE_SPACE_SQL_LIST = "select b.file_id, b.tablespace_name as name, b.file_name as path, b.bytes / (1024 * 1024 * 1024) as totalSize, \n" +
-            "(b.bytes - sum(nvl(a.bytes, 0))) / (1024 * 1024 * 1024) as useSize, sum(nvl(a.bytes, 0)) / (1024 * 1024 * 1024) as freeSize, \n" +
-            "sum(nvl(a.bytes, 0)) / (b.bytes) * 100 as usageRate, b.autoextensible, b.maxbytes, b.online_status as status,b.increment_by as autoSize \n" +
+    private static String TABLE_SPACE_SQL_LIST = "select b.file_id, b.tablespace_name as name, b.file_name as path, b.bytes / (1024 * 1024) as totalSize, \n" +
+            "(b.bytes - sum(nvl(a.bytes, 0))) / (1024 * 1024) as useSize, sum(nvl(a.bytes, 0)) / (1024 * 1024) as freeSize, \n" +
+            "sum(nvl(a.bytes, 0)) / (b.bytes) * 100 as usageRate, b.autoextensible, b.maxbytes / (1024 * 1024) as maxbytes, b.online_status as status,b.increment_by as autoSize \n" +
             "from dba_free_space a, dba_data_files b\n" +
             "where a.file_id = b.file_id";
 
@@ -829,11 +968,12 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             Table tableSpace = new Table();
             TableDetails tableDetails = new TableDetails();
             tableDetails.setTableSpace(resultSet.getString("name"));
+            tableSpace.setName(resultSet.getString("name"));
             tableDetails.setPath(resultSet.getString("path"));
             tableDetails.setStatus(resultSet.getString("status"));
             String totalSize = new BigDecimal(resultSet.getString("totalSize")).setScale(2, RoundingMode.HALF_UP).toString();
             BigDecimal bigDecimal = new BigDecimal(totalSize);
-            tableDetails.setTotalSize(bigDecimal.divide(new BigDecimal("1024"), RoundingMode.HALF_UP).toString());
+            tableDetails.setTotalSize(bigDecimal.toString());
             tableDetails.setFreeSize(new BigDecimal(resultSet.getString("freeSize")).setScale(2, RoundingMode.HALF_UP).toString());
             tableDetails.setUseSize(new BigDecimal(resultSet.getString("useSize")).setScale(2, RoundingMode.HALF_UP).toString());
             tableDetails.setUsageRate(new BigDecimal("100").subtract(new BigDecimal(resultSet.getString("usageRate")).setScale(2, RoundingMode.HALF_UP)).toString());
@@ -1153,16 +1293,21 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             String tables = "";
             for (int i = 0; i < tableName.size(); i++) {
                 if (i == tableName.size() - 1) {
-                    tables = tables + metaData.getMetaDataName(fromUser) + "." + metaData.getMetaDataName(tableName.get(i));
+                    tables = tables + metaData.getMetaDataName(tableName.get(i));
                 } else {
-                    tables = tables + metaData.getMetaDataName(fromUser) + "." + metaData.getMetaDataName(tableName.get(i)) + ",";
+                    tables = tables + metaData.getMetaDataName(tableName.get(i)) + ",";
                 }
             }
             arguments.add("file=" + file);
             arguments.add("log=" + logFileName);
-            arguments.add("tables=" + tables);
+            arguments.add("tables=(" + tables + ")");
+            arguments.add("fromuser=" + fromUser);
+            if (StringUtils.isNotBlank(toUser)) {
+                arguments.add("touser=" + toUser);
+            }
+            arguments.add("IGNORE=Y");
         }
-        if (StringUtils.isNotBlank(fromUser) && StringUtils.isNotBlank(toUser)) {
+        if (CollectionUtil.isEmpty(tableName) && StringUtils.isNotBlank(fromUser) && StringUtils.isNotBlank(toUser)) {
             arguments.clear();
             arguments.add("file=" + file);
             arguments.add("IGNORE=Y");
@@ -1186,8 +1331,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                                 String importDmp, List<String> toUserList, Boolean isWin,
                                 String dmpUser, String dmpPassword, DmpToolOptions options) {
         if (options == null || !"ORACLE_DATAPUMP".equalsIgnoreCase(options.getToolFamily())) {
-            return importDmp(connectInfo, tableName, fromUser, toUser, schemaName, file,
-                    logFileName, importDmp, toUserList, isWin, dmpUser, dmpPassword);
+            return withContentFilter(importDmp(connectInfo, tableName, fromUser, toUser, schemaName, file,
+                    logFileName, importDmp, toUserList, isWin, dmpUser, dmpPassword), options, true);
         }
         String host = connectInfo.getUrl().split("@")[1];
         String credential = dmpUser + "/" + dmpPassword + "@" + host;
@@ -1202,6 +1347,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             if (StringUtils.isNotBlank(toUser) && !fromUser.equalsIgnoreCase(toUser)) {
                 arguments.add("REMAP_SCHEMA=" + fromUser + ":" + toUser);
             }
+            arguments.add("TABLE_EXISTS_ACTION=APPEND");
         } else if (StringUtils.isNotBlank(fromUser)) {
             arguments.add("SCHEMAS=" + fromUser);
             if (StringUtils.isNotBlank(toUser) && !fromUser.equalsIgnoreCase(toUser)) {
@@ -1212,7 +1358,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
         } else {
             arguments.add("FULL=Y");
         }
-        return new DmpCommand(importDmp, credential, arguments);
+        return withContentFilter(new DmpCommand(importDmp, credential, arguments), options, true);
     }
 
     @Override
@@ -1258,8 +1404,8 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                                 File logFileName, File dmpFileName, String exportDmp, Boolean isWin,
                                 String dmpUser, String dmpPassword, DmpToolOptions options) {
         if (options == null || !"ORACLE_DATAPUMP".equalsIgnoreCase(options.getToolFamily())) {
-            return exportDmp(connectInfo, tableName, schemaName, logFileName, dmpFileName,
-                    exportDmp, isWin, dmpUser, dmpPassword);
+            return withContentFilter(exportDmp(connectInfo, tableName, schemaName, logFileName, dmpFileName,
+                    exportDmp, isWin, dmpUser, dmpPassword), options, false);
         }
         String host = connectInfo.getUrl().split("@")[1];
         String credential = dmpUser + "/" + dmpPassword + "@" + host;
@@ -1279,6 +1425,35 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
         } else {
             arguments.add("FULL=Y");
         }
-        return new DmpCommand(exportDmp, credential, arguments);
+        return withContentFilter(new DmpCommand(exportDmp, credential, arguments), options, false);
+    }
+
+    private DmpCommand withContentFilter(DmpCommand command, DmpToolOptions options, boolean importing) {
+        if (options == null) return command;
+        List<String> selected = options.getContentOptions();
+        DmpContentOptions.validate(options.getToolFamily(), importing, false, selected);
+        List<String> excluded = DmpContentOptions.excluded(selected);
+        boolean dataPump = "ORACLE_DATAPUMP".equalsIgnoreCase(options.getToolFamily());
+        for (String name : excluded) {
+            if (!dataPump) {
+                command = command.withOption(name + "=N");
+                continue;
+            }
+            switch (name) {
+                case "ROWS": command = command.withOption("CONTENT=METADATA_ONLY"); break;
+                case "INDEXES": command = command.withOption("EXCLUDE=INDEX"); break;
+                case "CONSTRAINTS":
+                    command = command.withOption("EXCLUDE=CONSTRAINT").withOption("EXCLUDE=REF_CONSTRAINT"); break;
+                case "TRIGGERS": command = command.withOption("EXCLUDE=TRIGGER"); break;
+                case "VIEWS": command = command.withOption("EXCLUDE=VIEW"); break;
+                case "PROCEDURE":
+                    command = command.withOption("EXCLUDE=PROCEDURE").withOption("EXCLUDE=FUNCTION"); break;
+                case "PACKAGE": command = command.withOption("EXCLUDE=PACKAGE"); break;
+                case "SEQUENCE": command = command.withOption("EXCLUDE=SEQUENCE"); break;
+                case "GRANTS": command = command.withOption("EXCLUDE=GRANT"); break;
+                default: throw new IllegalArgumentException("不支持的 DMP 导入导出内容：" + name);
+            }
+        }
+        return command;
     }
 }

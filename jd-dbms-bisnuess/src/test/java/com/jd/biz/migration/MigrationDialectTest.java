@@ -62,6 +62,14 @@ public class MigrationDialectTest {
         Mapping mapping = new Mapping(); mapping.source = "B"; mapping.target = "ORDER"; config.tables.add(mapping);
         try { MigrationDialect.validate(config, true); fail(); } catch (BusinessException expected) { }
     }
+    @Test public void acceptsMoreThanOneHundredObjects() {
+        Config config = config();
+        for (int index = 1; index < 125; index++) {
+            Mapping mapping = new Mapping(); mapping.source = "SOURCE_" + index; mapping.target = "TARGET_" + index; config.tables.add(mapping);
+        }
+        MigrationDialect.validate(config, true);
+        assertEquals(125, config.tables.size());
+    }
     @Test public void targetCompatibilityChecksPrecisionNullabilityAndMissingColumns() {
         Column source = column("NUMBER", 20, 2, 0), target = column("NUMBER", 20, 2, 0);
         MigrationDialect.mapType(source, "ORACLE", "DM"); MigrationDialect.mapType(target, "DM", "DM");

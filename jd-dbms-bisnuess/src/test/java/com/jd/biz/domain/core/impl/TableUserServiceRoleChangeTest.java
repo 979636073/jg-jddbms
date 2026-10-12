@@ -6,6 +6,8 @@ import com.jd.plugin.oracle.builder.OracleSqlBuilder;
 import com.jd.spi.jdbc.DefaultSqlBuilder;
 import com.jd.spi.model.TableObjectRoleData;
 import com.jd.spi.model.TableRoleData;
+import com.jd.spi.model.TableUserRole;
+import com.jd.plugin.dm.builder.DMSqlBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -18,6 +20,23 @@ import java.util.stream.Collectors;
 public class TableUserServiceRoleChangeTest {
 
     private final TableUserServiceImpl service = new TableUserServiceImpl();
+
+    @Test
+    public void shouldIncludeCurrentRolesAndObjectGrantsInUserScript() {
+        TableUserRole role = new TableUserRole();
+        role.setRole("RESOURCE");
+        role.setIsAdmin("否");
+        TableObjectRoleData select = objectRole("SELECT", true, true);
+        select.setOwner("SYSDBA");
+        select.setTableName("QA_TABLE");
+
+        String script = service.buildUserScript(new DMSqlBuilder(), "JDDBMS_QA",
+                Arrays.asList(role), Arrays.asList(select));
+
+        Assert.assertTrue(script.contains("CREATE USER \"JDDBMS_QA\" IDENTIFIED BY <PASSWORD>;"));
+        Assert.assertTrue(script.contains("GRANT \"RESOURCE\" TO \"JDDBMS_QA\";"));
+        Assert.assertTrue(script.contains("grant SELECT on \"SYSDBA\".\"QA_TABLE\" to \"JDDBMS_QA\" with grant option;"));
+    }
 
     @Test
     public void shouldOnlyPlanChangedUserRoles() {

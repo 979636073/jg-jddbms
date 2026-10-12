@@ -8,6 +8,7 @@ const page = compiler.parseComponent(source)
 assert.deepStrictEqual(compiler.compile(page.template.content).errors, [])
 const pending = []
 const migration = {
+  delete: id => { migration.deletedId = id; return Promise.resolve(true) },
   get: () => new Promise(resolve => pending.push(resolve)),
   objects: () => new Promise(resolve => pending.push(resolve)),
   objectRetryCheck: () => new Promise(resolve => pending.push(resolve)),
@@ -84,20 +85,32 @@ async function run() {
   const overLimit = Array.from({ length: 101 }, (_, i) => ({ name: 'T' + i, type: 'TABLE' }))
   migration.objects = () => Promise.resolve({ data: overLimit, total: 101 })
   await limited.selectAllObjects()
-  assert.strictEqual(limited.config.tables.length, 0, '超限必须整体拒绝，不能只选择前100个对象')
-  assert(warnings.some(message => message.includes('100')))
-  limited.objects = overLimit; limited.selectVisible()
-  assert.strictEqual(limited.config.tables.length, 0, '本页批量选择同样不应静默截断')
+  assert.strictEqual(limited.config.tables.length, 101, '超过 100 个对象时应全选全部结果')
+  assert.strictEqual(warnings.length, 0)
+  limited.objects = [{ name: 'EXTRA', type: 'TABLE' }]; limited.selectVisible()
+  assert.strictEqual(limited.config.tables.length, 102, '本页批量选择应允许超过旧的 100 个上限')
   const combined = create(); combined.config.sourceId = 1; combined.config.sourceSchema = 'ONE'
   combined.config.tables = Array.from({ length: 99 }, (_, i) => ({ source: 'OLD_' + i, sourceSchema: 'OTHER', type: 'TABLE', target: 'CUSTOM_' + i }))
   const retained = JSON.stringify(combined.config.tables)
   migration.objects = () => Promise.resolve({ data: [{ name: 'NEW1', type: 'TABLE' }, { name: 'NEW2', type: 'TABLE' }], total: 2 })
   await combined.selectAllObjects()
-  assert.strictEqual(JSON.stringify(combined.config.tables), retained, '其他模式已选对象也计入100个上限，超限不能改变原映射')
-  limited.config.scope = 'DATA'
+  assert.strictEqual(combined.config.tables.length, 101, '其他模式的已有选择与新筛选结果应合并')
+  assert.strictEqual(JSON.stringify(combined.config.tables.slice(0, 99)), retained, '批量选择不得改写已有映射')
+  combined.mappingPage = 2
+  assert.strictEqual(combined.pagedMappings.length, 50, '大量对象的映射列表应按页渲染')
+  combined.removeMapping(combined.config.tables[100])
+  assert.strictEqual(combined.config.tables.length, 100, '分页后的移除必须定位原始对象')
+  const capped = create(); capped.config.sourceId = 1; capped.config.sourceSchema = 'ONE'
+  capped.config.tables = Array.from({ length: 9999 }, (_, i) => ({ source: 'OLD_' + i, sourceSchema: 'OTHER', type: 'TABLE', target: 'OLD_' + i }))
+  capped.$message.warning = message => warnings.push(message)
+  const cappedBefore = capped.config.tables.slice()
+  await capped.selectAllObjects()
+  assert.strictEqual(capped.config.tables.length, cappedBefore.length, '达到安全上限时全选必须保持原选择')
+  assert(warnings.some(message => message.includes('10000')))
+  const dataOnly = create(); dataOnly.config.sourceId = 1; dataOnly.config.sourceSchema = 'ONE'; dataOnly.config.scope = 'DATA'
   migration.objects = () => Promise.resolve({ data: [{ name: 'T', type: 'TABLE' }, { name: 'V', type: 'VIEW' }], total: 2 })
-  await limited.selectAllObjects()
-  assert.deepStrictEqual(Array.from(limited.config.tables, row => row.source), ['T'], '仅数据范围的全选必须排除非表对象')
+  await dataOnly.selectAllObjects()
+  assert.deepStrictEqual(Array.from(dataOnly.config.tables, row => row.source), ['T'], '仅数据范围的全选必须排除非表对象')
 
   const interrupted = create(); interrupted.config.sourceId = 1; interrupted.config.sourceSchema = 'ONE'
   const errors = []; interrupted.$message.error = message => errors.push(message)
@@ -122,6 +135,14 @@ async function run() {
   calls.length = 0; migration.objects = params => { calls.push(params); return Promise.resolve({ data: [], total: 0 }) }
   await locked.selectAllObjects(); assert.strictEqual(calls.length, 0, '不可编辑任务不执行全选读取')
   migration.objects = originalObjects
+
+  const deletion = create(); deletion.tasks = [{ id: 8, status: 'MIG_DRAFT', config: { name: '旧任务' } }]
+  deletion.$confirm = () => Promise.resolve(); deletion.loadList = async () => {}
+  await deletion.deleteTask(deletion.tasks[0])
+  assert.strictEqual(migration.deletedId, 8, '删除按钮必须调用任务删除接口')
+  migration.deletedId = null
+  await deletion.deleteTask({ id: 9, status: 'MIG_RUNNING', config: { name: '执行中' } })
+  assert.strictEqual(migration.deletedId, null, '执行中的任务不能删除')
 
   assert.strictEqual(state.previewDdl({ targetDdl: 'CREATE TABLE X', afterDdl: ['COMMENT X'], postDdl: [{ sql: 'CREATE INDEX X_I' }, { sql: 'ALTER TABLE X ADD FOREIGN KEY' }] }), 'CREATE TABLE X;\n\nCOMMENT X;\n\nCREATE INDEX X_I;\n\nALTER TABLE X ADD FOREIGN KEY', '预览必须包括索引和外键，不能只展示建表')
   state.config.scope = 'DATA'; assert.strictEqual(state.previewDdl({ targetDdl: 'EXISTING DDL', postDdl: [{ sql: 'NOT EXECUTED' }] }), 'EXISTING DDL')
@@ -166,6 +187,26 @@ async function run() {
   assert(state.ready && state.assessment, '前后端字段顺序不同不应清除真实预检查结果')
   state.config.errorPolicy = 'CONTINUE_INDEPENDENT'; component.watch.config.handler.call(state)
   assert(!state.ready && !state.assessment, '错误策略改变仍必须重新预检查')
+
+  const prechecked = create(); prechecked.step = 3; prechecked.config.name = '往返配置'
+  prechecked.config.sourceId = 1; prechecked.config.targetId = 2
+  prechecked.config.sourceSchema = 'SRC'; prechecked.config.targetSchema = 'DEST'
+  prechecked.config.tables = [{ source: 'A', target: 'A', sourceSchema: 'SRC', targetSchema: '', type: 'TABLE', filters: [], columns: [], dependencies: [] }]
+  let serverConfig
+  migration.save = (id, config) => {
+    serverConfig = JSON.parse(JSON.stringify(config)); serverConfig.tables[0].targetSchema = null
+    return Promise.resolve({ id: 30, status: 'MIG_DRAFT', config: serverConfig })
+  }
+  migration.precheck = () => Promise.resolve({ id: 30, status: 'MIG_READY', config: serverConfig, assessment: { ready: true, tables: [{ source: 'A', blockers: [] }] } })
+  await prechecked.runPrecheck()
+  component.watch.config.handler.call(prechecked)
+  assert(prechecked.ready && prechecked.assessment, '服务端规范化配置后，预检查通过状态必须保持有效')
+  await prechecked.nextStep()
+  assert.strictEqual(prechecked.step, 4, '预检查通过后下一步应进入审阅执行')
+  prechecked.$confirm = () => { throw new Error('已保存配置不应提示丢弃') }
+  prechecked.loadList = async () => {}
+  await prechecked.backToList()
+  assert.strictEqual(prechecked.editing, false, '保存后的配置返回列表不应被误判为未保存')
 
   const failed = { source: '"QA"."B"', stage: 'FAILED' }, completed = { source: '"QA"."G"', stage: 'COMPLETED' }
   state.config.sourceSchema = 'QA'; state.task = { id: 8, status: 'MIG_PARTIAL', assessment: { tables: [{ sourceSchema: 'QA', source: 'B', type: 'TABLE' }, { sourceSchema: 'QA', source: 'G', type: 'TABLE' }] } }

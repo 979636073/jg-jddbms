@@ -19,6 +19,8 @@ public class DmpToolPackage implements Serializable {
     private String packagePath;
     private String originalFileName;
     private String checksum;
+    private String sourceUrl;
+    private Boolean checksumVerified;
     private Boolean enabled;
     private String status;
     private String statusMessage;

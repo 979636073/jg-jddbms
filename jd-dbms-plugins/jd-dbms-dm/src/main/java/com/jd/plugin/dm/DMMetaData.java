@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
 import com.google.common.collect.Lists;
+import com.jd.common.tools.base.wrapper.result.PageResult;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.plugin.dm.builder.DMSqlBuilder;
 import com.jd.plugin.dm.type.DMColumnDefaultEnum;
@@ -48,7 +49,117 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     }
 
     private String format(String tableName) {
-        return "\"" + tableName + "\"";
+        return "\"" + tableName.replace("\"", "\"\"") + "\"";
+    }
+
+    private static String sqlLiteral(String value) {
+        return value.replace("'", "''");
+    }
+
+    @Override
+    public PageResult<Table> tableDetailsPage(Connection connection, String databaseName, String schemaName,
+                                              String searchKey, int pageNo, int pageSize) {
+        String filter = StringUtils.isBlank(searchKey) ? "" :
+                " AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)";
+        String from = " FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c " +
+                "ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' " +
+                "WHERE t.OWNER = ?" + filter;
+        String pattern = StringUtils.isBlank(searchKey) ? null : searchKey.trim().toUpperCase(Locale.ROOT);
+        try {
+            long total;
+            try (PreparedStatement count = connection.prepareStatement("SELECT COUNT(*)" + from)) {
+                bindTablePageFilter(count, schemaName, pattern);
+                try (ResultSet rows = count.executeQuery()) {
+                    rows.next();
+                    total = rows.getLong(1);
+                }
+            }
+            List<Table> tables = new ArrayList<>();
+            String sql = "SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, " +
+                    "t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME" + from.replace("WHERE t.OWNER", 
+                    "LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME " +
+                    "AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER") +
+                    " ORDER BY t.TABLE_NAME LIMIT ? OFFSET ?";
+            try (PreparedStatement page = connection.prepareStatement(sql)) {
+                int next = bindTablePageFilter(page, schemaName, pattern);
+                page.setInt(next++, pageSize);
+                page.setLong(next, (long) (pageNo - 1) * pageSize);
+                try (ResultSet rows = page.executeQuery()) {
+                    while (rows.next()) {
+                        Table table = new Table();
+                        TableDetails details = new TableDetails();
+                        String name = rows.getString("TABLE_NAME");
+                        table.setName(name);
+                        table.setSchemaName(rows.getString("OWNER"));
+                        table.setDatabaseName(databaseName);
+                        table.setComment(rows.getString("COMMENTS"));
+                        details.setName(name);
+                        details.setSchema(table.getSchemaName());
+                        details.setDataBaseName(databaseName);
+                        details.setTableSpace(rows.getString("TABLESPACE_NAME"));
+                        details.setLastAnalyzed(rows.getString("LAST_ANALYZED"));
+                        details.setNumRows(rows.getString("NUM_ROWS"));
+                        details.setComment(table.getComment());
+                        details.setCreated(rows.getString("CREATED"));
+                        details.setLastDDL(rows.getString("LAST_DDL_TIME"));
+                        table.setTableDetails(details);
+                        tables.add(table);
+                    }
+                }
+            }
+            // NUM_ROWS is null until statistics are gathered. Count only the visible page,
+            // so a schema with thousands of tables does not trigger a schema-wide scan.
+            List<Table> missingCounts = tables.stream()
+                    .filter(table -> table.getTableDetails().getNumRows() == null)
+                    .collect(Collectors.toList());
+            if (!missingCounts.isEmpty()) {
+                String placeholders = missingCounts.stream().map(table -> "?").collect(Collectors.joining(","));
+                String countSql = "SELECT TABLE_NAME, TABLE_ROWCOUNT(OWNER, TABLE_NAME) AS ROW_COUNT " +
+                        "FROM ALL_TABLES WHERE OWNER = ? AND TABLE_NAME IN (" + placeholders + ")";
+                try (PreparedStatement counts = connection.prepareStatement(countSql)) {
+                    counts.setString(1, schemaName);
+                    for (int i = 0; i < missingCounts.size(); i++) {
+                        counts.setString(i + 2, missingCounts.get(i).getName());
+                    }
+                    Map<String, String> countByName = new HashMap<>();
+                    try (ResultSet rows = counts.executeQuery()) {
+                        while (rows.next()) {
+                            countByName.put(rows.getString("TABLE_NAME"), rows.getString("ROW_COUNT"));
+                        }
+                    }
+                    for (Table table : missingCounts) {
+                        table.getTableDetails().setNumRows(countByName.get(table.getName()));
+                    }
+                } catch (SQLException countError) {
+                    log.warn("Unable to read row counts for schema {}", schemaName, countError);
+                }
+            }
+            return PageResult.of(tables, total, pageNo, pageSize);
+        } catch (SQLException e) {
+            throw new BusinessException("table.page.query.failed", new Object[]{e.getMessage()});
+        }
+    }
+
+    private static int bindTablePageFilter(PreparedStatement statement, String schemaName, String pattern)
+            throws SQLException {
+        int next = 1;
+        statement.setString(next++, schemaName);
+        if (pattern != null) {
+            statement.setString(next++, pattern);
+            statement.setString(next++, pattern);
+        }
+        return next;
+    }
+
+    static String buildStandaloneIndexDdlSql(String schemaName, String tableName) {
+        return "SELECT DBMS_METADATA.GET_DDL('INDEX', i.INDEX_NAME, i.TABLE_OWNER) AS DDL " +
+                "FROM ALL_INDEXES i WHERE i.TABLE_OWNER = '" + sqlLiteral(schemaName) + "' " +
+                "AND i.TABLE_NAME = '" + sqlLiteral(tableName) + "' " +
+                "AND i.INDEX_TYPE NOT IN ('CLUSTER', 'VIRTUAL') " +
+                "AND NOT EXISTS (SELECT 1 FROM ALL_CONSTRAINTS c " +
+                "WHERE c.OWNER = i.TABLE_OWNER AND c.TABLE_NAME = i.TABLE_NAME " +
+                "AND c.INDEX_NAME = i.INDEX_NAME AND c.CONSTRAINT_TYPE IN ('P', 'U')) " +
+                "ORDER BY i.INDEX_NAME";
     }
 
     public String tableDDL(Connection connection, String databaseName, String schemaName, String tableName) {
@@ -56,7 +167,8 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 " (SELECT comments FROM all_tab_comments WHERE table_name = '%s' and owner='%s') AS comments, " +
                 " (SELECT dbms_metadata.get_ddl('TABLE', '%s', '%s') FROM dual) AS ddl " +
                 " FROM dual; ";
-        String selectObjectDDLSQL = String.format(sql, tableName, schemaName, tableName, schemaName);
+        String selectObjectDDLSQL = String.format(sql, sqlLiteral(tableName), sqlLiteral(schemaName),
+                sqlLiteral(tableName), sqlLiteral(schemaName));
         String tableSql = SQLExecutor.getInstance().execute(connection, selectObjectDDLSQL, resultSet -> {
             String ddl = "";
             try {
@@ -65,7 +177,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                     String comment = resultSet.getString("comments");
                     if (StringUtils.isNotBlank(comment)) {
                         return ddl + "\n" + "COMMENT ON TABLE " + format(schemaName) + "." + format(tableName) +
-                                " IS " + "'" + comment + "';";
+                                " IS " + "'" + sqlLiteral(comment) + "';";
                     }
                 }
                 return ddl;
@@ -97,7 +209,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 " AND ACC.SCHEMA_NAME = '%s' " +
                 " AND ACC.TABLE_NAME  = '%s' " +
                 " ORDER BY ATC.COLUMN_ID ";
-        String columnCommentsDDLSQL = String.format(columnCommentsSql, schemaName, tableName);
+        String columnCommentsDDLSQL = String.format(columnCommentsSql, sqlLiteral(schemaName), sqlLiteral(tableName));
         String columnSql = SQLExecutor.getInstance().execute(connection, columnCommentsDDLSQL, resultSet -> {
             try {
                 String ddl = "";
@@ -108,7 +220,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                     String comments = resultSet.getString("COMMENTS");
                     if (StringUtils.isNotBlank(comments)) {
                         ddl += "\n" + "COMMENT ON COLUMN " + format(owner) + "." + format(table) +
-                                "." + format(columnName) + " IS " + "'" + comments + "';";
+                                "." + format(columnName) + " IS " + "'" + sqlLiteral(comments) + "';";
                     }
                 }
                 return ddl;
@@ -116,8 +228,18 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 return "";
             }
         });
-        //TODO 索引SQL
-        return tableSql + columnSql;
+        String indexSql = SQLExecutor.getInstance().execute(connection,
+                buildStandaloneIndexDdlSql(schemaName, tableName), resultSet -> {
+                    StringBuilder ddl = new StringBuilder();
+                    while (resultSet.next()) {
+                        String definition = resultSet.getString("DDL");
+                        if (StringUtils.isNotBlank(definition)) {
+                            ddl.append("\n").append(definition.trim());
+                        }
+                    }
+                    return ddl.toString();
+                });
+        return tableSql + columnSql + indexSql;
     }
 
     private static String ROUTINES_SQL
@@ -273,8 +395,28 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
 
     private static String getObjectRule = "SELECT GRANTEE,OWNER,TABLE_NAME,GRANTOR,PRIVILEGE,GRANTABLE FROM ALL_TAB_PRIVS WHERE GRANTEE = '%s' AND TABLE_NAME = '%s' AND OWNER = '%s'";
     @Override
+    public List<TableObjectRoleData> userObjectRoles(Connection connection, String userName) {
+        String sql = "SELECT GRANTEE,OWNER,TABLE_NAME,PRIVILEGE,GRANTABLE FROM ALL_TAB_PRIVS WHERE GRANTEE = '"
+                + userName.replace("'", "''") + "' ORDER BY OWNER,TABLE_NAME,PRIVILEGE";
+        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+            List<TableObjectRoleData> list = new ArrayList<>();
+            while (resultSet.next()) {
+                TableObjectRoleData privilege = new TableObjectRoleData();
+                privilege.setUserName(resultSet.getString("GRANTEE"));
+                privilege.setOwner(resultSet.getString("OWNER"));
+                privilege.setTableName(resultSet.getString("TABLE_NAME"));
+                privilege.setDesc(resultSet.getString("PRIVILEGE"));
+                privilege.setRule(true);
+                privilege.setToRule("YES".equalsIgnoreCase(resultSet.getString("GRANTABLE")));
+                list.add(privilege);
+            }
+            return list;
+        });
+    }
+
+    @Override
     public List<TableObjectRoleData> allObjectRole(Connection connection, String userName, String schemaName, String tableName) {
-        String sql = String.format(getObjectRule, userName, tableName, schemaName);
+        String sql = String.format(getObjectRule, userName.replace("'", "''"), tableName.replace("'", "''"), schemaName.replace("'", "''"));
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             List<TableObjectRoleData> list = new ArrayList<>();
             while (resultSet.next()) {
@@ -289,6 +431,47 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             }
             return list;
         });
+    }
+
+    @Override
+    public Map<String, List<TableObjectRoleData>> allObjectRoles(Connection connection, String userName,
+                                                                  String schemaName, List<String> tableNames) {
+        Map<String, List<TableObjectRoleData>> result = new LinkedHashMap<>();
+        for (String name : tableNames) {
+            result.put(name, new ArrayList<>());
+        }
+        if (result.isEmpty()) {
+            return result;
+        }
+        String placeholders = String.join(",", Collections.nCopies(result.size(), "?"));
+        String sql = "SELECT GRANTEE,OWNER,TABLE_NAME,PRIVILEGE,GRANTABLE FROM ALL_TAB_PRIVS " +
+                "WHERE GRANTEE = ? AND OWNER = ? AND TABLE_NAME IN (" + placeholders + ")";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, userName);
+            statement.setString(2, schemaName);
+            int index = 3;
+            for (String name : result.keySet()) {
+                statement.setString(index++, name);
+            }
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    TableObjectRoleData role = new TableObjectRoleData();
+                    role.setDesc(rows.getString("PRIVILEGE"));
+                    role.setUserName(rows.getString("GRANTEE"));
+                    role.setOwner(rows.getString("OWNER"));
+                    role.setTableName(rows.getString("TABLE_NAME"));
+                    role.setRule(true);
+                    role.setToRule("YES".equalsIgnoreCase(rows.getString("GRANTABLE")));
+                    List<TableObjectRoleData> roles = result.get(role.getTableName());
+                    if (roles != null) {
+                        roles.add(role);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new BusinessException("user.objectRole.query.failed", new Object[]{e.getMessage()});
+        }
+        return result;
     }
 
     @Override
@@ -450,6 +633,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             Table tableSpace = new Table();
             TableDetails tableDetails = new TableDetails();
             tableDetails.setTableSpace(resultSet.getString("name"));
+            tableSpace.setName(resultSet.getString("name"));
             tableDetails.setPath(resultSet.getString("path"));
             tableDetails.setStatus(resultSet.getString("online_status"));
             String totalSize = new BigDecimal(resultSet.getString("totalSize")).setScale(2, RoundingMode.HALF_UP).toString();
@@ -529,7 +713,8 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             arguments.add("TABLESPACE=N");
             arguments.add("DROP=N");
             arguments.add("PARALLEL=10");
-            arguments.add("file=" + dmpFileName);
+            arguments.add("DIRECTORY=" + dmpFileName.getParent());
+            arguments.add("file=" + dmpFileName.getName());
             arguments.add("log=" + logFileName);
             arguments.add("tables=" + tables);
             arguments.add("LOG_WRITE=Y");
@@ -538,7 +723,8 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             arguments.add("TABLESPACE=N");
             arguments.add("DROP=N");
             arguments.add("PARALLEL=10");
-            arguments.add("file=" + dmpFileName);
+            arguments.add("DIRECTORY=" + dmpFileName.getParent());
+            arguments.add("file=" + dmpFileName.getName());
             arguments.add("log=" + logFileName);
             if (schemaName.contains(",")) {
                 String[] strings = schemaName.split(",");
@@ -554,12 +740,22 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             arguments.add("TABLESPACE=N");
             arguments.add("DROP=N");
             arguments.add("PARALLEL=10");
-            arguments.add("file=" + dmpFileName);
+            arguments.add("DIRECTORY=" + dmpFileName.getParent());
+            arguments.add("file=" + dmpFileName.getName());
             arguments.add("log=" + logFileName);
             arguments.add("LOG_WRITE=Y");
         }
 
         return new DmpCommand(exportDmp, credential, arguments);
+    }
+
+    @Override
+    public DmpCommand exportDmp(ConnectInfo connectInfo, List<String> tableName, String schemaName,
+                                File logFileName, File dmpFileName, String exportDmp, Boolean isWin,
+                                String dmpUser, String dmpPassword, DmpToolOptions options) {
+        DmpCommand command = exportDmp(connectInfo, tableName, schemaName, logFileName, dmpFileName,
+                exportDmp, isWin, dmpUser, dmpPassword);
+        return withContentFilter(command, options);
     }
 
     @Override
@@ -579,14 +775,17 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                     tables = tables + metaData.getMetaDataName(fromUser) + "." + metaData.getMetaDataName(tableName.get(i)) + ",";
                 }
             }
-            arguments.add("file=" + file);
+            arguments.add("DIRECTORY=" + file.getParent());
+            arguments.add("file=" + file.getName());
             arguments.add("log=" + logFileName);
             arguments.add("PARALLEL=10");
             arguments.add("tables=" + tables);
             arguments.add("REMAP_SCHEMA=" + fromUser + ":" + toUser);
+            arguments.add("TABLE_EXISTS_ACTION=APPEND");
         }
         if (StringUtils.isNotBlank(fromUser) && CollectionUtil.isEmpty(tableName) && CollUtil.isEmpty(fromUserList)) {
-            arguments.add("file=" + file);
+            arguments.add("DIRECTORY=" + file.getParent());
+            arguments.add("file=" + file.getName());
             arguments.add("IGNORE=Y");
             arguments.add("PARALLEL=10");
             arguments.add("log=" + logFileName);
@@ -594,7 +793,8 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             arguments.add("touser=" + toUser);
         }
         if (CollUtil.isNotEmpty(fromUserList)) {
-            arguments.add("file=" + file);
+            arguments.add("DIRECTORY=" + file.getParent());
+            arguments.add("file=" + file.getName());
             arguments.add("log=" + logFileName);
             arguments.add("PARALLEL=10");
             arguments.add("SCHEMAS=" + fromUser);
@@ -612,6 +812,23 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             }
         }
         return new DmpCommand(importDmp, credential, arguments);
+    }
+
+    @Override
+    public DmpCommand importDmp(ConnectInfo connectInfo, List<String> tableName, String fromUser,
+                                String toUser, String schemaName, File file, File logFileName,
+                                String importDmp, List<String> fromUserList, Boolean isWin,
+                                String dmpUser, String dmpPassword, DmpToolOptions options) {
+        DmpCommand command = importDmp(connectInfo, tableName, fromUser, toUser, schemaName,
+                file, logFileName, importDmp, fromUserList, isWin, dmpUser, dmpPassword);
+        return withContentFilter(command, options);
+    }
+
+    private DmpCommand withContentFilter(DmpCommand command, DmpToolOptions options) {
+        if (options == null) return command;
+        List<String> excluded = DmpContentOptions.excluded(options.getContentOptions());
+        if (excluded.isEmpty()) return command;
+        return command.withOption("EXCLUDE=(" + String.join(",", excluded) + ")");
     }
 
     private static String INDEX_SQL = "SELECT i.TABLE_NAME, i.STATUS, i.INDEX_TYPE, i.INDEX_NAME, i.UNIQUENESS ,c.COLUMN_NAME, c.COLUMN_POSITION, c.DESCEND, cons.CONSTRAINT_TYPE, cons.CONSTRAINT_NAME FROM ALL_INDEXES i LEFT JOIN ALL_IND_COLUMNS c ON i.INDEX_NAME = c.INDEX_NAME AND i.TABLE_NAME = c.TABLE_NAME AND i.TABLE_OWNER = c.TABLE_OWNER LEFT JOIN ALL_CONSTRAINTS cons ON i.INDEX_NAME = cons.INDEX_NAME AND i.TABLE_NAME = cons.TABLE_NAME AND i.TABLE_OWNER = cons.OWNER WHERE i.TABLE_OWNER = '%s' AND i.TABLE_NAME = '%s' ORDER BY i.INDEX_NAME, c.COLUMN_POSITION;";

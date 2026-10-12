@@ -188,11 +188,20 @@
     </section>
 
     <section class="result-panel">
+      <div v-if="hasCompared" class="report-toolbar">
+        <div>
+          <strong>对比报告</strong>
+          <span>包含差异明细、两侧字段属性和其他结构对象；浏览器可将报告保存为 PDF。</span>
+        </div>
+        <el-button size="small" icon="el-icon-document" @click="exportPdf">导出 PDF</el-button>
+      </div>
       <whole-database-result
         v-if="hasCompared && compareMode === 'database'"
         :rows="databaseRows"
       />
       <field-compare-result v-else-if="hasCompared" :rows="resultRows" />
+
+      <schema-object-result v-if="hasCompared" :rows="objectRows" :issues="inventoryIssues" />
 
       <div v-else class="empty-state">
         <i class="el-icon-document-copy" />
@@ -208,6 +217,8 @@ import connectionServer from '@/api/main/connection'
 import tableServer from '@/api/main/table'
 import FieldCompareResult from './components/FieldCompareResult'
 import WholeDatabaseResult from './components/WholeDatabaseResult'
+import SchemaObjectResult from './components/SchemaObjectResult'
+import { buildCompareReport } from './report'
 
 function createSide() {
   return {
@@ -232,12 +243,35 @@ const COMPARE_FIELDS = [
   'defaultValue',
   'primaryKey',
   'autoIncrement',
-  'comment'
+  'comment',
+  'ordinalPosition'
 ]
+
+const FIELD_LABELS = {
+  dataType: '数据类型', columnType: '完整类型', columnSize: '长度',
+  decimalDigits: '小数位', nullable: '是否可空', defaultValue: '默认值',
+  primaryKey: '是否主键', autoIncrement: '是否自增', comment: '注释',
+  ordinalPosition: '字段顺序'
+}
+
+function normalizedBoolean(value) {
+  if (value === null || value === undefined || value === '') return false
+  return value === true || value === 1 || ['1', 'TRUE', 'Y', 'YES'].includes(String(value).trim().toUpperCase())
+}
+
+function completeType(column) {
+  const explicit = String(column.columnType || '').trim()
+  if (explicit) return explicit.replace(/\s+/g, ' ').replace(/\s*([(),])\s*/g, '$1').toUpperCase()
+  const type = String(column.dataType || '').trim().toUpperCase()
+  const size = column.columnSize === null || column.columnSize === undefined ? '' : String(column.columnSize).trim()
+  if (!size || size === '0') return type
+  const decimal = column.decimalDigits === null || column.decimalDigits === undefined ? '' : String(column.decimalDigits).trim()
+  return `${type}(${size}${decimal && decimal !== '0' ? `,${decimal}` : ''})`
+}
 
 export default {
   name: 'TableCompare',
-  components: { FieldCompareResult, WholeDatabaseResult },
+  components: { FieldCompareResult, WholeDatabaseResult, SchemaObjectResult },
   data() {
     return {
       compareMode: 'table',
@@ -247,6 +281,8 @@ export default {
       target: createSide(),
       resultRows: [],
       databaseRows: [],
+      objectRows: [],
+      inventoryIssues: [],
       comparing: false,
       hasCompared: false,
       wholeProgress: {
@@ -416,8 +452,30 @@ export default {
     resetResult() {
       this.resultRows = []
       this.databaseRows = []
+      this.objectRows = []
+      this.inventoryIssues = []
       this.hasCompared = false
       this.wholeProgress = { stage: 'tables', completed: 0, total: 0 }
+    },
+    exportPdf() {
+      const report = buildCompareReport({
+        mode: this.compareMode,
+        sourcePath: this.selectionPath('source'),
+        targetPath: this.selectionPath('target'),
+        fieldRows: this.resultRows,
+        tableRows: this.databaseRows,
+        objectRows: this.objectRows,
+        issues: this.inventoryIssues
+      })
+      const tab = window.open('', '_blank')
+      if (!tab) {
+        this.$message.error('浏览器阻止了报告窗口，请允许本页面打开新标签页后重试')
+        return
+      }
+      tab.document.open()
+      tab.document.write(report)
+      tab.document.close()
+      tab.focus()
     },
     async compare() {
       if (!this.canCompare) return
@@ -427,6 +485,12 @@ export default {
           await this.compareWholeDatabase()
         } else {
           await this.compareSingleTable()
+        }
+        try {
+          await this.compareObjects()
+        } catch (error) {
+          this.objectRows = []
+          this.inventoryIssues = [error.message || '其他结构对象清单读取失败，无法判定一致性']
         }
         this.hasCompared = true
       } catch (error) {
@@ -465,7 +529,7 @@ export default {
         ])
         const sourceColumns = Array.isArray(sourceColumnsRes.data) ? sourceColumnsRes.data : []
         const targetColumns = Array.isArray(targetColumnsRes.data) ? targetColumnsRes.data : []
-        row.fieldRows = this.buildRows(sourceColumns, targetColumns, true)
+        row.fieldRows = this.buildRows(sourceColumns, targetColumns)
         row.counts = this.countFieldDifferences(row.fieldRows)
         row.status = row.counts.changed || row.counts.sourceOnly || row.counts.targetOnly ? 'changed' : 'same'
         this.wholeProgress.completed += 1
@@ -473,7 +537,7 @@ export default {
       this.databaseRows = rows
     },
     buildDatabaseRows(sourceTables, targetTables) {
-      const normalizeName = name => String(name || '').toLocaleUpperCase()
+      const normalizeName = name => String(name || '')
       const targetMap = new Map(targetTables.map(table => [normalizeName(table.name), table]))
       const sourceNames = new Set(sourceTables.map(table => normalizeName(table.name)))
       const rows = sourceTables.map(sourceTable => {
@@ -509,6 +573,42 @@ export default {
         return counts
       }, { changed: 0, sourceOnly: 0, targetOnly: 0 })
     },
+    async compareObjects() {
+      const [source, target] = await Promise.all([
+        tableServer.getSchemaInventory(this.buildRequest('source')),
+        tableServer.getSchemaInventory(this.buildRequest('target'))
+      ])
+      if (!source.success || !target.success) throw new Error(source.errorMessage || target.errorMessage || '对象清单读取失败')
+      const left = source.data || {}
+      const right = target.data || {}
+      const issues = []
+      ;[['源库', left], ['目标库', right]].forEach(([label, inventory]) => {
+        Object.entries(inventory.errors || {}).forEach(([kind, message]) => issues.push(`${label} ${kind} 无法读取：${message}`))
+        if ((inventory.truncated || []).length) issues.push(`${label} ${inventory.truncated.join('、')} 超过单次上限，请缩小范围`)
+      })
+      this.inventoryIssues = issues
+      const permitted = item => this.compareMode === 'database' ||
+        ['INDEX', 'CONSTRAINT', 'TRIGGER'].includes(item.kind) &&
+        item.name.startsWith(this.source.tableName + '.')
+      const leftMap = new Map((left.objects || []).filter(permitted).map(item => [`${item.kind}|${item.name}`, item]))
+      const rightMap = new Map((right.objects || []).filter(item => this.compareMode === 'database' ||
+        ['INDEX', 'CONSTRAINT', 'TRIGGER'].includes(item.kind) &&
+        item.name.startsWith(this.target.tableName + '.')).map(item => [`${item.kind}|${item.name}`, item]))
+      const keys = new Set([...leftMap.keys(), ...rightMap.keys()])
+      const failedKinds = new Set([
+        ...Object.keys(left.errors || {}), ...Object.keys(right.errors || {}),
+        ...(left.truncated || []), ...(right.truncated || [])
+      ])
+      this.objectRows = [...keys].sort().map(key => {
+        const sourceObject = leftMap.get(key)
+        const targetObject = rightMap.get(key)
+        const kind = key.split('|')[0]
+        const status = failedKinds.has(kind) ? 'unknown' : !sourceObject ? 'target-only'
+          : !targetObject ? 'source-only'
+            : sourceObject.fingerprint === targetObject.fingerprint ? 'same' : 'changed'
+        return { key, kind, name: (sourceObject || targetObject).name, source: sourceObject, target: targetObject, status }
+      })
+    },
     async runWithConcurrency(items, limit, worker) {
       let nextIndex = 0
       const runNext = async () => {
@@ -530,13 +630,19 @@ export default {
         if (!target) {
           return { columnName: source.name, source, target: null, status: 'source-only', changedFields: [] }
         }
-        const changedFields = COMPARE_FIELDS.filter(field => !this.sameValue(source[field], target[field]))
+        const changedFields = COMPARE_FIELDS.filter(field => !this.sameValue(source[field], target[field], field, source, target))
         return {
           columnName: source.name,
           source,
           target,
           status: changedFields.length ? 'changed' : 'same',
-          changedFields
+          changedFields,
+          changeDetails: changedFields.map(field => ({
+            field,
+            label: FIELD_LABELS[field],
+            source: this.displayFieldValue(field, source),
+            target: this.displayFieldValue(field, target)
+          }))
         }
       })
       targetColumns.forEach(target => {
@@ -546,9 +652,30 @@ export default {
       })
       return rows
     },
-    sameValue(left, right) {
-      const normalize = value => value === null || value === undefined ? '' : String(value).trim()
-      return normalize(left) === normalize(right)
+    normalizedFieldValue(field, column) {
+      if (field === 'columnType') return completeType(column)
+      const value = column[field]
+      if (['nullable', 'primaryKey', 'autoIncrement'].includes(field)) return normalizedBoolean(value)
+      if (['columnSize', 'decimalDigits'].includes(field)) {
+        if (value === null || value === undefined || value === '' || Number(value) === 0) return ''
+        return String(value).trim()
+      }
+      if (field === 'dataType') return String(value || '').trim().toUpperCase()
+      if (field === 'ordinalPosition' && value !== null && value !== undefined && value !== '' && !isNaN(Number(value))) return Number(value)
+      return value === null || value === undefined ? '' : String(value).trim()
+    },
+    sameValue(left, right, field, source, target) {
+      if (!field) {
+        const normalize = value => value === null || value === undefined ? '' : String(value).trim()
+        return normalize(left) === normalize(right)
+      }
+      return this.normalizedFieldValue(field, source) === this.normalizedFieldValue(field, target)
+    },
+    displayFieldValue(field, column) {
+      const value = this.normalizedFieldValue(field, column)
+      if (field === 'nullable') return value ? '可为空' : '不可为空'
+      if (['primaryKey', 'autoIncrement'].includes(field)) return value ? '是' : '否'
+      return value === '' ? '—' : String(value)
     },
     selectionPath(side) {
       const selection = this[side]
@@ -745,6 +872,21 @@ export default {
   min-height: 300px;
   margin-top: 16px;
   overflow: hidden;
+}
+
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 20px;
+  border: 1px solid #dce6f3;
+  border-radius: 6px;
+  background: #f6faff;
+
+  div { display: flex; flex-direction: column; gap: 3px; }
+  strong { color: #243b53; font-size: 14px; }
+  span { color: #68778a; font-size: 12px; }
 }
 
 .empty-state {

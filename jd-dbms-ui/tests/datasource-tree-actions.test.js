@@ -28,7 +28,7 @@ async function main() {
         return { success: true }
       },
     },
-    SqlPreview: {}, CreateOption: {}, addTableSpaceVue: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {},
+    SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {},
     database: {}, uuidv4() { return 'node-id' }, copyText() {},
     window: { innerWidth: 1280, innerHeight: 720 },
   }
@@ -85,7 +85,7 @@ async function main() {
     preventDefault() {},
   }, { id: 'node' })
   assert.strictEqual(menuState.contextMenu_left, 1052, '右键菜单不应超出视口右边界')
-  assert.strictEqual(menuState.contextMenu_top, 406, '右键菜单不应超出视口底边界')
+  assert.strictEqual(menuState.contextMenu_top, 312, '右键菜单不应超出视口底边界')
   assert.strictEqual(menuState.contextMenuVisible, true)
   assert.strictEqual(menuState.context_current_item.name, 'T_A')
 

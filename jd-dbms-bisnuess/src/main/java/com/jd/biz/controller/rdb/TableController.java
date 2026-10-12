@@ -6,6 +6,7 @@ import cn.hutool.core.lang.Validator;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.jd.spi.util.JdbcUtils;
 import com.google.common.collect.Lists;
 import com.jd.biz.aspect.ConnectionInfoAspect;
 import com.jd.biz.controller.rdb.converter.RdbWebConverter;
@@ -42,6 +43,7 @@ import com.jd.spi.model.*;
 import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.ConnectInfo;
 import com.jd.spi.sql.SQLExecutor;
+import com.jd.spi.util.SqlUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -576,7 +578,8 @@ public class TableController {
                     table.setIndexList(collect);
                 }
                 String sqlStr = Chat2DBContext.getSqlBuilder().buildCreateTableSql(table);
-                String[] sqlArr = sqlStr.split(";");
+                List<String> sqlArr = SqlUtils.parse(sqlStr,
+                        JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType()));
                 for(String sql:sqlArr){
                     if (StringUtils.isNotBlank(sql)){
                         SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(),sql, new DefaultValueHandler());

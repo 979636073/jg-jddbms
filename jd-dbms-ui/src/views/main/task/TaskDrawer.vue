@@ -20,7 +20,7 @@
         <el-table-column label="任务详情与实时进度" min-width="270">
           <template slot-scope="scope">
             <div class="task-name">{{ scope.row.taskName || scope.row.taskType || '未命名任务' }}</div>
-            <div class="task-type">{{ scope.row.taskType || '后台任务' }}</div>
+            <div class="task-type">{{ typeText(scope.row.taskType) }}</div>
             <template v-if="isRunning(scope.row.taskStatus)">
               <el-progress :percentage="progress(scope.row.taskProgress)" :stroke-width="14" :text-inside="true" status="success" />
               <div class="task-running"><i class="el-icon-loading" /> {{ taskMessage(scope.row) || statusText(scope.row.taskStatus) }}</div>
@@ -62,12 +62,20 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="migration-heading">跨库数据迁移 <el-button type="text" size="mini" @click="openMigrationList">查看全部</el-button></div>
+      <div v-for="task in migrationTasks" :key="task.id" class="migration-task">
+        <el-button type="text" size="mini" @click="openMigration(task)">{{ task.config && task.config.name }}</el-button>
+        <el-tag size="mini" :type="migrationStatusType(task.status)">{{ migrationStatus(task.status) }}</el-tag>
+        <span v-if="task.status === 'MIG_RUNNING'">已提交 {{ task.committedRows || 0 }} 行</span>
+      </div>
     </div>
   </el-drawer>
 </template>
 
 <script>
 import taskApi, { downloadTaskFile } from '@/api/main/task'
+import migration from '@/api/main/migration'
+import { notifyResourceTaskStatus } from '@/utils/resourceMutation'
 
 export default {
   name: 'TaskDrawer',
@@ -78,6 +86,7 @@ export default {
     return {
       loading: false,
       list: [],
+      migrationTasks: [],
       refreshTimer: null
     }
   },
@@ -100,9 +109,11 @@ export default {
     },
     getList() {
       this.loading = true
+      this.loadMigrations()
       taskApi.getTaskList({ pageNo: 1, pageSize: 10 }).then(res => {
         const page = res.data || {}
         this.list = page.data || []
+        this.list.forEach(notifyResourceTaskStatus)
         this.$emit('running-count', this.list.filter(item => this.isRunning(item.taskStatus)).length)
         this.syncRefresh()
       }).finally(() => {
@@ -110,7 +121,7 @@ export default {
       })
     },
     syncRefresh() {
-      if (this.list.some(item => this.isRunning(item.taskStatus))) {
+      if (this.list.some(item => this.isRunning(item.taskStatus)) || this.migrationTasks.some(item => ['MIG_RUNNING', 'MIG_CANCEL_REQUESTED'].includes(item.status))) {
         if (!this.refreshTimer) {
           this.refreshTimer = setInterval(() => this.getList(), 1000)
         }
@@ -158,8 +169,21 @@ export default {
       return ''
     },
     download(row) {
-      downloadTaskFile(row.id, row.taskType)
+      downloadTaskFile(row.id, row.taskType, row)
     },
+    async loadMigrations() {
+      try {
+        const result = await migration.list({ page: 1, size: 5 })
+        this.migrationTasks = result.data || []
+        this.$emit('running-count', this.list.filter(item => this.isRunning(item.taskStatus)).length + this.migrationTasks.filter(item => ['MIG_RUNNING', 'MIG_CANCEL_REQUESTED'].includes(item.status)).length)
+        this.syncRefresh()
+      } catch (_) { this.migrationTasks = [] }
+    },
+    migrationStatus(status) { return ({ MIG_DRAFT: '待配置', MIG_READY: '待确认', MIG_BLOCKED: '预检查阻断', MIG_RUNNING: '执行中', MIG_COMPLETED: '已完成', MIG_FAILED: '失败', MIG_PARTIAL: '部分完成', MIG_CANCELLED: '已取消' })[status] || status },
+    migrationStatusType(status) { return status === 'MIG_COMPLETED' ? 'success' : ['MIG_FAILED', 'MIG_BLOCKED'].includes(status) ? 'danger' : 'info' },
+    openMigration(task) { window.open(`/data-migration/index?taskId=${encodeURIComponent(task.id)}`, '_blank') },
+    openMigrationList() { window.open('/data-migration/index', '_blank') },
+    typeText(type) { return ({ TABLE_EXPORT: '表文件导出', TABLE_IMPORT: '表文件导入', SCHEMA_SQL_EXPORT: '模式 SQL 导出', SCHEMA_SQL_IMPORT: '模式 SQL 导入', DOWNLOAD_TABLE_STRUCTURE: 'DMP 导出', UPLOAD_TABLE_STRUCTURE: 'DMP 导入' })[type] || type || '后台任务' },
     clearTask(row) {
       this.$confirm('仅清除任务记录，不会删除已导出的文件。确定继续吗？', '清除任务', { type: 'warning' }).then(() => {
         return taskApi.clearTask(row.id)
@@ -205,8 +229,13 @@ export default {
 </script>
 
 <style scoped lang="scss">
+.migration-heading { display: flex; justify-content: space-between; align-items: center; margin: 16px 0 7px; font-weight: 600; }
+.migration-task { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #edf0f4; }
+.migration-task > span:last-child { color: #6d7788; font-size: 12px; }
 .task-drawer {
   padding: 0 15px 15px;
+  max-height: calc(100vh - 70px);
+  overflow-y: auto;
 
   &__toolbar {
     display: flex;

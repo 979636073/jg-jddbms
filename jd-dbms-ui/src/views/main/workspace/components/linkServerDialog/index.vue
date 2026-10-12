@@ -54,9 +54,6 @@
           <el-checkbox v-model="formData.isSave">保存密码</el-checkbox>
         </el-form-item>
       </el-form>
-      <el-alert v-if="!isReadonly && isLoopbackHost" title="Docker 部署提示"
-        description="127.0.0.1 或 localhost 指向后端容器；连接宿主机数据库请使用 host.docker.internal。"
-        type="warning" show-icon :closable="false" />
     </div>
     <div slot="footer" class="dialog-footer">
       <el-button :disabled="connecting" @click="handleClose">取消</el-button>
@@ -121,9 +118,6 @@ export default {
       return this.isReadonly ? "确认连接以下数据源，连接成功后加载数据库。连接信息仅供查看。"
         : this.mode === "edit" ? "修改连接配置并保存。密码留空时保留原密码。"
         : "填写新的连接信息，保存并连接后显示在左侧树中。";
-    },
-    isLoopbackHost() {
-      return ["127.0.0.1", "localhost"].includes((this.formData.host || "").toLowerCase());
     },
   },
   methods: {

@@ -85,6 +85,15 @@ public interface MetaData {
     PageResult<Table> tables(Connection connection, String databaseName, String schemaName, String tableNamePattern, int pageNo, int pageSize);
 
     /**
+     * Server-side table paging when the database plugin supports it. A null result
+     * asks the caller to use the existing metadata implementation.
+     */
+    default PageResult<Table> tableDetailsPage(Connection connection, String databaseName, String schemaName,
+                                               String searchKey, int pageNo, int pageSize) {
+        return null;
+    }
+
+    /**
      * Querying view information.
      *
      * @param connection
@@ -474,4 +483,18 @@ public interface MetaData {
     Set<TableIndex> getCheckSQl(Connection connection, String schemaName, String tableName);
 
     List<TableObjectRoleData> allObjectRole(Connection connection, String userName, String schemaName, String tableName);
+
+    default Map<String, List<TableObjectRoleData>> allObjectRoles(Connection connection, String userName,
+                                                                  String schemaName, List<String> tableNames) {
+        Map<String, List<TableObjectRoleData>> result = new java.util.LinkedHashMap<>();
+        for (String tableName : tableNames) {
+            result.put(tableName, allObjectRole(connection, userName, schemaName, tableName));
+        }
+        return result;
+    }
+
+    /** Object privileges granted to a user, across all schemas and objects. */
+    default List<TableObjectRoleData> userObjectRoles(Connection connection, String userName) {
+        return java.util.Collections.emptyList();
+    }
 }

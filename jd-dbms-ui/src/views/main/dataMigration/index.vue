@@ -14,7 +14,7 @@
         <el-table-column label="状态" width="120"><template slot-scope="s"><el-tag size="small" :type="statusType(s.row.status)">{{ statusLabel(s.row.status) }}</el-tag></template></el-table-column>
         <el-table-column label="已确认提交行数" width="140" prop="committedRows" />
         <el-table-column label="创建时间" min-width="150"><template slot-scope="s">{{ time(s.row.createdAt) }}</template></el-table-column>
-        <el-table-column label="操作" width="140"><template slot-scope="s"><el-button type="text" @click="openTask(s.row.id)">查看</el-button><el-button type="text" @click="copyTask(s.row.id)">复制配置</el-button></template></el-table-column>
+        <el-table-column label="操作" width="190"><template slot-scope="s"><el-button type="text" @click="openTask(s.row.id)">查看</el-button><el-button type="text" @click="copyTask(s.row.id)">复制配置</el-button><el-button type="text" class="delete-action" :disabled="activeStatuses.includes(s.row.status) || busy" @click="deleteTask(s.row)">删除</el-button></template></el-table-column>
       </el-table></div>
       <el-pagination class="pagination" :current-page.sync="taskPage" :page-size="20" :total="taskTotal" layout="total, prev, pager, next" @current-change="loadList()" />
     </section>
@@ -39,9 +39,9 @@
         </template>
 
         <template v-if="step === 1">
-          <h2>选择对象 <span class="heading-note">已选 {{ config.tables.length }} / 100 个对象</span></h2>
+          <h2>选择对象 <span class="heading-note">已选 {{ config.tables.length }} 个对象</span></h2>
           <p class="muted">切换模式、搜索和翻页均保留选择。普通表自动映射；序列、视图、同义词和程序对象必须在下一步逐个审阅目标定义。</p>
-          <div class="toolbar"><el-select v-model="config.sourceSchema" size="small" filterable placeholder="源业务模式" :disabled="!editable || selectingAll" @change="sourceSchemaChanged"><el-option v-for="schema in schemas('source')" :key="schema.name" :value="schema.name" :label="schema.name" /></el-select><el-input v-model="objectSearch" size="small" clearable placeholder="搜索对象名称" :disabled="selectingAll" @keyup.enter.native="loadObjects(true)" @clear="loadObjects(true)" /><el-button size="small" :disabled="!config.sourceSchema || selectingAll" @click="loadObjects(true)">查询</el-button><el-button size="small" :loading="selectingAll" :disabled="!editable || objectLoading || !objectTotal" @click="selectAllObjects">全选筛选结果</el-button><el-button size="small" :disabled="!editable || selectingAll || objectLoading || !objects.length" @click="selectVisible">选择本页</el-button><el-button size="small" :disabled="!editable || selectingAll || !config.tables.length" @click="config.tables = []">清空选择</el-button></div>
+          <div class="toolbar"><el-select v-model="config.sourceSchema" size="small" filterable placeholder="源业务模式" :disabled="!editable || selectingAll" @change="sourceSchemaChanged"><el-option v-for="schema in schemas('source')" :key="schema.name" :value="schema.name" :label="schema.name" /></el-select><el-input v-model="objectSearch" size="small" clearable placeholder="搜索对象名称" :disabled="selectingAll" @keyup.enter.native="loadObjects(true)" @clear="loadObjects(true)" /><el-button size="small" :disabled="!config.sourceSchema || selectingAll" @click="loadObjects(true)">查询</el-button><el-button size="small" :loading="selectingAll" :disabled="!editable || objectLoading || !objectTotal" @click="selectAllObjects">全选筛选结果</el-button><el-button size="small" :disabled="!editable || selectingAll || objectLoading || !objects.length" @click="selectVisible">选择本页</el-button><el-button size="small" :disabled="!editable || selectingAll || !config.tables.length" @click="clearSelection">清空选择</el-button></div>
           <div class="table-region"><el-table :data="objects" height="100%" size="small" v-loading="objectLoading" empty-text="选择源模式后查询对象">
             <el-table-column width="48"><template slot-scope="s"><el-checkbox :value="selected(s.row.name, s.row.type)" :disabled="!editable || selectingAll || !supportedObject(s.row.type)" :aria-label="'选择 ' + s.row.name" @change="toggleObject(s.row, $event)" /></template></el-table-column>
             <el-table-column label="对象名称" prop="name" min-width="220" /><el-table-column label="类型" prop="type" width="180" /><el-table-column label="执行范围"><template slot-scope="s">{{ s.row.type === 'TABLE' ? '普通表，预检查确认支持范围' : supportedObject(s.row.type) ? '人工确认目标 DDL / 依赖 / 编译校验' : '专项适配，当前不可执行' }}</template></el-table-column>
@@ -56,14 +56,15 @@
               <el-tab-pane label="对象映射" name="objects">
             <div class="default-rules"><el-form-item label="默认目标业务模式"><el-select v-model="config.targetSchema" filterable placeholder="选择已有目标模式" @change="targetSchemaChanged"><el-option v-for="schema in schemas('target')" :key="schema.name" :value="schema.name" :label="schema.name" /></el-select></el-form-item><el-form-item label="默认迁移范围"><el-select v-model="config.scope" @change="config.conflict = 'STOP'"><el-option value="ALL" label="结构 + 数据" /><el-option value="STRUCTURE" label="仅结构" /><el-option value="DATA" label="仅数据 · 预建兼容表" /></el-select></el-form-item><el-form-item label="同名对象 / 数据处理"><el-select v-model="config.conflict"><el-option value="STOP" :label="config.scope === 'DATA' ? '空目标写入 · 推荐' : '同名阻断 · 推荐'" /><el-option v-if="config.scope !== 'DATA'" value="SKIP" label="跳过 · 不计为全部验收" /><el-option v-if="config.scope === 'DATA'" value="APPEND" label="追加 · 高风险，合并内容校验" /><el-option v-if="config.scope === 'DATA'" value="CLEAR" label="清空后写入 · 高风险" /><el-option v-if="config.scope !== 'DATA'" value="REBUILD" label="删除重建 · 高风险，不级联" /></el-select></el-form-item></div>
             <p class="mapping-note muted">未设置单对象策略时继承默认规则；字段、筛选及 DDL 通过“对象配置”编辑。批次、并发等参数在“执行设置”。</p>
-            <div class="table-region"><el-table :data="config.tables" height="100%" size="small" empty-text="请先选择源对象">
+            <div class="table-region"><el-table :data="pagedMappings" height="100%" size="small" empty-text="请先选择源对象">
               <el-table-column label="源模式 / 对象" min-width="210"><template slot-scope="s">{{ s.row.sourceSchema || config.sourceSchema }}.{{ s.row.source }}<p class="muted">{{ s.row.type || 'TABLE' }}</p></template></el-table-column>
               <el-table-column label="目标模式" min-width="180"><template slot-scope="s"><el-select v-model="s.row.targetSchema" size="small" clearable filterable placeholder="使用默认目标模式" @change="s.row.ddlConfirmed = false"><el-option v-for="schema in schemas('target')" :key="schema.name" :value="schema.name" :label="schema.name" /></el-select></template></el-table-column>
               <el-table-column label="目标对象" min-width="170"><template slot-scope="s"><el-input v-model="s.row.target" size="small" maxlength="128" @input="s.row.ddlConfirmed = false" /></template></el-table-column>
               <el-table-column label="对象策略 / 筛选" min-width="170"><template slot-scope="s">{{ scopeLabel(effectiveScope(s.row)) }}<p>{{ conflictLabel(effectiveConflict(s.row), effectiveScope(s.row)) }} · {{ (s.row.filters || []).length }} 个条件</p></template></el-table-column>
               <el-table-column label="对象配置" width="140" fixed="right"><template slot-scope="s"><el-button type="text" :disabled="!editable" @click="editMapping(s.row)">对象配置</el-button><p v-if="s.row.type && s.row.type !== 'TABLE'" :class="s.row.ddlConfirmed ? 'muted' : 'danger'">{{ s.row.ddlConfirmed ? '已人工确认' : '目标 DDL 待确认' }}</p><p v-else class="muted">字段 / 策略 / 筛选</p></template></el-table-column>
-              <el-table-column label="操作" width="65" fixed="right"><template slot-scope="s"><el-button type="text" :disabled="!editable" @click="config.tables.splice(s.$index, 1)">移除</el-button></template></el-table-column>
+              <el-table-column label="操作" width="65" fixed="right"><template slot-scope="s"><el-button type="text" :disabled="!editable" @click="removeMapping(s.row)">移除</el-button></template></el-table-column>
             </el-table></div>
+            <el-pagination v-if="config.tables.length > 50" class="mapping-pagination" :current-page.sync="mappingPage" :page-size="50" :total="config.tables.length" layout="total, prev, pager, next" />
             <p class="mapping-safety" :class="highRisk ? 'danger' : 'muted'">默认不改既有数据。追加/清空仅用于兼容预建表；删除重建不级联，不自动处理其他表的引用。高风险策略须逐表审阅和备份后确认。DATE 映射为 TIMESTAMP(0)。</p>
               </el-tab-pane>
               <el-tab-pane label="执行设置" name="execution">
@@ -94,7 +95,8 @@
           <template v-if="assessment">
             <div class="summary-strip"><span>{{ assessment.direction }}</span><span>源：{{ assessment.sourceVersion }}</span><span>目标：{{ assessment.targetVersion }}</span><span>{{ time(assessment.checkedAt) }}</span></div>
             <ul class="warning-list"><li v-for="warning in assessment.warnings" :key="warning">{{ warning }}</li></ul>
-            <el-table :data="assessment.tables" size="small"><el-table-column label="源对象 → 目标对象" min-width="230"><template slot-scope="s">{{ s.row.sourceSchema || config.sourceSchema }}.{{ s.row.source }} → {{ s.row.targetSchema || config.targetSchema }}.{{ s.row.target }}<p class="muted">{{ s.row.type || 'TABLE' }}</p></template></el-table-column><el-table-column label="检查结果" min-width="300"><template slot-scope="s"><template v-if="s.row.blockers.length"><p v-for="blocker in s.row.blockers" :key="blocker" class="danger">{{ blocker }}</p></template><span v-else>{{ s.row.skipped ? '跳过：目标已存在，不修改' : '通过：执行前仍会重新检查' }}</span></template></el-table-column><el-table-column label="详情" width="130"><template slot-scope="s"><el-button type="text" @click="preview = s.row">DDL / 类型映射</el-button></template></el-table-column></el-table>
+            <el-table :data="pagedAssessment" size="small"><el-table-column label="源对象 → 目标对象" min-width="230"><template slot-scope="s">{{ s.row.sourceSchema || config.sourceSchema }}.{{ s.row.source }} → {{ s.row.targetSchema || config.targetSchema }}.{{ s.row.target }}<p class="muted">{{ s.row.type || 'TABLE' }}</p></template></el-table-column><el-table-column label="检查结果" min-width="300"><template slot-scope="s"><template v-if="s.row.blockers.length"><p v-for="blocker in s.row.blockers" :key="blocker" class="danger">{{ blocker }}</p></template><span v-else>{{ s.row.skipped ? '跳过：目标已存在，不修改' : '通过：执行前仍会重新检查' }}</span></template></el-table-column><el-table-column label="详情" width="130"><template slot-scope="s"><el-button type="text" @click="preview = s.row">DDL / 类型映射</el-button></template></el-table-column></el-table>
+            <el-pagination v-if="assessment.tables.length > 50" class="mapping-pagination" :current-page.sync="assessmentPage" :page-size="50" :total="assessment.tables.length" layout="total, prev, pager, next" />
           </template>
           <el-empty v-else description="尚无有效预检查结果" :image-size="70" />
         </template>
@@ -106,10 +108,8 @@
           <p>表级并发：{{ config.parallelism }} · 默认目标表空间：{{ config.targetTablespace || '目标用户默认' }}</p>
           <p v-if="task.parentTaskId" class="muted">关联原任务 {{ task.parentTaskId }}。这是新目标的完整重新迁移，不会自动清理原目标。</p>
           <el-alert title="目标会产生真实 DDL / 数据写入。取消或失败不会撤销已提交数据、已创建表和已执行 DDL；结果不确定时必须人工核对，不能直接重跑。" type="warning" :closable="false" />
-          <div class="offline-confirm"><el-checkbox v-model="offlineConfirmed">我已冻结源端数据和结构，并停止目标对象的业务写入，确认迁移范围及类型映射</el-checkbox></div>
           <el-table :data="config.tables" size="small"><el-table-column label="目标对象" min-width="200"><template slot-scope="s">{{ s.row.targetSchema || config.targetSchema }}.{{ s.row.target }}</template></el-table-column><el-table-column label="实际执行策略" min-width="190"><template slot-scope="s">{{ scopeLabel(effectiveScope(s.row)) }} · {{ conflictLabel(effectiveConflict(s.row), effectiveScope(s.row)) }}</template></el-table-column><el-table-column label="数据范围" min-width="140"><template slot-scope="s">{{ (s.row.filters || []).length ? s.row.filters.length + ' 个 AND 条件（预览查看）' : '未配置筛选' }}</template></el-table-column><el-table-column width="80"><template slot-scope="s"><el-button type="text" @click="previewMapping(s.row)">预览</el-button></template></el-table-column></el-table>
-          <template v-if="highRisk"><el-alert title="以下目标表将被追加、清空或删除重建；DDL 不承诺事务回滚。单表覆盖策略也须独立确认。" type="error" :closable="false" /><ul><li v-for="table in riskyTables" :key="objectKey(table.targetSchema || config.targetSchema, table.target)">{{ table.targetSchema || config.targetSchema }}.{{ table.target }} · {{ conflictLabel(effectiveConflict(table), effectiveScope(table)) }}</li></ul><el-checkbox v-model="targetChangeConfirmed">我已逐表核对上述目标对象，完成数据、索引、约束、触发器及授权备份，确认这些高风险改动</el-checkbox></template>
-          <el-button type="primary" size="small" :disabled="!ready || !offlineConfirmed || (highRisk && !targetChangeConfirmed)" @click="startTask">开始后台迁移</el-button>
+          <template v-if="highRisk"><el-alert title="以下目标表将被追加、清空或删除重建；DDL 不承诺事务回滚。单表覆盖策略也须独立确认。" type="error" :closable="false" /><ul><li v-for="table in riskyTables" :key="objectKey(table.targetSchema || config.targetSchema, table.target)">{{ table.targetSchema || config.targetSchema }}.{{ table.target }} · {{ conflictLabel(effectiveConflict(table), effectiveScope(table)) }}</li></ul></template>
         </template>
 
         <template v-if="step === 5 && task">
@@ -119,13 +119,29 @@
           <p class="muted">不使用估算百分比；完整内容摘要保留重复行且忽略行顺序。恢复只适用于有稳定主键、源端未变且归属已确认的表任务；已有行须逐行一致，不覆盖、不删除。执行次数：{{ task.attempts || 1 }}。</p>
           <p class="muted">稳定主键表可检查并续迁。无主键、无旧基线、仅结构或程序对象可“重新迁移到新目标”：生成关联草稿，包含必要依赖，重新审阅 / 预检查；原目标不删除。追加失败不会盲目再次追加。</p>
           <div v-if="resumable" class="toolbar"><el-select v-model="retrySelection" size="small" clearable placeholder="所有未完成对象"><el-option v-for="row in task.objects.filter(item => !['COMPLETED', 'SKIPPED'].includes(item.stage))" :key="row.source" :value="row.source" :label="row.source" /></el-select><el-button size="small" :disabled="busy" @click="retryToNewTarget(task.objects.find(row => row.source === retrySelection))">重新迁移到新目标</el-button></div>
-          <el-table :data="task.objects" size="small"><el-table-column label="源对象 → 目标对象" min-width="180"><template slot-scope="s">{{ s.row.source }} → {{ s.row.target }}</template></el-table-column><el-table-column label="阶段" width="130"><template slot-scope="s">{{ stageLabel(s.row.stage) }}</template></el-table-column><el-table-column label="已提交" prop="committedRows" width="90" /><el-table-column label="恢复复用行" width="100"><template slot-scope="s">{{ s.row.reusedRows || 0 }}</template></el-table-column><el-table-column label="源 / 目标校验行数（追加含原目标）" width="160"><template slot-scope="s">{{ s.row.sourceRows }} / {{ s.row.targetRows }}</template></el-table-column><el-table-column label="校验结果" min-width="180"><template slot-scope="s">{{ verificationLabel(s.row.verification) }}<p v-if="s.row.message" class="danger">{{ s.row.message }}</p></template></el-table-column><el-table-column label="恢复操作" width="135" fixed="right"><template slot-scope="s"><el-button v-if="retryable(s.row)" type="text" :disabled="busy" @click="retryObject(s.row)">检查并重跑该表</el-button><span v-else class="muted">{{ s.row.stage === 'COMPLETED' ? '无需重跑' : '人工核对' }}</span></template></el-table-column></el-table>
+          <el-table :data="pagedResults" size="small"><el-table-column label="源对象 → 目标对象" min-width="180"><template slot-scope="s">{{ s.row.source }} → {{ s.row.target }}</template></el-table-column><el-table-column label="阶段" width="130"><template slot-scope="s">{{ stageLabel(s.row.stage) }}</template></el-table-column><el-table-column label="已提交" prop="committedRows" width="90" /><el-table-column label="恢复复用行" width="100"><template slot-scope="s">{{ s.row.reusedRows || 0 }}</template></el-table-column><el-table-column label="源 / 目标校验行数（追加含原目标）" width="160"><template slot-scope="s">{{ s.row.sourceRows }} / {{ s.row.targetRows }}</template></el-table-column><el-table-column label="校验结果" min-width="180"><template slot-scope="s">{{ verificationLabel(s.row.verification) }}<p v-if="s.row.message" class="danger">{{ s.row.message }}</p></template></el-table-column><el-table-column label="恢复操作" width="135" fixed="right"><template slot-scope="s"><el-button v-if="retryable(s.row)" type="text" :disabled="busy" @click="retryObject(s.row)">检查并重跑该表</el-button><span v-else class="muted">{{ s.row.stage === 'COMPLETED' ? '无需重跑' : '人工核对' }}</span></template></el-table-column></el-table>
+          <el-pagination v-if="task.objects.length > 50" class="mapping-pagination" :current-page.sync="resultPage" :page-size="50" :total="task.objects.length" layout="total, prev, pager, next" />
           <h3>任务记录</h3><div class="log-panel"><p v-for="(log, index) in task.logs" :key="index">{{ log }}</p><p v-if="!task.logs.length" class="muted">任务结束时记录结果摘要；未保存业务字段值或口令。</p></div>
         </template>
 
         </div>
       </section>
-      <footer v-if="step < 5" class="panel wizard-footer"><el-button size="small" :disabled="step === 0 || busy || selectingAll" @click="step--">上一步</el-button><span>配置草稿保存在服务端，离开页面不会取消已启动任务</span><div><el-button size="small" :disabled="!editable || busy || selectingAll" @click="saveDraft">保存草稿</el-button><el-button v-if="step < 4" size="small" type="primary" :disabled="busy || selectingAll || (step === 3 && !ready)" @click="nextStep">下一步</el-button></div></footer>
+      <footer v-if="step < 5" class="panel wizard-footer" :class="{ 'review-footer': step === 4 }">
+        <div v-if="step === 4" class="execution-confirmations">
+          <el-checkbox v-model="offlineConfirmed">我已冻结源端数据和结构，停止目标端业务写入，并核对迁移范围及类型映射</el-checkbox>
+          <el-checkbox v-if="highRisk" v-model="targetChangeConfirmed">我已逐表核对高风险目标改动，完成数据、索引、约束、触发器及授权备份</el-checkbox>
+        </div>
+        <div class="footer-row">
+          <el-button size="small" :disabled="step === 0 || busy || selectingAll" @click="step--">上一步</el-button>
+          <span v-if="step < 4">配置草稿保存在服务端，离开页面不会取消已启动任务</span>
+          <span v-else class="execution-hint">{{ !ready ? '预检查已失效，请返回上一步重新检查' : !offlineConfirmed ? '请先勾选执行确认' : highRisk && !targetChangeConfirmed ? '请先确认高风险目标改动' : '将写入目标数据库，请确认后启动' }}</span>
+          <div class="footer-actions">
+            <el-button v-if="step < 4" size="small" :disabled="!editable || busy || selectingAll" @click="saveDraft">保存草稿</el-button>
+            <el-button v-if="step < 4" size="small" type="primary" :disabled="busy || selectingAll || (step === 3 && !ready)" @click="nextStep">下一步</el-button>
+            <el-button v-if="step === 4" class="start-migration-button" type="primary" size="medium" :loading="busy" :disabled="!ready || !offlineConfirmed || (highRisk && !targetChangeConfirmed)" @click="startTask">开始后台迁移</el-button>
+          </div>
+        </div>
+      </footer>
     </template>
 
     <el-dialog title="对象配置 · 策略 / 字段 / 筛选 / 定义" custom-class="migration-config-dialog" :visible="!!mappingEditor" width="85%" @close="mappingEditor = null" append-to-body>
@@ -158,6 +174,7 @@ import connectionServer from '@/api/main/connection'
 import { saveAs } from 'file-saver'
 
 const activeStatuses = ['MIG_RUNNING', 'MIG_CANCEL_REQUESTED']
+const maxObjects = 10000
 const editableStatuses = ['MIG_DRAFT', 'MIG_READY', 'MIG_BLOCKED']
 const blankConfig = () => ({ name: '', sourceId: null, targetId: null, sourceSchema: '', targetSchema: '', scope: 'ALL', conflict: 'STOP', fetchSize: 100, commitSize: 500, rowsPerSecond: 0, parallelism: 1, targetTablespace: '', errorPolicy: 'STOP', tables: [] })
 const configSignature = config => JSON.stringify(Object.assign(blankConfig(), config), (_, value) => {
@@ -172,7 +189,8 @@ export default {
       editing: false, step: 0, mappingTab: 'objects', config: blankConfig(), task: null, checkedConfig: '',
       retrySelection: '',
       sources: [], endpoints: { source: null, target: null }, connecting: { source: false, target: false },
-      tasks: [], taskSearch: '', taskPage: 1, taskTotal: 0, loading: false, busy: false,
+      activeStatuses, tasks: [], taskSearch: '', taskPage: 1, taskTotal: 0, loading: false, busy: false,
+      mappingPage: 1, assessmentPage: 1, resultPage: 1,
       objects: [], objectSearch: '', objectPage: 1, objectTotal: 0, objectLoading: false, selectingAll: false, selectAllRequest: 0,
       offlineConfirmed: false, targetChangeConfirmed: false, preview: null, mappingEditor: null, mappingSourceDdl: '', mappingFields: [], mappingIndex: -1, pollTimer: null, generation: 0, visible: true,
       listRequest: 0, taskRequest: 0, objectRequest: 0, connectionRequest: { source: 0, target: 0 } }
@@ -186,12 +204,16 @@ export default {
     riskyTables() { return this.config.tables.filter(table => ['APPEND', 'CLEAR', 'REBUILD'].includes(this.effectiveConflict(table))) },
     highRisk() { return this.riskyTables.length > 0 },
     resumable() { return !!(this.task && ['MIG_FAILED', 'MIG_CANCELLED', 'MIG_INTERRUPTED', 'MIG_NEEDS_REVIEW', 'MIG_PARTIAL'].includes(this.task.status)) },
+    pagedMappings() { return this.config.tables.slice((this.mappingPage - 1) * 50, this.mappingPage * 50) },
+    pagedAssessment() { return this.assessment ? this.assessment.tables.slice((this.assessmentPage - 1) * 50, this.assessmentPage * 50) : [] },
+    pagedResults() { return this.task ? this.task.objects.slice((this.resultPage - 1) * 50, this.resultPage * 50) : [] },
     dependencyOptions() { return this.config.tables.filter(item => !this.mappingEditor || item !== this.config.tables[this.mappingIndex]).map(item => ({ key: this.objectKey(item.sourceSchema || this.config.sourceSchema, item.source), label: (item.sourceSchema || this.config.sourceSchema) + '.' + item.source })) }
   },
   watch: {
     config: { deep: true, handler() {
       if (this.checkedConfig && this.checkedConfig !== configSignature(this.config)) {
         if (this.task) this.task.assessment = null
+        this.checkedConfig = ''
         this.offlineConfirmed = false
         this.targetChangeConfirmed = false
       }
@@ -234,7 +256,7 @@ export default {
     },
     newTask() {
       this.stopPolling(); this.generation++; this.editing = true; this.step = 0; this.task = null
-      this.mappingTab = 'objects'; this.selectingAll = false
+      this.mappingTab = 'objects'; this.mappingPage = this.assessmentPage = this.resultPage = 1; this.selectingAll = false
       this.config = blankConfig(); this.checkedConfig = ''; this.retrySelection = ''; this.endpoints = { source: null, target: null }
       this.objects = []; this.objectTotal = 0; this.objectSearch = ''; this.offlineConfirmed = false; this.targetChangeConfirmed = false; this.preview = this.mappingEditor = null
       this.$router.replace({ path: this.$route.path, query: {} })
@@ -252,7 +274,7 @@ export default {
       this.checkedConfig = task.assessment ? configSignature(task.config) : ''
     },
     async openTask(id) {
-      this.stopPolling(); const generation = ++this.generation; this.busy = true; this.selectingAll = false; this.mappingTab = 'objects'
+      this.stopPolling(); const generation = ++this.generation; this.busy = true; this.selectingAll = false; this.mappingTab = 'objects'; this.mappingPage = this.assessmentPage = this.resultPage = 1
       try {
         const task = await migration.get(id)
         if (generation !== this.generation) return
@@ -265,9 +287,20 @@ export default {
     async copyTask(id) {
       try { const task = await migration.get(id); this.newTask(); this.config = Object.assign(blankConfig(), JSON.parse(JSON.stringify(task.config))); this.config.name = (this.config.name + ' - 副本').slice(0, 80) } catch (error) { this.showError(error) }
     },
+    async deleteTask(row) {
+      if (activeStatuses.includes(row.status) || this.busy) return
+      try {
+        await this.$confirm(`确认删除迁移任务“${row.config.name}”？仅从任务列表移除记录，不会删除源端或目标端数据。`, '删除迁移任务', { type: 'warning', confirmButtonText: '删除任务', cancelButtonText: '取消' })
+        this.busy = true
+        await migration.delete(row.id)
+        if (this.taskPage > 1 && this.tasks.length === 1) this.taskPage--
+        await this.loadList()
+        this.$message.success('迁移任务已删除')
+      } catch (error) { this.showError(error) } finally { this.busy = false }
+    },
     endpointChanged(side) {
       this.connectionRequest[side]++; this.connecting[side] = false; this.endpoints[side] = null; this.config[side + 'Schema'] = ''
-      if (side === 'source') { this.objectRequest++; this.objectLoading = false; this.config.tables = []; this.objects = []; this.objectTotal = 0 }
+      if (side === 'source') { this.objectRequest++; this.objectLoading = false; this.config.tables = []; this.mappingPage = 1; this.objects = []; this.objectTotal = 0 }
       else this.config.tables.forEach(table => { table.targetSchema = ''; table.ddlConfirmed = false })
     },
     async connectEndpoint(side) {
@@ -291,21 +324,23 @@ export default {
       } catch (error) { this.showError(error) } finally { if (request === this.objectRequest) this.objectLoading = false }
     },
     objectKey(schema, name) { return '"' + schema.replace(/"/g, '""') + '"."' + name.replace(/"/g, '""') + '"' },
+    selectionKey(schema, name, type) { return JSON.stringify([schema, name, type]) },
+    newMapping(row, schema = this.config.sourceSchema) { return { source: row.name, target: row.name, sourceSchema: schema, targetSchema: '', type: row.type, scope: '', conflict: '', filters: [], columns: [], dependencies: [], manualDdl: '', ddlConfirmed: false } },
     supportedObject(type) { return ['TABLE', 'VIEW', 'SEQUENCE', 'SYNONYM', 'PROCEDURE', 'FUNCTION', 'PACKAGE', 'TRIGGER'].includes(type) && (this.config.scope !== 'DATA' || type === 'TABLE') },
     selected(name, type = 'TABLE') { return this.config.tables.some(table => table.source === name && (table.sourceSchema || this.config.sourceSchema) === this.config.sourceSchema && (table.type || 'TABLE') === type) },
     toggleObject(row, selected) {
       if (!this.supportedObject(row.type) || !this.editable) return
       if (!selected) this.config.tables = this.config.tables.filter(table => !(table.source === row.name && (table.sourceSchema || this.config.sourceSchema) === this.config.sourceSchema && (table.type || 'TABLE') === row.type))
       else if (!this.selected(row.name, row.type)) {
-        if (this.config.tables.length >= 100) { this.$message.warning('单个任务最多选择 100 个对象'); return }
-        this.config.tables.push({ source: row.name, target: row.name, sourceSchema: this.config.sourceSchema, targetSchema: '', type: row.type, scope: '', conflict: '', filters: [], columns: [], dependencies: [], manualDdl: '', ddlConfirmed: false })
+        if (this.config.tables.length >= maxObjects) { this.$message.warning(`单个任务最多选择 ${maxObjects} 个对象`); return }
+        this.config.tables.push(this.newMapping(row))
       }
     },
     selectVisible() {
       if (!this.editable || this.selectingAll) return
       const rows = this.objects.filter(row => this.supportedObject(row.type) && !this.selected(row.name, row.type))
-      if (this.config.tables.length + rows.length > 100) { this.$message.warning('单个任务最多选择 100 个对象，请缩小选择范围'); return }
-      rows.forEach(row => this.toggleObject(row, true))
+      if (this.config.tables.length + rows.length > maxObjects) { this.$message.warning(`单个任务最多选择 ${maxObjects} 个对象，请缩小选择范围`); return }
+      this.config.tables.push(...rows.map(row => this.newMapping(row)))
     },
     async selectAllObjects() {
       if (!this.editable || this.selectingAll || !this.config.sourceId || !this.config.sourceSchema) return
@@ -314,21 +349,30 @@ export default {
       this.selectingAll = true
       try {
         const additions = new Map(); let found = false
+        const existing = new Set(this.config.tables.map(table => this.selectionKey(table.sourceSchema || schema, table.source, table.type || 'TABLE')))
         for (let page = 1, total = Infinity; (page - 1) * 200 < total; page++) {
           const result = await migration.objects({ id, schema, search, page, size: 200 })
           if (!current()) return
           total = result.total
           result.data.filter(row => this.supportedObject(row.type)).forEach(row => {
             found = true
-            if (!this.selected(row.name, row.type)) additions.set(JSON.stringify([row.name, row.type]), row)
+            const key = this.selectionKey(schema, row.name, row.type)
+            if (!existing.has(key)) additions.set(key, row)
           })
-          if (this.config.tables.length + additions.size > 100) { this.$message.warning('全选结果超过单个任务 100 个对象的上限，请缩小搜索范围或手动选择；已有选择未改变'); return }
+          if (this.config.tables.length + additions.size > maxObjects) { this.$message.warning(`全选结果超过单个任务 ${maxObjects} 个对象的上限，请缩小搜索范围；已有选择未改变`); return }
         }
         if (!found) { this.$message.warning('当前筛选结果没有可迁移对象'); return }
-        additions.forEach(row => this.toggleObject(row, true))
+        this.config.tables.push(...Array.from(additions.values(), row => this.newMapping(row, schema)))
         this.$message.success(`全选完成，任务共选择 ${this.config.tables.length} 个对象`)
       } catch (error) { if (current()) this.showError(error) } finally { if (request === this.selectAllRequest) this.selectingAll = false }
     },
+    removeMapping(row) {
+      const index = this.config.tables.indexOf(row)
+      if (index < 0) return
+      this.config.tables.splice(index, 1)
+      if ((this.mappingPage - 1) * 50 >= this.config.tables.length) this.mappingPage = Math.max(1, this.mappingPage - 1)
+    },
+    clearSelection() { this.config.tables = []; this.mappingPage = 1 },
     async editMapping(row) {
       if (!this.editable) return
       const generation = this.generation; this.busy = true
@@ -363,7 +407,7 @@ export default {
       return operators
     },
     async persistDraft() {
-      const task = await migration.save(this.task && this.task.id, this.config); this.applyTask(task)
+      const task = await migration.save(this.task && this.task.id, this.config); this.applyTask(task, true)
       this.$router.replace({ path: this.$route.path, query: { taskId: String(task.id) } }); return task
     },
     async saveDraft() { this.busy = true; try { await this.persistDraft(); this.$message.success('草稿已保存') } catch (error) { this.showError(error) } finally { this.busy = false } },
@@ -376,13 +420,13 @@ export default {
     },
     async runPrecheck() {
       this.busy = true
-      try { const saved = await this.persistDraft(); const task = await migration.precheck(saved.id); this.applyTask(task); this.offlineConfirmed = false; this.targetChangeConfirmed = false }
+      try { const saved = await this.persistDraft(); const task = await migration.precheck(saved.id); this.applyTask(task, true); this.assessmentPage = 1; this.offlineConfirmed = false; this.targetChangeConfirmed = false }
       catch (error) { this.showError(error) } finally { this.busy = false }
     },
     async startTask() {
       if (!this.ready || !this.offlineConfirmed || (this.highRisk && !this.targetChangeConfirmed)) return
       this.busy = true
-      try { this.applyTask(await migration.start(this.task.id, { fingerprint: this.assessment.fingerprint, offlineConfirmed: true, targetChangeConfirmed: this.targetChangeConfirmed })); this.step = 5; this.schedulePolling() }
+      try { this.applyTask(await migration.start(this.task.id, { fingerprint: this.assessment.fingerprint, offlineConfirmed: true, targetChangeConfirmed: this.targetChangeConfirmed })); this.resultPage = 1; this.step = 5; this.schedulePolling() }
       catch (error) { this.showError(error) } finally { this.busy = false }
     },
     async refreshTask() {
@@ -471,6 +515,8 @@ export default {
   .step-panel { padding: 12px 16px; } .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; flex-shrink: 0; }
   .table-step .toolbar { margin-bottom: 0; }
   .toolbar > .el-input { width: 220px; } .toolbar > .el-select { width: 240px; } .pagination { text-align: right; margin-top: 16px; }
+  .mapping-pagination { flex-shrink: 0; text-align: right; padding: 8px 0; }
+  .delete-action:not(.is-disabled) { color: #d94242; }
   .object-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
   .endpoint-grid, .ddl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; } .endpoint { border: 1px solid var(--migration-border); border-radius: 4px; padding: 16px; } .endpoint h3 { margin-top: 0; }
   .name-input { max-width: 560px; } .endpoint .el-select { width: 100%; } .connection-summary { color: var(--migration-muted); overflow-wrap: anywhere; margin-top: 16px; }
@@ -499,20 +545,28 @@ export default {
   .setting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .summary-strip { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 0; } .warning-list { padding-left: 20px; line-height: 1.9; color: var(--migration-muted); }
   .danger { color: #d94242; } .review { display: grid; grid-template-columns: 90px 1fr; gap: 16px; margin: 24px 0; } .review dt { color: var(--migration-muted); } .review dd { margin: 0; overflow-wrap: anywhere; }
-  .offline-confirm { margin: 24px 0; } .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 24px 0; }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 24px 0; }
   .metrics > div { padding-right: 16px; border-right: 1px solid var(--migration-border); } .metrics > div:last-child { border: 0; } .metrics span, .metrics small { color: var(--migration-muted); display: block; font-size: 12px; }
   .metrics strong { display: block; font-size: 16px; margin: 8px 0; font-weight: 600; } .metrics strong small { display: inline; font-weight: normal; }
   .log-panel { background: #f8fafc; padding: 12px; border: 1px solid var(--migration-border); overflow-wrap: anywhere; }
-  .wizard-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; }
-  .wizard-footer > span { color: var(--migration-muted); } ::v-deep .el-step__title { font-size: 12px; line-height: 24px; } ::v-deep .el-form-item__label { font-size: 12px; padding-bottom: 4px; }
+  .wizard-footer { padding: 12px 16px; }
+  .footer-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .footer-row > span { color: var(--migration-muted); } .footer-actions { display: flex; align-items: center; gap: 8px; }
+  .footer-actions ::v-deep .el-button + .el-button { margin-left: 0; }
+  .execution-confirmations { display: flex; flex-wrap: wrap; gap: 8px 24px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--migration-border); }
+  .execution-confirmations ::v-deep .el-checkbox { margin-right: 0; max-width: 100%; }
+  .start-migration-button { min-width: 174px; font-weight: 600; box-shadow: 0 2px 8px rgba(0, 111, 255, .25); }
+  .review-footer ::v-deep .start-migration-button { font-size: 14px; }
+  .review-footer ::v-deep .start-migration-button.is-disabled, .review-footer ::v-deep .start-migration-button.is-disabled:hover { color: #fff; background: #89b7f0; border-color: #89b7f0; box-shadow: none; }
+  ::v-deep .el-step__title { font-size: 12px; line-height: 24px; } ::v-deep .el-form-item__label { font-size: 12px; padding-bottom: 4px; }
   ::v-deep .el-step__icon { width: 22px; height: 22px; } ::v-deep .el-step.is-horizontal .el-step__line { top: 10px; }
   ::v-deep .el-table, ::v-deep .el-input__inner, ::v-deep .el-button, ::v-deep .el-checkbox__label, ::v-deep .el-alert__title { font-size: 12px; }
   ::v-deep .el-button--primary { background: var(--migration-primary); border-color: var(--migration-primary); } ::v-deep .el-button--primary:hover { background: #2052dd; border-color: #2052dd; }
   ::v-deep .el-checkbox__label { white-space: normal; line-height: 1.7; } ::v-deep .el-table p { margin: 4px 0; }
   ::v-deep .el-tag--error { color: #d94242; background: #fef0f0; border-color: #fbc4c4; }
   ::v-deep .el-textarea__inner { font: 12px/1.65 Consolas, monospace; }
-  @media (max-width: 980px) { padding: 12px; gap: 8px; .metrics { grid-template-columns: 1fr 1fr; } .wizard-footer > span, .object-pagination > span { display: none; } }
-  @media (max-width: 680px) { .endpoint-grid, .ddl-grid, .default-rules, .setting-grid, .metrics { grid-template-columns: 1fr; } .default-rules { max-height: 150px; overflow-y: auto; } .section-heading, .page-heading { align-items: flex-start; flex-wrap: wrap; } }
+  @media (max-width: 980px) { padding: 12px; gap: 8px; .metrics { grid-template-columns: 1fr 1fr; } .footer-row > span, .object-pagination > span { display: none; } }
+  @media (max-width: 680px) { .endpoint-grid, .ddl-grid, .default-rules, .setting-grid, .metrics { grid-template-columns: 1fr; } .default-rules { max-height: 150px; overflow-y: auto; } .section-heading, .page-heading { align-items: flex-start; flex-wrap: wrap; } .execution-confirmations { max-height: 96px; overflow-y: auto; } }
 }
 .ddl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .mapping-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 12px; } .mapping-settings .el-select { width: 100%; } .mapping-settings p { grid-column: 1 / -1; margin-top: 0; }

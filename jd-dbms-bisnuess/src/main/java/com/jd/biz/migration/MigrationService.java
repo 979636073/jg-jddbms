@@ -1,5 +1,7 @@
 package com.jd.biz.migration;
 
+import com.jd.biz.domain.api.enums.DataSourceAction;
+
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -56,6 +58,19 @@ public class MigrationService {
 
     public Task get(Long id, Long user) { return snapshot(row(id, user)); }
 
+    public synchronized boolean delete(Long id, Long user) {
+        TaskDO task = row(id, user);
+        if (ACTIVE.contains(task.getTaskStatus()) || (active != null && id.equals(active.task.id))) {
+            throw new BusinessException("执行中或取消中的任务不能删除，请等待任务结束");
+        }
+        int changed = mapper.update(null, new LambdaUpdateWrapper<TaskDO>()
+                .eq(TaskDO::getId, id).eq(TaskDO::getUserId, user).eq(TaskDO::getTaskType, TYPE)
+                .eq(TaskDO::getDeleted, "N").eq(TaskDO::getTaskStatus, task.getTaskStatus())
+                .set(TaskDO::getDeleted, "Y").set(TaskDO::getGmtModified, new Date()));
+        if (changed != 1) throw new BusinessException("任务状态已变化，请刷新后重试");
+        return true;
+    }
+
     public Map<String, Object> page(Long user, int page, int size, String search) {
         if (page < 1 || size < 1 || size > 100) throw new BusinessException("任务分页范围无效");
         LambdaQueryWrapper<TaskDO> query = owned(user);
@@ -64,15 +79,15 @@ public class MigrationService {
         List<Task> rows = new ArrayList<>();
         for (TaskDO item : result.getRecords()) {
             Task task = snapshot(item);
-            // List responses do not carry large DDL previews or logs.
-            task.assessment = null; task.objects.clear(); task.logs.clear(); rows.add(task);
+            // Keep the task list small even when a migration selects thousands of objects.
+            task.assessment = null; task.objects.clear(); task.logs.clear(); task.config.tables.clear(); rows.add(task);
         }
         Map<String, Object> output = new LinkedHashMap<>(); output.put("data", rows); output.put("total", result.getTotal()); return output;
     }
 
     public synchronized Task save(Long id, Long user, Config config) {
         MigrationDialect.validate(config, false);
-        if (JSON.toJSONBytes(config).length > 128 * 1024) throw new BusinessException("配置超出大小限制");
+        if (JSON.toJSONBytes(config).length > 16 * 1024 * 1024) throw new BusinessException("配置超出 16 MiB 大小限制");
         owned(user);
         TaskDO row = id == null ? new TaskDO() : row(id, user);
         if (id != null && !Arrays.asList("MIG_DRAFT", "MIG_READY", "MIG_BLOCKED").contains(row.getTaskStatus())) {
@@ -152,7 +167,8 @@ public class MigrationService {
     public synchronized Task start(Long id, Long user, StartRequest request) {
         Task task = get(id, user); validateStart(task, request);
         if (active != null) throw new BusinessException("已有迁移任务执行中；首版仅允许一个后台迁移任务");
-        DataSource source = connections.authorized(task.config.sourceId), target = connections.authorized(task.config.targetId);
+        DataSource source = connections.authorized(task.config.sourceId, DataSourceAction.MIGRATION_RUN),
+                target = connections.authorized(task.config.targetId, DataSourceAction.MIGRATION_RUN);
         task.status = "MIG_RUNNING"; task.stage = "RECHECK"; task.startedAt = System.currentTimeMillis();
         task.message = "后台执行已启动；离开页面不会停止任务";
         for (TablePlan table : task.assessment.tables) {
@@ -201,7 +217,8 @@ public class MigrationService {
                 || !Objects.equals(task.resumeObject, request.sourceObject)
                 || System.currentTimeMillis() - task.resumeCheckedAt > 10 * 60 * 1000L) throw new BusinessException("请重新执行恢复检查，并确认冻结数据、已复核既有目标及不确定提交");
         if (active != null) throw new BusinessException("已有迁移任务执行中");
-        DataSource source = connections.authorized(task.config.sourceId), target = connections.authorized(task.config.targetId);
+        DataSource source = connections.authorized(task.config.sourceId, DataSourceAction.MIGRATION_RUN),
+                target = connections.authorized(task.config.targetId, DataSourceAction.MIGRATION_RUN);
         String previous = task.status; task.attempts++; task.resumeFingerprint = null;
         task.logs.add("第 " + task.attempts + " 次执行：" + (task.resumeObject == null ? "受限恢复全任务" : "只重跑 " + task.resumeObject) + "；原状态 " + previous);
         task.inFlightCommits = 0;

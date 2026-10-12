@@ -9,12 +9,29 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.sql.*;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Objects;
 
 public class DMDBManage extends DefaultDBManage implements DBManage {
 
     private String format(String tableName) {
         return "\"" + tableName + "\"";
+    }
+
+    @Override
+    public void dropSchema(Connection connection, String databaseName, String schemaName) {
+        if (StringUtils.isBlank(schemaName)) {
+            throw new IllegalArgumentException("模式名称不能为空");
+        }
+        String normalized = schemaName.toUpperCase(Locale.ROOT);
+        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
+        if (Arrays.asList("SYS", "SYSDBA", "SYSAUDITOR", "SYSSSO", "CTISYS", "MONITOR_ADMIN").contains(normalized)
+                || (connectInfo != null && StringUtils.equalsIgnoreCase(schemaName, connectInfo.getUser()))) {
+            throw new IllegalArgumentException("系统模式和当前连接用户所属模式不能删除");
+        }
+        String quotedSchema = "\"" + schemaName.replace("\"", "\"\"") + "\"";
+        SQLExecutor.getInstance().execute(connection, "DROP SCHEMA " + quotedSchema + " CASCADE", resultSet -> null);
     }
 
     private static String ROUTINES_SQL

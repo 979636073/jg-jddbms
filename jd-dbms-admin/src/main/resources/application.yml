@@ -80,7 +80,7 @@ spring:
     host: ${JDDBMS_REDIS_HOST:localhost}
     #    host: localhost
     # 端口，默认为6379
-    port: 6379
+    port: ${JDDBMS_REDIS_PORT:6379}
     # 数据库索引
     database: 0
     # 密码

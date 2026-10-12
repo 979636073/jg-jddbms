@@ -15,7 +15,9 @@ export default {
     return {
       timer: null,
       tableLoading: false,
+      pageRequestId: 0,
       searchKey: '',
+      allViews: [],
       tableData: [],
       tableDataTotal: 0,
       databaseName: '',
@@ -23,7 +25,7 @@ export default {
       dataSourceId: '',
       queryParams: {
         pageNo: 1,
-        pageSize: 1000,
+        pageSize: 100,
       },
       multipleSelection: [],
     }
@@ -42,6 +44,7 @@ export default {
   },
   methods: {
     getTable(params = {}) {
+      const requestId = ++this.pageRequestId
       this.tableLoading = true
       viewServer.getViewList({
         ...this.uniqueData,
@@ -49,8 +52,8 @@ export default {
         ...params,
       })
         .then((res) => {
-          this.tableDataTotal = res.data.total
-          const data = res.data.data.map((t) => {
+          if (requestId !== this.pageRequestId) return
+          this.allViews = (res.data.data || []).map((t) => {
             const key = uuidv4();
             return {
               uuid: key,
@@ -64,12 +67,24 @@ export default {
                 tableName: t.name,
               },
             };
-          });
-          this.tableData = data
+          })
+          this.applyViewPage()
+        })
+        .catch(() => {
+          if (requestId === this.pageRequestId) this.$message.error('视图列表加载失败，请重试')
         })
         .finally(() => {
-          this.tableLoading = false
+          if (requestId === this.pageRequestId) this.tableLoading = false
         });
+    },
+    applyViewPage() {
+      const keyword = this.searchKey.trim().toLowerCase()
+      const matched = keyword
+        ? this.allViews.filter(item => [item.name, item.comment].some(value => String(value || '').toLowerCase().includes(keyword)))
+        : this.allViews
+      this.tableDataTotal = matched.length
+      const start = (this.queryParams.pageNo - 1) * this.queryParams.pageSize
+      this.tableData = matched.slice(start, start + this.queryParams.pageSize)
     },
     createView() {
       this.$store.dispatch('addWorkspaceTab', {
@@ -111,22 +126,20 @@ export default {
 
     refresh() {
       this.queryParams.pageNo = 1
-      this.queryParams.pageSize = 1000
       this.getTable({refresh: true})
     },
     onSearch() {
       this.queryParams.pageNo = 1
-      this.queryParams.pageSize = 1000
-      this.getTable({searchKey: this.searchKey})
+      this.applyViewPage()
     },
     handleSizeChange(val) {
       this.queryParams.pageNo = 1
       this.queryParams.pageSize = val
-      this.getTable()
+      this.applyViewPage()
     },
     handleCurrentChange(val) {
       this.queryParams.pageNo = val
-      this.getTable()
+      this.applyViewPage()
     },
     handleSelectionChange(val) {
       this.multipleSelection = val;
@@ -203,7 +216,7 @@ export default {
       @size-change="handleSizeChange"
       @current-change="handleCurrentChange"
       :current-page="queryParams.pageNo"
-      :page-sizes="[10, 50, 100, 200, 500, 1000]"
+      :page-sizes="[10, 50, 100, 200]"
       :page-size="queryParams.pageSize"
       layout="total, sizes, prev, pager, next, jumper"
       :total="tableDataTotal">

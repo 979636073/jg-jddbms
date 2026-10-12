@@ -270,7 +270,7 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Override
     public ActionResult modifyDatabase(DatabaseCreateParam param) {
         Chat2DBContext.getDBManage().modifyDatabase(Chat2DBContext.getConnection(), param.getName(),
-                param.getName());
+                param.getNewName());
         return ActionResult.isSuccess();
     }
 
@@ -484,6 +484,13 @@ public class DatabaseServiceImpl implements DatabaseService {
             dmpExport = managedTool.getExportExecutable();
             toolFamily = managedTool.getToolFamily();
         }
+        List<String> exportContentOptions;
+        try {
+            exportContentOptions = DmpContentOptions.normalize(dmpExportRequest.getContentOptions());
+            DmpContentOptions.validate(toolFamily, false, false, exportContentOptions);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage());
+        }
         validateDataPumpConfiguration(toolFamily);
         if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {
             if (StrUtil.isBlank(dmpExport)) {
@@ -507,7 +514,9 @@ public class DatabaseServiceImpl implements DatabaseService {
         dmpExportVo.setUserId(loginUser.getId());
         dmpExportVo.setStatus(TaskStatusEnum.INIT.name());
         dmpExportVo.setSchemaName(StringUtils.isNotBlank(dmpExportRequest.getSchemaName()) ? dmpExportRequest.getSchemaName() : "");
-        Long taskId = createDmpTask(TaskTypeEnum.DOWNLOAD_TABLE_STRUCTURE, "DMP导出", dmpExportRequest.getDataSourceId(), dmpExportRequest.getDatabaseName(), dmpExportRequest.getSchemaName());
+        Long taskId = createDmpTask(TaskTypeEnum.DOWNLOAD_TABLE_STRUCTURE,
+                dmpTaskName("导出", dmpExportRequest.getSchemaName(), dmpExportRequest.getTableList(), toolFamily, managedTool),
+                dmpExportRequest.getDataSourceId(), dmpExportRequest.getDatabaseName(), dmpExportRequest.getSchemaName());
         dmpExportVo.setTaskId(taskId);
         List<String> tableList = CollUtil.isEmpty(dmpExportRequest.getTableList())
                 ? Collections.emptyList() : new ArrayList<>(dmpExportRequest.getTableList());
@@ -549,6 +558,7 @@ public class DatabaseServiceImpl implements DatabaseService {
         String finalSchemas = schemas;
         DmpToolOptions dmpToolOptions = DmpToolOptions.builder()
                 .toolFamily(toolFamily)
+                .contentOptions(exportContentOptions)
                 .targetVersion(StrUtil.blankToDefault(dmpExportRequest.getTargetVersion(),
                         oracleDataPumpCompatibilityVersion))
                 .directoryName(oracleDataPumpDirectory)
@@ -728,6 +738,13 @@ public class DatabaseServiceImpl implements DatabaseService {
             dmpImport = managedTool.getImportExecutable();
             toolFamily = managedTool.getToolFamily();
         }
+        List<String> importContentOptions;
+        try {
+            importContentOptions = DmpContentOptions.normalize(dmpImportRequest.getContentOptions());
+            DmpContentOptions.validate(toolFamily, true, false, importContentOptions);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage());
+        }
         validateDataPumpConfiguration(toolFamily);
         if (connectInfo.getDbType().equalsIgnoreCase(DBTypeEnum.DM.name())) {
             if (StrUtil.isBlank(dmpImport)) {
@@ -748,7 +765,9 @@ public class DatabaseServiceImpl implements DatabaseService {
         dmpImportVo.setDatabaseName(dmpImportRequest.getDatabaseName());
         dmpImportVo.setUserId(loginUser.getId());
         dmpImportVo.setStatus(TaskStatusEnum.INIT.name());
-        Long taskId = createDmpTask(TaskTypeEnum.UPLOAD_TABLE_STRUCTURE, "DMP导入", dmpImportRequest.getDataSourceId(), dmpImportRequest.getDatabaseName(), dmpImportRequest.getSchemaName());
+        Long taskId = createDmpTask(TaskTypeEnum.UPLOAD_TABLE_STRUCTURE,
+                dmpTaskName("导入", dmpImportRequest.getSchemaName(), dmpImportRequest.getTableList(), toolFamily, managedTool),
+                dmpImportRequest.getDataSourceId(), dmpImportRequest.getDatabaseName(), dmpImportRequest.getSchemaName());
         File file = sourceFile;
         if (DmpToolRegistryService.ORACLE_DATAPUMP.equals(toolFamily)) {
             try {
@@ -802,6 +821,7 @@ public class DatabaseServiceImpl implements DatabaseService {
         File finalImportFile = file;
         DmpToolOptions dmpToolOptions = DmpToolOptions.builder()
                 .toolFamily(toolFamily)
+                .contentOptions(importContentOptions)
                 .directoryName(oracleDataPumpDirectory)
                 .build();
         AtomicReference<String> msg = new AtomicReference<>("");
@@ -1029,6 +1049,17 @@ public class DatabaseServiceImpl implements DatabaseService {
         param.setTaskProgress("0.1");
         DataResult<Long> result = taskService.create(param);
         return result.getData();
+    }
+
+    private String dmpTaskName(String action, String schemaName, List<String> tables,
+                               String family, DmpToolPackage managedTool) {
+        String scope = StrUtil.blankToDefault(schemaName, "全库");
+        if (CollUtil.isNotEmpty(tables)) {
+            scope += "." + tables.get(0) + (tables.size() > 1 ? " 等" + tables.size() + "张表" : "");
+        }
+        String version = managedTool == null ? "系统工具" : managedTool.getVersion();
+        String name = "DMP" + action + " · " + scope + " · " + family + " " + version;
+        return name.length() > 180 ? name.substring(0, 180) : name;
     }
 
     private void updateDmpTask(Long taskId, String status, String downloadUrl) {

@@ -65,7 +65,8 @@ public abstract class DataSourceWebConverter {
      * @return
      */
     @Mappings({
-        @Mapping(target = "user", source = "userName")
+        @Mapping(target = "user", source = "userName"),
+        @Mapping(target = "password", ignore = true)
     })
     public abstract DataSourceVO dto2vo(DataSource dataSource);
 

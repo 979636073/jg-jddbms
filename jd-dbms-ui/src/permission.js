@@ -10,6 +10,8 @@ NProgress.configure({ showSpinner: false })
 
 const whiteList = ['/login', '/register']
 const isWorkspaceWindow = path => /^\/workspace\/(look|query)\//.test(path)
+const canOpenRoute = to => (to.matched || [to]).every(route => !route.meta || !route.meta.allowedRoles ||
+  route.meta.allowedRoles.some(role => store.getters.roles.includes(role)))
 
 router.beforeEach((to, from, next) => {
   if (!isWorkspaceWindow(to.path) || !isWorkspaceWindow(from.path)) {
@@ -29,7 +31,7 @@ router.beforeEach((to, from, next) => {
         }).catch(err => {
           store.dispatch('LogOut').then(() => {
             Message.error(err)
-            next({ path: '/' })
+            next({ path: '/login' })
           })
         })
         // next({path:to.redirectedFrom,replace:true})
@@ -43,7 +45,7 @@ router.beforeEach((to, from, next) => {
     to.meta.title && store.dispatch('settings/setTitle', to.meta.title)
     /* has token*/
     if (to.path === '/login') {
-      next({ path: '/' })
+      next({ path: '/workspace' })
       NProgress.done()
     } else if (whiteList.indexOf(to.path) !== -1) {
       next()
@@ -61,11 +63,11 @@ router.beforeEach((to, from, next) => {
         }).catch(err => {
           store.dispatch('LogOut').then(() => {
             Message.error(err)
-            next({ path: '/' })
+            next({ path: '/login' })
           })
         })
       } else {
-        next()
+        next(canOpenRoute(to) ? undefined : '/401')
       }
     }
   } else {

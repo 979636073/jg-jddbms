@@ -98,9 +98,11 @@ body { font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif; }
 .el-radio__input.is-checked .el-radio__inner { background: var(--dm-primary); border-color: var(--dm-primary); }
 
 .el-button { border-radius: var(--dm-radius-sm) !important; transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease; }
-.el-button--default:hover, .el-button--default:focus { border-color: var(--dm-primary); background: var(--dm-primary-soft); color: var(--dm-primary); }
-.el-button--primary { background: var(--dm-primary); border-color: var(--dm-primary); box-shadow: 0 2px 6px var(--dm-primary-ring); }
-.el-button--primary:hover, .el-button--primary:focus { background: var(--dm-primary-dark); border-color: var(--dm-primary-dark); }
+.el-button--default:not(.el-button--primary):not(.is-disabled):hover,
+.el-button--default:not(.el-button--primary):not(.is-disabled):focus { border-color: var(--dm-primary); background: var(--dm-primary-soft); color: var(--dm-primary); }
+.el-button--primary:not(.is-disabled) { background: var(--dm-primary); border-color: var(--dm-primary); color: #fff; box-shadow: 0 2px 6px var(--dm-primary-ring); }
+.el-button--primary:not(.is-disabled):hover,
+.el-button--primary:not(.is-disabled):focus { background: var(--dm-primary-dark); border-color: var(--dm-primary-dark); color: #fff; }
 
 .el-table { border-radius: var(--dm-radius); color: var(--dm-text); }
 .el-table th.el-table__cell { background: var(--dm-surface-2) !important; border-bottom-color: var(--dm-border); color: var(--dm-text-2); font-weight: 600; }
@@ -127,7 +129,10 @@ body { font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif; }
 .el-message--error { border-color: #f5c2c7; }
 .el-message--warning { border-color: #f7e0a3; }
 
-*::-webkit-scrollbar { width: 10px; height: 10px; }
-*::-webkit-scrollbar-thumb { background: rgba(87, 97, 111, .28); border: 2px solid transparent; border-radius: 999px; background-clip: padding-box; }
-*::-webkit-scrollbar-thumb:hover { background: rgba(87, 97, 111, .48); background-clip: padding-box; }
-*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar { width: 9px !important; height: 9px !important; cursor: pointer; }
+*::-webkit-scrollbar-thumb { background: rgba(87, 97, 111, .48); border: 1px solid transparent; border-radius: 999px; background-clip: padding-box; cursor: pointer; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(43, 109, 227, .72); background-clip: padding-box; cursor: pointer; }
+*::-webkit-scrollbar-track { background: rgba(87, 97, 111, .08); cursor: pointer; }
+.el-scrollbar__bar.is-vertical { width: 9px; right: 1px; }
+.el-scrollbar__bar.is-horizontal { height: 9px; bottom: 1px; }
+.el-scrollbar__thumb, .monaco-scrollable-element > .scrollbar > .slider { cursor: pointer !important; }

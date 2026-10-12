@@ -116,4 +116,8 @@ public class TableBriefQueryRequest extends PageQueryRequest implements DataSour
     private List<TableObjectRoleData> oldObjectRoleData;
     private List<TableObjectRoleData> newObjectRoleData;
 
+    private List<String> tableNames;
+
+    private List<TableBriefQueryRequest> objectRoleChanges;
+
 }

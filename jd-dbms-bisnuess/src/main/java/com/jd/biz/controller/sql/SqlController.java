@@ -11,7 +11,6 @@ import com.jd.biz.controller.sql.request.SqlFormatRequest;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.spi.MetaData;
 import com.jd.spi.sql.Chat2DBContext;
-import com.jd.spi.sql.ConnectInfo;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -52,11 +51,10 @@ public class SqlController {
     @GetMapping("/sortSqlFormat")
     public DataResult<String> sortSqlFormat(@Valid SortSqlFormatRequest sqlFormatRequest) {
         String dbType = Chat2DBContext.getConnectInfo().getDbType();
-        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
         MetaData metaData = Chat2DBContext.getMetaData();
         sqlFormatRequest.setColumnName(metaData.getMetaDataName(sqlFormatRequest.getColumnName()));
         String sql;
-        if ((dbType.equalsIgnoreCase(DBTypeEnum.DM.name()) && dbType.equalsIgnoreCase(DBTypeEnum.ORACLE.name())) || StrUtil.isNotEmpty(sqlFormatRequest.getNullType())){
+        if ((dbType.equalsIgnoreCase(DBTypeEnum.DM.name()) || dbType.equalsIgnoreCase(DBTypeEnum.ORACLE.name())) && StrUtil.isNotEmpty(sqlFormatRequest.getNullType())){
             sql = sqlFormatRequest.getColumnName()+" " + sqlFormatRequest.getSorType() + " NULLS " + sqlFormatRequest.getNullType();
 
         }else{

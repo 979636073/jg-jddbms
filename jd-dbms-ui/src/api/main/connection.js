@@ -71,6 +71,14 @@ function getSchemaList(data) {
   })
 }
 
+function deleteSchema(data) {
+  return request({
+    url: '/api/rdb/schema/delete_schema',
+    method: 'post',
+    data
+  })
+}
+
 // 获取驱动列表
 function getDriverList(data) {
   return request({
@@ -112,6 +120,28 @@ function getEnvList() {
   })
 }
 
+function getSharing(id) {
+  return request({ url: `/api/connection/datasource/sharing/${id}`, method: 'get' })
+}
+function searchSharingUsers(id, keyword) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/users`, method: 'get', params: { keyword } })
+}
+function grantSharingUser(id, userId, permissionCodes) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/users`, method: 'post', data: { userId, permissionCodes } })
+}
+function revokeSharingUser(id, userId) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/users/${userId}`, method: 'delete' })
+}
+function searchSharingTeams(id, keyword) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/teams`, method: 'get', params: { keyword } })
+}
+function grantSharingTeam(id, teamId, permissionCodes) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/teams`, method: 'post', data: { teamId, permissionCodes } })
+}
+function revokeSharingTeam(id, teamId) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/teams/${teamId}`, method: 'delete' })
+}
+
 export default {
   closeDataSource,
   getList,
@@ -121,10 +151,18 @@ export default {
   clone,
   getDatabaseList,
   getSchemaList,
+  deleteSchema,
   getDriverList,
   test,
   save,
   update,
   getEnvList,
+  getSharing,
+  searchSharingUsers,
+  grantSharingUser,
+  revokeSharingUser,
+  searchSharingTeams,
+  grantSharingTeam,
+  revokeSharingTeam,
   deleteDataSource
 }

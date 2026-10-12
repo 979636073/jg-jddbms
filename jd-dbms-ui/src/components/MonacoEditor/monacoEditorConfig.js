@@ -29,6 +29,8 @@ export const editorDefaultOptions = {
   scrollbar: {
     // 滚动条
     alwaysConsumeMouseWheel: false, // 总是消耗鼠标滚轮
+    verticalScrollbarSize: 9,
+    horizontalScrollbarSize: 9,
   },
   unicodeHighlight: {
     ambiguousCharacters: false,

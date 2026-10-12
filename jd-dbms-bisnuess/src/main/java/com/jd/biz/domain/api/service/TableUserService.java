@@ -10,6 +10,7 @@ import com.jd.spi.model.*;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 表用户管理
@@ -34,5 +35,9 @@ public interface TableUserService {
 
     List<TableObjectRoleData> allObjectRole(TableBriefQueryRequest request);
 
+    Map<String, List<TableObjectRoleData>> allObjectRoles(TableBriefQueryRequest request);
+
     UserOperationResult addObjectRole(TableBriefQueryRequest request) throws SQLException;
+
+    UserOperationResult addObjectRoles(TableBriefQueryRequest request) throws SQLException;
 }

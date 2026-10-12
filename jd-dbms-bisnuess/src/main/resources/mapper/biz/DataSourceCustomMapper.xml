@@ -7,6 +7,9 @@
         from DATA_SOURCE ds
         <where>
             <choose>
+                <when test="admin">
+                    and 1 = 1
+                </when>
                 <when test="kind == 'PRIVATE'">
                     and ds.USER_ID = #{userId}
                 </when>

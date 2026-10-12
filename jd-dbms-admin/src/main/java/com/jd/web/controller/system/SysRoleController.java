@@ -53,6 +53,17 @@ public class SysRoleController extends BaseController
     private ISysUserService userService;
 
     @Autowired
+    private RoleGrantGuard roleGrantGuard;
+
+    private void invalidateRoleSessions(Long roleId) {
+        SysUser query = new SysUser();
+        query.setRoleId(roleId);
+        for (SysUser assigned : userService.selectAllocatedList(query)) {
+            tokenService.delLoginUserSessions(assigned.getUserId(), null);
+        }
+    }
+
+    @Autowired
     private ISysDeptService deptService;
 
     @PreAuthorize("@ss.hasPermi('system:role:list')")
@@ -93,6 +104,7 @@ public class SysRoleController extends BaseController
     @PostMapping
     public AjaxResult add(@Validated @RequestBody SysRole role)
     {
+        roleGrantGuard.checkDefinition(role);
         if (!roleService.checkRoleNameUnique(role))
         {
             return error("新增角色'" + role.getRoleName() + "'失败，角色名称已存在");
@@ -116,6 +128,7 @@ public class SysRoleController extends BaseController
     {
         roleService.checkRoleAllowed(role);
         roleService.checkRoleDataScope(role.getRoleId());
+        roleGrantGuard.checkDefinition(role);
         if (!roleService.checkRoleNameUnique(role))
         {
             return error("修改角色'" + role.getRoleName() + "'失败，角色名称已存在");
@@ -128,6 +141,7 @@ public class SysRoleController extends BaseController
         
         if (roleService.updateRole(role) > 0)
         {
+            invalidateRoleSessions(role.getRoleId());
             // 更新缓存用户权限
             LoginUser loginUser = getLoginUser();
             if (StringUtils.isNotNull(loginUser.getUser()) && !loginUser.getUser().isAdmin())
@@ -151,7 +165,10 @@ public class SysRoleController extends BaseController
     {
         roleService.checkRoleAllowed(role);
         roleService.checkRoleDataScope(role.getRoleId());
-        return toAjax(roleService.authDataScope(role));
+        roleGrantGuard.checkMutableRole(role.getRoleId());
+        int rows = roleService.authDataScope(role);
+        if (rows > 0) invalidateRoleSessions(role.getRoleId());
+        return toAjax(rows);
     }
 
     /**
@@ -164,8 +181,11 @@ public class SysRoleController extends BaseController
     {
         roleService.checkRoleAllowed(role);
         roleService.checkRoleDataScope(role.getRoleId());
+        roleGrantGuard.checkMutableRole(role.getRoleId());
         role.setUpdateBy(getUsername());
-        return toAjax(roleService.updateRoleStatus(role));
+        int rows = roleService.updateRoleStatus(role);
+        if (rows > 0) invalidateRoleSessions(role.getRoleId());
+        return toAjax(rows);
     }
 
     /**
@@ -176,6 +196,7 @@ public class SysRoleController extends BaseController
     @DeleteMapping("/{roleIds}")
     public AjaxResult remove(@PathVariable Long[] roleIds)
     {
+        for (Long roleId : roleIds) roleGrantGuard.checkMutableRole(roleId);
         return toAjax(roleService.deleteRoleByIds(roleIds));
     }
 
@@ -221,7 +242,10 @@ public class SysRoleController extends BaseController
     @PutMapping("/authUser/cancel")
     public AjaxResult cancelAuthUser(@RequestBody SysUserRole userRole)
     {
-        return toAjax(roleService.deleteAuthUser(userRole));
+        roleGrantGuard.checkManagedRole(userRole.getRoleId());
+        int rows = roleService.deleteAuthUser(userRole);
+        if (rows > 0) tokenService.delLoginUserSessions(userRole.getUserId(), null);
+        return toAjax(rows);
     }
 
     /**
@@ -232,7 +256,10 @@ public class SysRoleController extends BaseController
     @PutMapping("/authUser/cancelAll")
     public AjaxResult cancelAuthUserAll(Long roleId, Long[] userIds)
     {
-        return toAjax(roleService.deleteAuthUsers(roleId, userIds));
+        roleGrantGuard.checkManagedRole(roleId);
+        int rows = roleService.deleteAuthUsers(roleId, userIds);
+        if (rows > 0 && userIds != null) for (Long userId : userIds) tokenService.delLoginUserSessions(userId, null);
+        return toAjax(rows);
     }
 
     /**
@@ -244,7 +271,13 @@ public class SysRoleController extends BaseController
     public AjaxResult selectAuthUserAll(Long roleId, Long[] userIds)
     {
         roleService.checkRoleDataScope(roleId);
-        return toAjax(roleService.insertAuthUsers(roleId, userIds));
+        roleGrantGuard.checkManagedRole(roleId);
+        if (userIds != null) for (Long userId : userIds) {
+            roleGrantGuard.checkAssignableRoles(new Long[]{roleId}, userId);
+        }
+        int rows = roleService.insertAuthUsers(roleId, userIds);
+        if (rows > 0 && userIds != null) for (Long userId : userIds) tokenService.delLoginUserSessions(userId, null);
+        return toAjax(rows);
     }
 
     /**

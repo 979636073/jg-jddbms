@@ -146,11 +146,6 @@ public class DataSourceDO implements Serializable {
     private String authenticationType;
 
     /**
-     * 密码备份
-     */
-    private String passwordCopy;
-
-    /**
      * 是否保存密码
      */
     private Boolean isSave;

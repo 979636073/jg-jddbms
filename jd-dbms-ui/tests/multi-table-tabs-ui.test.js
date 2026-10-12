@@ -108,7 +108,7 @@ assert(sideBarSource.includes('forceNew: true'), '右键新建窗口应保留强
 const sideBarContext = {
   module: { exports: {} },
   connectionServer: {}, sqlServer: {}, viewServer: {}, tableServer: {}, userServer: {}, tableSpaceServer: {},
-  SqlPreview: {}, CreateOption: {}, addTableSpaceVue: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {},
+  SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {},
   database: {}, uuidv4() { return 'side-page' }, copyText() {},
 }
 const sideBar = loadComponent(sideBarFile, sideBarContext).component

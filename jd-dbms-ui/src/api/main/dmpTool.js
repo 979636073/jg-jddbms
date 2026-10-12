@@ -28,6 +28,23 @@ export function setDmpToolEnabled(id, enabled) {
   })
 }
 
+export function redetectDmpTool(id, version) {
+  return request({
+    url: `/api/rdb/dmp-tools/${id}/redetect`,
+    method: 'post',
+    params: version ? { version } : undefined,
+    timeout: 30000
+  })
+}
+
+export function updateDmpTool(id, version, platform) {
+  return request({
+    url: `/api/rdb/dmp-tools/${id}`,
+    method: 'put',
+    params: { version, platform }
+  })
+}
+
 export function deleteDmpTool(id) {
   return request({
     url: `/api/rdb/dmp-tools/${id}`,

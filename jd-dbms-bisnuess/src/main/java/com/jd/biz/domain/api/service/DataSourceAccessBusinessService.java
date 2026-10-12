@@ -1,6 +1,7 @@
 package com.jd.biz.domain.api.service;
 
 import com.jd.biz.domain.api.model.DataSource;
+import com.jd.biz.domain.api.enums.DataSourceAction;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 
 import javax.validation.constraints.NotNull;
@@ -18,4 +19,8 @@ public interface DataSourceAccessBusinessService {
      * @return
      */
     ActionResult checkPermission(@NotNull DataSource dataSource);
+
+    ActionResult checkActionPermission(@NotNull DataSource dataSource, @NotNull DataSourceAction action);
+
+    ActionResult checkPlatformAction(@NotNull DataSourceAction action);
 }

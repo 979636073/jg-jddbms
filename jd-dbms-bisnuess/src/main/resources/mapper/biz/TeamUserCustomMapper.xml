@@ -8,7 +8,7 @@
             left join TEAM t on t.id = tu.TEAM_ID
         </if>
         <if test="userSearchKey != null">
-            left join DBHUB_USER du on du.id = tu.USER_ID
+            left join SYS_USER du on du.USER_ID = tu.USER_ID
         </if>
         <where>
             <if test="teamId != null ">

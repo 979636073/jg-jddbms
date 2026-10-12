@@ -14,6 +14,8 @@ import com.jd.spi.model.TableIndex;
 import com.jd.spi.model.TableIndexColumn;
 import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.SQLExecutor;
+import com.jd.spi.util.SqlUtils;
+import com.jd.spi.util.JdbcUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -60,7 +62,8 @@ public class TestCreateImpl {
                     table.getIndexList().add(tableIndex);
                 }
                 String sqlStr = Chat2DBContext.getSqlBuilder().buildCreateTableSql(table);
-                String[] sqlArr = sqlStr.split(";");
+                List<String> sqlArr = SqlUtils.parse(sqlStr,
+                        JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType()));
                 for(String sql:sqlArr){
                     if (StrUtil.isNotEmpty(sql)) {
                         SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(),sql.trim(), new DefaultValueHandler());

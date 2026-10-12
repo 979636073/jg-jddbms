@@ -431,16 +431,16 @@ function createTriggersWH(data) {
 // 创建触发器
 function delete_triggers(data) {
   return request({
-    url: '/api/rdb/trigger/delete_triggers',
+    url: '/api/rdb/trigger/deleteTriggers',
     method: 'post',
     data: data
   })
 }
 
 
-function SortSqlFormat(data) {
+function sortSqlFormat(data) {
   return request({
-    url: '/api/sql/SortSqlFormat',
+    url: '/api/sql/sortSqlFormat',
     method: 'get',
     params: data
   })
@@ -802,7 +802,7 @@ export default {
   getExecuteSQL,
   viewDelete,
   filterSqlFormat,
-  SortSqlFormat,
+  sortSqlFormat,
   create_procedure,
   delete_procedure,
   create_function,

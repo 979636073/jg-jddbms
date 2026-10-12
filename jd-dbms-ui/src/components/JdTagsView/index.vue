@@ -292,21 +292,10 @@ export default {
       }
     },
     async routerLinkFn(type) {
-      this.pageId = uuidv4();
       if (type !== "look") {
-        await this.$store
-          .dispatch("workspaceData/createConsole", {
-            pageId: this.pageId,
-            dataSourceId: this.dataInfo.dataSource.id,
-            dataSourceName: this.dataInfo.dataSource.alias,
-            databaseType: this.dataInfo.dataSource.type
-          })
-          .then(res => {
-            this.$router.push({
-              path: "/workspace/query/" + this.pageId
-            });
-          });
+        this.$emit("newQuery");
       } else {
+        this.pageId = uuidv4();
         this.$router.push({ path: `/workspace/${type}/` + this.pageId });
       }
       this.showPop = !this.showPop;

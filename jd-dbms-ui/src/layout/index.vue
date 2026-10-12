@@ -1,14 +1,14 @@
 <template>
   <div :class="classObj" class="app-wrapper" :style="{'--current-color': theme}">
-    <div v-if="device==='mobile'&&sidebar.opened" class="drawer-bg" @click="handleClickOutside"/>
-    <sidebar v-if="!sidebar.hide" class="sidebar-container"/>
-    <div :class="{hasTagsView:needTagsView,sidebarHide:sidebar.hide}" class="main-container">
-      <div :class="{'fixed-header':fixedHeader}">
+    <div v-if="device==='mobile'&&sidebar.opened&&!isStandaloneTool" class="drawer-bg" @click="handleClickOutside"/>
+    <sidebar v-if="!sidebar.hide&&!isStandaloneTool" class="sidebar-container"/>
+    <div :class="{hasTagsView:needTagsView&&!isStandaloneTool,sidebarHide:sidebar.hide||isStandaloneTool}" class="main-container">
+      <div v-if="!isStandaloneTool" :class="{'fixed-header':fixedHeader}">
         <navbar/>
         <tags-view v-if="needTagsView"/>
       </div>
       <app-main/>
-      <right-panel>
+      <right-panel v-if="!isStandaloneTool">
         <settings/>
       </right-panel>
     </div>
@@ -21,6 +21,8 @@ import { AppMain, Navbar, Settings, Sidebar, TagsView } from './components'
 import ResizeMixin from './mixin/ResizeHandler'
 import { mapState } from 'vuex'
 import variables from '@/assets/styles/variables.scss'
+import { getInfo } from '@/api/login'
+import { getToken } from '@/utils/auth'
 
 export default {
   name: 'Layout',
@@ -33,7 +35,13 @@ export default {
     TagsView
   },
   mixins: [ResizeMixin],
+  data() {
+    return { standaloneAuthTimer: null, standaloneAuthPending: false }
+  },
   computed: {
+    isStandaloneTool() {
+      return Boolean(this.$route.meta.standaloneTool)
+    },
     ...mapState({
       theme: state => state.settings.theme,
       sideTheme: state => state.settings.sideTheme,
@@ -44,17 +52,58 @@ export default {
     }),
     classObj() {
       return {
-        hideSidebar: !this.sidebar.opened,
-        openSidebar: this.sidebar.opened,
+        hideSidebar: !this.sidebar.opened || this.isStandaloneTool,
+        openSidebar: this.sidebar.opened && !this.isStandaloneTool,
         withoutAnimation: this.sidebar.withoutAnimation,
-        mobile: this.device === 'mobile'
+        mobile: this.device === 'mobile',
+        'standalone-tool': this.isStandaloneTool
       }
     },
     variables() {
       return variables;
     }
   },
+  watch: {
+    isStandaloneTool(active) {
+      if (active) this.startStandaloneAuthChecks()
+      else this.stopStandaloneAuthChecks()
+    }
+  },
+  mounted() {
+    if (this.isStandaloneTool) this.startStandaloneAuthChecks()
+  },
+  beforeDestroy() {
+    this.stopStandaloneAuthChecks()
+  },
   methods: {
+    startStandaloneAuthChecks() {
+      if (this.standaloneAuthTimer) return
+      this.standaloneAuthTimer = setInterval(this.checkStandaloneAuth, 60000)
+      window.addEventListener('focus', this.checkStandaloneAuth)
+      document.addEventListener('visibilitychange', this.checkStandaloneAuth)
+      this.checkStandaloneAuth()
+    },
+    stopStandaloneAuthChecks() {
+      clearInterval(this.standaloneAuthTimer)
+      this.standaloneAuthTimer = null
+      window.removeEventListener('focus', this.checkStandaloneAuth)
+      document.removeEventListener('visibilitychange', this.checkStandaloneAuth)
+    },
+    async checkStandaloneAuth() {
+      if (!this.isStandaloneTool || this.standaloneAuthPending) return
+      if (!getToken()) {
+        window.location.replace(`/login?redirect=${encodeURIComponent(this.$route.fullPath)}`)
+        return
+      }
+      this.standaloneAuthPending = true
+      try {
+        await getInfo()
+      } catch (error) {
+        // 401 由请求拦截器统一清除登录状态并跳转；临时网络故障保留当前页面。
+      } finally {
+        this.standaloneAuthPending = false
+      }
+    },
     handleClickOutside() {
       this.$store.dispatch('app/closeSideBar', { withoutAnimation: false })
     }
@@ -107,5 +156,9 @@ export default {
 
   .mobile .fixed-header {
     width: 100%;
+  }
+
+  .standalone-tool ::v-deep .app-main {
+    min-height: 100vh;
   }
 </style>

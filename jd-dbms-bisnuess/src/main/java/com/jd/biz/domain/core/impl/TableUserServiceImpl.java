@@ -56,7 +56,7 @@ public class TableUserServiceImpl implements TableUserService {
             }
             return ListResult.of(tableUsers);
         } catch (Exception e) {
-            throw new BusinessException("user.query.failed", new Object[]{ExceptionUtils.getMessage(e)});
+            throw new BusinessException("user.query.failed", new Object[]{ExceptionUtils.getMessage(e)}, e);
         }
     }
 
@@ -64,10 +64,43 @@ public class TableUserServiceImpl implements TableUserService {
     public Table tableUser(String databaseName, String username) {
         Table table = Chat2DBContext.getMetaData().tableUser(Chat2DBContext.getConnection(), databaseName, username);
         if (Objects.nonNull(table) && Objects.nonNull(table.getTableDetails())) {
-            table.setQuerySql(Chat2DBContext.getSqlBuilder().createUser(table.getTableDetails().getName()));
+            table.setQuerySql(userScript(table.getTableDetails().getName()));
         }
         table.setTableUserRoles(getUserRole(username));
         return table;
+    }
+
+    private String userScript(String userName) {
+        SqlBuilder<?> builder = Chat2DBContext.getSqlBuilder();
+        return buildUserScript(builder, userName, getUserRole(userName), Chat2DBContext.getMetaData()
+                .userObjectRoles(Chat2DBContext.getConnection(), userName));
+    }
+
+    String buildUserScript(SqlBuilder<?> builder, String userName, List<TableUserRole> roles,
+                           List<TableObjectRoleData> privileges) {
+        StringBuilder script = new StringBuilder(builder.createUser(userName)).append(';');
+        if (roles != null) {
+            for (TableUserRole role : roles) {
+                if (StrUtil.isNotBlank(role.getRole())) {
+                    boolean admin = "YES".equalsIgnoreCase(role.getIsAdmin()) || "是".equals(role.getIsAdmin());
+                    script.append('\n').append(builder.addUserRole(userName, role.getRole(), admin ? role.getRole() : "")).append(';');
+                }
+            }
+        }
+        if (privileges != null) {
+            for (TableObjectRoleData privilege : privileges) {
+                if (StrUtil.isBlank(privilege.getOwner()) || StrUtil.isBlank(privilege.getTableName())
+                        || StrUtil.isBlank(privilege.getDesc())) {
+                    continue;
+                }
+                List<String> statements = builder.addObjectRole(privilege.getOwner(), userName,
+                        privilege.getTableName(), Collections.singletonList(privilege));
+                for (String statement : statements) {
+                    script.append('\n').append(statement).append(';');
+                }
+            }
+        }
+        return script.toString();
     }
 
     public List<TableUserRole> getUserRole(String username) {
@@ -206,51 +239,76 @@ public class TableUserServiceImpl implements TableUserService {
 
     @Override
     public List<TableObjectRoleData> allObjectRole(TableBriefQueryRequest request) {
+        List<TableObjectRoleData> granted = Collections.emptyList();
+        if (StrUtil.isNotBlank(request.getSchemaName()) && StrUtil.isNotBlank(request.getTableName())
+                && StrUtil.isNotBlank(request.getUserName())) {
+            granted = Chat2DBContext.getMetaData().allObjectRole(Chat2DBContext.getConnection(),
+                    request.getUserName(), request.getSchemaName(), request.getTableName());
+        }
+        return normalizeObjectRoles(granted);
+    }
+
+    @Override
+    public Map<String, List<TableObjectRoleData>> allObjectRoles(TableBriefQueryRequest request) {
+        if (StrUtil.isBlank(request.getSchemaName()) || StrUtil.isBlank(request.getUserName())
+                || request.getTableNames() == null || request.getTableNames().isEmpty()
+                || request.getTableNames().size() > 200
+                || request.getTableNames().stream().anyMatch(StrUtil::isBlank)) {
+            throw new BusinessException("user.objectRole.paramRequired");
+        }
+        Map<String, List<TableObjectRoleData>> granted = Chat2DBContext.getMetaData().allObjectRoles(
+                Chat2DBContext.getConnection(), request.getUserName(), request.getSchemaName(), request.getTableNames());
+        Map<String, List<TableObjectRoleData>> result = new LinkedHashMap<>();
+        for (String tableName : request.getTableNames()) {
+            result.put(tableName, normalizeObjectRoles(granted.get(tableName)));
+        }
+        return result;
+    }
+
+    private List<TableObjectRoleData> normalizeObjectRoles(List<TableObjectRoleData> granted) {
         String dbType = Chat2DBContext.getDBConfig().getDbType();
-        String[] array = null;
+        String[] array;
         if (DBTypeEnum.DM.name().equals(dbType)) {
             array = new String[]{"ALL", "SELECT", "INSERT", "DELETE", "UPDATE", "REFERENCES", "SELECT FOR DUMP", "ALTER", "INDEX"};
         } else {
             array = new String[]{"ALL", "SELECT", "INSERT", "DELETE", "UPDATE", "REFERENCES", "ALTER", "INDEX"};
         }
-        Set<TableObjectRoleData> set = new HashSet<>();
-        if (StrUtil.isNotBlank(request.getSchemaName()) && StrUtil.isNotBlank(request.getTableName()) && StrUtil.isNotBlank(request.getUserName())) {
-            // 查询对象权限
-            List<TableObjectRoleData> list = Chat2DBContext.getMetaData().allObjectRole(Chat2DBContext.getConnection(), request.getUserName(), request.getSchemaName(), request.getTableName());
-            if (CollUtil.isEmpty(list)) {
-                for (String s : array) {
-                    TableObjectRoleData tableRoleData = new TableObjectRoleData();
-                    tableRoleData.setDesc(s);
-                    set.add(tableRoleData);
-                }
-            } else {
-                set.addAll(list);
-                if (list.size() == array.length-1) {
-                    TableObjectRoleData tableRoleData = new TableObjectRoleData();
-                    tableRoleData.setDesc(array[0]);
-                    tableRoleData.setRule(Boolean.TRUE);
-                    List<Boolean> booleans = list.stream().map(TableObjectRoleData::getToRule).collect(Collectors.toList());
-                    tableRoleData.setToRule(booleans.size() == array.length-1);
-                    set.add(tableRoleData);
-                } else {
-                    List<String> collect = list.stream().map(TableObjectRoleData::getDesc).collect(Collectors.toList());
-                    for (String s : array) {
-                        if (!collect.contains(s)) {
-                            TableObjectRoleData tableRoleData = new TableObjectRoleData();
-                            tableRoleData.setDesc(s);
-                            set.add(tableRoleData);
+        Map<String, TableObjectRoleData> privileges = new LinkedHashMap<>();
+        for (String privilegeName : array) {
+            TableObjectRoleData empty = new TableObjectRoleData();
+            empty.setDesc(privilegeName);
+            privileges.put(privilegeName, empty);
+        }
+        if (granted != null) {
+                for (TableObjectRoleData privilege : granted) {
+                    if (privilege != null && StrUtil.isNotBlank(privilege.getDesc())) {
+                        TableObjectRoleData existing = privileges.get(privilege.getDesc());
+                        if (existing != null && Boolean.TRUE.equals(existing.getRule())) {
+                            existing.setToRule(Boolean.TRUE.equals(existing.getToRule())
+                                    || Boolean.TRUE.equals(privilege.getToRule()));
+                        } else {
+                            privileges.put(privilege.getDesc(), privilege);
                         }
                     }
                 }
+            TableObjectRoleData all = privileges.get("ALL");
+            boolean allGranted = Boolean.TRUE.equals(all.getRule());
+            boolean allTransferable = Boolean.TRUE.equals(all.getToRule());
+            boolean allIndividualGranted = true;
+            boolean allIndividualTransferable = true;
+            for (String privilegeName : array) {
+                if (!"ALL".equals(privilegeName)) {
+                    TableObjectRoleData privilege = privileges.get(privilegeName);
+                    allIndividualGranted &= Boolean.TRUE.equals(privilege.getRule());
+                    allIndividualTransferable &= Boolean.TRUE.equals(privilege.getToRule());
+                }
             }
-        } else {
-            for (String s : array) {
-                TableObjectRoleData tableRoleData = new TableObjectRoleData();
-                tableRoleData.setDesc(s);
-                set.add(tableRoleData);
-            }
+            allGranted |= allIndividualGranted;
+            allTransferable |= allIndividualGranted && allIndividualTransferable;
+            all.setRule(allGranted);
+            all.setToRule(allGranted && allTransferable);
         }
-        return set.stream().sorted(Comparator.comparing(TableObjectRoleData::getDesc)).collect(Collectors.toList());
+        return privileges.values().stream().sorted(Comparator.comparing(TableObjectRoleData::getDesc)).collect(Collectors.toList());
     }
 
     @Override
@@ -265,6 +323,35 @@ public class TableUserServiceImpl implements TableUserService {
             throw new BusinessException("user.objectRole.sameSchema");
         }
         return executeChanges(buildObjectRoleChanges(Chat2DBContext.getSqlBuilder(), request));
+    }
+
+    @Override
+    public UserOperationResult addObjectRoles(TableBriefQueryRequest request) {
+        if (StrUtil.isBlank(request.getSchemaName()) || StrUtil.isBlank(request.getUserName())
+                || request.getObjectRoleChanges() == null || request.getObjectRoleChanges().isEmpty()
+                || request.getObjectRoleChanges().size() > 200) {
+            throw new BusinessException("user.objectRole.paramRequired");
+        }
+        UserOperationResult summary = new UserOperationResult();
+        for (TableBriefQueryRequest change : request.getObjectRoleChanges()) {
+            String tableName = change == null ? null : change.getTableName();
+            try {
+                if (change == null) {
+                    throw new BusinessException("user.objectRole.paramRequired");
+                }
+                change.setSchemaName(request.getSchemaName());
+                change.setUserName(request.getUserName());
+                UserOperationResult one = addObjectRole(change);
+                String failure = one.getItems().stream()
+                        .filter(item -> "FAILED".equals(item.getStatus()) || "ROLLBACK_FAILED".equals(item.getStatus()))
+                        .map(item -> item.getName() + ": " + item.getMessage())
+                        .collect(Collectors.joining("; "));
+                summary.add(tableName, "OBJECT_ROLE", one.isSuccess() ? "SUCCESS" : "FAILED", failure);
+            } catch (RuntimeException error) {
+                summary.add(tableName, "OBJECT_ROLE", "FAILED", ExceptionUtils.getMessage(error));
+            }
+        }
+        return summary;
     }
 
     List<SqlChange> buildUserRoleChanges(SqlBuilder<?> sqlBuilder, String userName,

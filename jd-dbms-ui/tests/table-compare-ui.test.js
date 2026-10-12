@@ -19,6 +19,7 @@ const compareContext = {
   tableServer: {},
   FieldCompareResult: {},
   WholeDatabaseResult: {},
+  SchemaObjectResult: {},
   setTimeout,
   clearTimeout
 }
@@ -42,13 +43,18 @@ const targetColumns = [
   { name: 'NAME', dataType: 'VARCHAR', columnType: 'VARCHAR(80)', columnSize: 80, nullable: 0, comment: '用户姓名' },
   { name: 'UPDATED_AT', dataType: 'DATE', columnType: 'DATE', nullable: 0 }
 ]
-const compareState = { sameValue: compare.methods.sameValue }
+const compareState = {
+  sameValue: compare.methods.sameValue,
+  normalizedFieldValue: compare.methods.normalizedFieldValue,
+  displayFieldValue: compare.methods.displayFieldValue
+}
 const rows = compare.methods.buildRows.call(compareState, sourceColumns, targetColumns)
 assert.strictEqual(rows.length, 4)
 assert.strictEqual(rows.find(row => row.columnName === 'ID').status, 'same')
 assert.strictEqual(rows.find(row => row.columnName === 'NAME').status, 'changed')
 assert(rows.find(row => row.columnName === 'NAME').changedFields.includes('columnSize'))
 assert(rows.find(row => row.columnName === 'NAME').changedFields.includes('nullable'))
+assert(rows.find(row => row.columnName === 'NAME').changeDetails.some(item => item.label === '是否可空' && item.source === '可为空' && item.target === '不可为空'))
 assert.strictEqual(rows.find(row => row.columnName === 'CREATED_AT').status, 'source-only')
 assert.strictEqual(rows.find(row => row.columnName === 'UPDATED_AT').status, 'target-only')
 
@@ -71,24 +77,59 @@ const databaseRows = compare.methods.buildDatabaseRows.call({},
   [{ name: 'USERS' }, { name: 'ORDERS' }],
   [{ name: 'users' }, { name: 'AUDIT_LOG' }]
 )
-assert.strictEqual(databaseRows.length, 3)
-assert.strictEqual(databaseRows.find(row => row.sourceName === 'USERS').targetName, 'users', '整库表名匹配应忽略大小写')
+assert.strictEqual(databaseRows.length, 4)
+assert.strictEqual(databaseRows.find(row => row.sourceName === 'USERS').status, 'source-only', '大小写敏感模式应区分表名')
+assert.strictEqual(databaseRows.find(row => row.targetName === 'users').status, 'target-only')
 assert.strictEqual(databaseRows.find(row => row.sourceName === 'ORDERS').status, 'source-only')
 assert.strictEqual(databaseRows.find(row => row.targetName === 'AUDIT_LOG').status, 'target-only')
 
-const caseInsensitiveFieldRows = compare.methods.buildRows.call(compareState,
+const caseSensitiveFieldRows = compare.methods.buildRows.call(compareState,
   [{ name: 'USER_ID', dataType: 'NUMBER' }],
-  [{ name: 'user_id', dataType: 'NUMBER' }],
-  true
+  [{ name: 'user_id', dataType: 'NUMBER' }]
 )
-assert.strictEqual(caseInsensitiveFieldRows.length, 1)
-assert.strictEqual(caseInsensitiveFieldRows[0].status, 'same', '整库字段名匹配应忽略大小写')
+assert.strictEqual(caseSensitiveFieldRows.length, 2)
+assert.strictEqual(caseSensitiveFieldRows[0].status, 'source-only', '大小写敏感模式应区分字段名')
+const orderRows = compare.methods.buildRows.call(compareState,
+  [{ name: 'ID', dataType: 'NUMBER', ordinalPosition: 1 }],
+  [{ name: 'ID', dataType: 'NUMBER', ordinalPosition: 2 }]
+)
+assert.strictEqual(orderRows[0].status, 'changed', '字段顺序变化应计入结构差异')
+assert(orderRows[0].changedFields.includes('ordinalPosition'))
+
+const equivalentMetadata = compare.methods.buildRows.call(compareState,
+  [{ name: 'ID', dataType: 'VARCHAR', columnType: '', columnSize: 0, nullable: 1, primaryKey: 1, autoIncrement: false, ordinalPosition: 1 }],
+  [{ name: 'ID', dataType: 'varchar', columnType: 'VARCHAR', columnSize: null, nullable: true, primaryKey: true, autoIncrement: 0, ordinalPosition: '1' }]
+)
+assert.strictEqual(equivalentMetadata[0].status, 'same', '等价元数据不应误报有变化')
+const visibleLengthChange = compare.methods.buildRows.call(compareState,
+  [{ name: 'ID', dataType: 'VARCHAR', columnType: 'VARCHAR', columnSize: 20 }],
+  [{ name: 'ID', dataType: 'VARCHAR', columnType: 'VARCHAR', columnSize: 40 }]
+)
+assert.strictEqual(visibleLengthChange[0].status, 'changed')
+assert(visibleLengthChange[0].changeDetails.some(item => item.label === '长度' && item.source === '20' && item.target === '40'))
 
 const wholeResultFile = path.join(__dirname, '../src/views/main/tableCompare/components/WholeDatabaseResult.vue')
-const wholeResult = loadComponent(wholeResultFile, { module: { exports: {} } }).component
+const wholeResult = loadComponent(wholeResultFile, { module: { exports: {} }, FieldCompareResult: {} }).component
 const wholeSummary = wholeResult.computed.summary.call({ rows: databaseRows })
-assert.strictEqual(wholeSummary['source-only'], 1)
-assert.strictEqual(wholeSummary['target-only'], 1)
+assert.strictEqual(wholeSummary['source-only'], 2)
+assert.strictEqual(wholeSummary['target-only'], 2)
+const largeResult = Array.from({ length: 1000 }, (_, index) => ({ key: String(index) }))
+const visiblePage = wholeResult.computed.pageRows.call({ filteredRows: largeResult, page: 2, pageSize: 50 })
+assert.strictEqual(visiblePage.length, 50, '整库结果应按页渲染，避免低配终端一次渲染千行')
+assert.strictEqual(visiblePage[0].key, '50')
+
+const reportFile = path.join(__dirname, '../src/views/main/tableCompare/report.js')
+const reportSource = fs.readFileSync(reportFile, 'utf8').replace('export function buildCompareReport', 'function buildCompareReport') + '\nmodule.exports = buildCompareReport'
+const reportContext = { module: { exports: {} } }
+vm.runInNewContext(reportSource, reportContext, { filename: reportFile })
+const report = reportContext.module.exports({
+  mode: 'table', sourcePath: '源库 / TEST', targetPath: '目标库 / TEST',
+  fieldRows: visibleLengthChange, objectRows: [{ kind: 'VIEW', name: '<危险>', status: 'changed', source: { definition: 'SELECT 1' }, target: { definition: 'SELECT 2' } }]
+})
+assert(report.includes('长度') && report.includes('20') && report.includes('40'), 'PDF 报告应包含具体变化值')
+assert(report.includes('&lt;危险&gt;') && !report.includes('<危险>'), '数据库元数据应转义后写入报告')
+assert(report.includes('window.print()'), '报告应支持浏览器保存 PDF')
+if (process.env.PDF_FIXTURE_HTML) fs.writeFileSync(process.env.PDF_FIXTURE_HTML, report, 'utf8')
 
 const tagsFile = path.join(__dirname, '../src/components/JdTagsView/index.vue')
 const tagsSource = fs.readFileSync(tagsFile, 'utf8')

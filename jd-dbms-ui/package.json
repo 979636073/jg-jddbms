@@ -8,6 +8,7 @@
     "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider vue-cli-service build",
     "build:stage": "cross-env NODE_OPTIONS=--openssl-legacy-provider vue-cli-service build --mode staging",
     "test:view-permission": "node tests/view-permission-regression.test.js",
+    "test:core": "node tests/run-core-tests.js",
     "preview": "node build/index.js --preview",
     "lint": "eslint --ext .js,.vue src"
   },

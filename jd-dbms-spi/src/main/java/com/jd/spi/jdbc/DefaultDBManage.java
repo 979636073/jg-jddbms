@@ -93,7 +93,7 @@ public class DefaultDBManage implements DBManage {
 
     @Override
     public void modifyDatabase(Connection connection, String databaseName, String newDatabaseName) {
-
+        throw new UnsupportedOperationException("当前数据库不支持修改数据库名称");
     }
 
     @Override
@@ -103,7 +103,7 @@ public class DefaultDBManage implements DBManage {
 
     @Override
     public void dropDatabase(Connection connection, String databaseName) {
-
+        throw new UnsupportedOperationException("当前数据库不支持删除数据库");
     }
 
     @Override
@@ -113,12 +113,12 @@ public class DefaultDBManage implements DBManage {
 
     @Override
     public void dropSchema(Connection connection, String databaseName, String schemaName) {
-
+        throw new UnsupportedOperationException("当前数据库不支持删除模式");
     }
 
     @Override
     public void modifySchema(Connection connection, String databaseName, String schemaName, String newSchemaName) {
-
+        throw new UnsupportedOperationException("当前数据库不支持修改模式名称");
     }
 
     @Override
@@ -138,7 +138,7 @@ public class DefaultDBManage implements DBManage {
 
     @Override
     public void updateProcedure(Connection connection, String databaseName, String schemaName, Procedure procedure) throws SQLException {
-
+        throw new UnsupportedOperationException("当前数据库不支持更新存储过程");
     }
 
     @Override

@@ -28,7 +28,7 @@ public class MigrationServiceTest {
                         AbstractWrapper<?, ?, ?> query = (AbstractWrapper<?, ?, ?>) args[0]; query.getSqlSegment();
                         String sql = query.getSqlSegment().toUpperCase(Locale.ROOT);
                         assertTrue(sql.contains("USER_ID")); assertTrue(sql.contains("TASK_TYPE"));
-                        return row != null && query.getParamNameValuePairs().values().contains(row.getUserId())
+                        return row != null && "N".equals(row.getDeleted()) && query.getParamNameValuePairs().values().contains(row.getUserId())
                                 && query.getParamNameValuePairs().values().contains(row.getId()) ? row : null;
                     }
                     if (method.getName().equals("insert")) { row = (TaskDO) args[0]; row.setId(100L); return 1; }
@@ -38,6 +38,7 @@ public class MigrationServiceTest {
                             AbstractWrapper<?, ?, ?> query = (AbstractWrapper<?, ?, ?>) args[1]; query.getSqlSegment();
                             if (!query.getParamNameValuePairs().values().contains(row.getTaskStatus())) return 0;
                         }
+                        if (patch == null) { row.setDeleted("Y"); return 1; }
                         row.setContent(patch.getContent()); row.setTaskStatus(patch.getTaskStatus()); row.setTaskProgress(patch.getTaskProgress());
                         if (!MigrationService.ACTIVE.contains(row.getTaskStatus()) && !Arrays.asList("MIG_DRAFT", "MIG_READY", "MIG_BLOCKED").contains(row.getTaskStatus())) finished.countDown();
                         return 1;
@@ -54,6 +55,7 @@ public class MigrationServiceTest {
         @Override public DataSource authorized(Long id) {
             authorizationChecks++; DataSource source = new DataSource(); source.setId(id); source.setType("DM"); source.setAlias("QA " + id); return source;
         }
+        @Override public DataSource authorized(Long id, com.jd.biz.domain.api.enums.DataSourceAction action) { return authorized(id); }
         @Override public Connection open(DataSource source) { return source.getId() == 1L ? this.source.connection() : target.connection(); }
     }
     static class Metadata extends MigrationMetadata {
@@ -79,6 +81,21 @@ public class MigrationServiceTest {
             Task task = service.save(null, 42L, MigrationDialectTest.config()); assertEquals("MIG_DRAFT", service.get(task.id, 42L).status);
             try { service.get(task.id, 43L); fail(); } catch (BusinessException expected) { }
             assertFalse(new String(repository.row.getContent(), java.nio.charset.StandardCharsets.UTF_8).contains("password"));
+        } finally { service.shutdown(); }
+    }
+    @Test public void deletionIsOwnerScopedAndRejectsRunningTasks() {
+        Repository repository = new Repository(); MigrationService service = new MigrationService(repository.mapper(), new Connections(), new Metadata());
+        try {
+            Task task = service.save(null, 42L, MigrationDialectTest.config());
+            try { service.delete(task.id, 43L); fail(); } catch (BusinessException expected) { }
+            assertEquals("N", repository.row.getDeleted());
+            repository.row.setTaskStatus("MIG_RUNNING");
+            try { service.delete(task.id, 42L); fail(); } catch (BusinessException expected) { }
+            assertEquals("N", repository.row.getDeleted());
+            repository.row.setTaskStatus("MIG_DRAFT");
+            assertTrue(service.delete(task.id, 42L));
+            assertEquals("Y", repository.row.getDeleted());
+            try { service.get(task.id, 42L); fail(); } catch (BusinessException expected) { }
         } finally { service.shutdown(); }
     }
     @Test public void startRequiresConfirmationFreshAssessmentAndMatchingFingerprint() {

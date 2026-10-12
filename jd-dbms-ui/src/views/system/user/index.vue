@@ -1,8 +1,10 @@
 <template>
   <div class="app-container">
+    <h2>平台用户</h2>
+    <p class="user-hint">管理登录账号与平台角色。目标数据库中的用户及对象权限，请在对应连接的工作区管理。</p>
     <el-row :gutter="20">
       <!--部门数据-->
-      <el-col :span="4" :xs="24">
+      <el-col v-if="false" :span="4" :xs="24">
         <div class="head-container">
           <el-input
             v-model="deptName"
@@ -28,21 +30,12 @@
         </div>
       </el-col>
       <!--用户数据-->
-      <el-col :span="20" :xs="24">
+      <el-col :span="24" :xs="24">
         <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
           <el-form-item label="用户名称" prop="userName">
             <el-input
               v-model="queryParams.userName"
               placeholder="请输入用户名称"
-              clearable
-              style="width: 240px"
-              @keyup.enter.native="handleQuery"
-            />
-          </el-form-item>
-          <el-form-item label="手机号码" prop="phonenumber">
-            <el-input
-              v-model="queryParams.phonenumber"
-              placeholder="请输入手机号码"
               clearable
               style="width: 240px"
               @keyup.enter.native="handleQuery"
@@ -113,7 +106,7 @@
               v-hasPermi="['system:user:remove']"
             >删除</el-button>
           </el-col>
-          <el-col :span="1.5">
+          <el-col v-if="false" :span="1.5">
             <el-button
               type="info"
               plain
@@ -123,7 +116,7 @@
               v-hasPermi="['system:user:import']"
             >导入</el-button>
           </el-col>
-          <el-col :span="1.5">
+          <el-col v-if="false" :span="1.5">
             <el-button
               type="warning"
               plain
@@ -133,17 +126,23 @@
               v-hasPermi="['system:user:export']"
             >导出</el-button>
           </el-col>
-          <right-toolbar :showSearch.sync="showSearch" @queryTable="getList" :columns="columns"></right-toolbar>
+          <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
         </el-row>
 
         <el-table v-loading="loading" :data="userList" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="50" align="center" />
           <el-table-column label="用户编号" align="center" key="userId" prop="userId" v-if="columns[0].visible" />
+          <el-table-column label="头像" align="center" width="90">
+            <template slot-scope="scope">
+              <el-button v-if="canEditUser" class="avatar-button" type="text" title="设置头像" @click="openAvatarDialog(scope.row)">
+                <img :src="avatarUrl(scope.row.avatar)" alt="用户头像" class="avatar-thumbnail" />
+              </el-button>
+              <img v-if="!canEditUser" :src="avatarUrl(scope.row.avatar)" alt="用户头像" class="avatar-thumbnail" />
+            </template>
+          </el-table-column>
           <el-table-column label="用户名称" align="center" key="userName" prop="userName" v-if="columns[1].visible" :show-overflow-tooltip="true" />
-          <el-table-column label="用户昵称" align="center" key="nickName" prop="nickName" v-if="columns[2].visible" :show-overflow-tooltip="true" />
-          <el-table-column label="部门" align="center" key="deptName" prop="dept.deptName" v-if="columns[3].visible" :show-overflow-tooltip="true" />
-          <el-table-column label="手机号码" align="center" key="phonenumber" prop="phonenumber" v-if="columns[4].visible" width="120" />
-          <el-table-column label="状态" align="center" key="status" v-if="columns[5].visible">
+          <el-table-column label="部门" align="center" key="deptName" prop="dept.deptName" v-if="false" :show-overflow-tooltip="true" />
+          <el-table-column label="状态" align="center" key="status" v-if="columns[2].visible">
             <template slot-scope="scope">
               <el-switch
                 v-model="scope.row.status"
@@ -153,7 +152,7 @@
               ></el-switch>
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" align="center" prop="createTime" v-if="columns[6].visible" width="160">
+          <el-table-column label="创建时间" align="center" prop="createTime" v-if="columns[3].visible" width="160">
             <template slot-scope="scope">
               <span>{{ parseTime(scope.row.createTime) }}</span>
             </template>
@@ -207,30 +206,6 @@
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
         <el-row>
           <el-col :span="12">
-            <el-form-item label="用户昵称" prop="nickName">
-              <el-input v-model="form.nickName" placeholder="请输入用户昵称" maxlength="30" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="归属部门" prop="deptId">
-              <treeselect v-model="form.deptId" :options="deptOptions" :show-count="true" placeholder="请选择归属部门" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row>
-          <el-col :span="12">
-            <el-form-item label="手机号码" prop="phonenumber" class="is-required">
-              <el-input v-model="form.phonenumber" placeholder="请输入手机号码" maxlength="11" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="邮箱" prop="email">
-              <el-input v-model="form.email" placeholder="请输入邮箱" maxlength="50" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row>
-          <el-col :span="12">
             <el-form-item v-if="form.userId == undefined" label="用户名称" prop="userName">
               <el-input v-model="form.userName" placeholder="请输入用户名称" maxlength="30" />
             </el-form-item>
@@ -243,18 +218,6 @@
         </el-row>
         <el-row>
           <el-col :span="12">
-            <el-form-item label="用户性别">
-              <el-select v-model="form.sex" placeholder="请选择性别">
-                <el-option
-                  v-for="dict in dict.type.sys_user_sex"
-                  :key="dict.value"
-                  :label="dict.label"
-                  :value="dict.value"
-                ></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="状态">
               <el-radio-group v-model="form.status">
                 <el-radio
@@ -266,8 +229,14 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="头像">
+          <el-button class="avatar-button" type="text" @click="openAvatarDialog(form)">
+            <img :src="avatarUrl(form.avatar)" alt="当前头像" class="avatar-thumbnail" />
+            <span class="avatar-edit-text">选择头像</span>
+          </el-button>
+        </el-form-item>
         <el-row>
-          <el-col :span="12">
+          <el-col v-if="false" :span="12">
             <el-form-item label="岗位">
               <el-select v-model="form.postIds" multiple placeholder="请选择岗位">
                 <el-option
@@ -308,6 +277,26 @@
       </div>
     </el-dialog>
 
+    <el-dialog title="设置头像" :visible.sync="avatarOpen" width="620px" append-to-body>
+      <p class="avatar-hint">选择一个基础头像，或上传 PNG、JPG、GIF 图片（最大 2 MB）。</p>
+      <div class="avatar-grid">
+        <button v-for="(preset, index) in presetAvatars" :key="preset" type="button"
+          class="avatar-choice" :class="{ selected: selectedAvatar === preset }"
+          :aria-label="'选择头像 ' + (index + 1)" @click="selectedAvatar = preset">
+          <img :src="preset" :alt="'头像 ' + (index + 1)" />
+        </button>
+      </div>
+      <el-upload v-if="avatarTarget && avatarTarget.userId" action="#" :show-file-list="false"
+        accept="image/png,image/jpeg,image/gif" :before-upload="beforeAvatarUpload" :http-request="handleAvatarUpload">
+        <el-button size="small" icon="el-icon-upload2">上传自定义头像</el-button>
+      </el-upload>
+      <p v-else class="avatar-hint">新用户保存后可上传自定义头像。</p>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="avatarOpen = false">取消</el-button>
+        <el-button type="primary" :disabled="!selectedAvatar || avatarSaving" :loading="avatarSaving" @click="saveSelectedAvatar">保存头像</el-button>
+      </div>
+    </el-dialog>
+
     <!-- 用户导入对话框 -->
     <el-dialog :title="upload.title" :visible.sync="upload.open" width="400px" append-to-body>
       <el-upload
@@ -341,30 +330,23 @@
 </template>
 
 <script>
-import { listUser, getUser, delUser, addUser, updateUser, resetUserPwd, changeUserStatus, deptTreeSelect } from "@/api/system/user";
+import { listUser, getUser, delUser, addUser, updateUser, resetUserPwd, changeUserStatus, deptTreeSelect, selectUserAvatar, uploadUserAvatar } from "@/api/system/user";
+import { avatarUrl, presetAvatars } from "@/utils/avatar";
 import { getToken } from "@/utils/auth";
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 
 export default {
   name: "User",
-  dicts: ['sys_normal_disable', 'sys_user_sex'],
+  dicts: ['sys_normal_disable'],
   components: { Treeselect },
   data() {
-    var phoneRegex = (rule, value, callback) => {
-      const port = parseInt(value)
-      var regex = /^1[3|4|5|6|7|8|9][0-9]\d{8}$/;
-      if(!value) {
-        return callback(new Error('手机号码不能为空!'))
-      } else if(isNaN(port)) {
-        return callback(new Error('手机号码应为纯数字!'))
-      } else if(!regex.test(port)) {
-        return callback(new Error('请输入正确的手机号码!'))
-      } else {
-        callback();
-      }
-    }
     return {
+      presetAvatars,
+      avatarOpen: false,
+      avatarSaving: false,
+      avatarTarget: null,
+      selectedAvatar: '',
       // 遮罩层
       loading: true,
       // 选中数组
@@ -421,7 +403,6 @@ export default {
         pageNum: 1,
         pageSize: 10,
         userName: undefined,
-        phonenumber: undefined,
         status: undefined,
         deptId: undefined
       },
@@ -429,11 +410,8 @@ export default {
       columns: [
         { key: 0, label: `用户编号`, visible: true },
         { key: 1, label: `用户名称`, visible: true },
-        { key: 2, label: `用户昵称`, visible: true },
-        { key: 3, label: `部门`, visible: true },
-        { key: 4, label: `手机号码`, visible: true },
-        { key: 5, label: `状态`, visible: true },
-        { key: 6, label: `创建时间`, visible: true }
+        { key: 2, label: `状态`, visible: true },
+        { key: 3, label: `创建时间`, visible: true }
       ],
       // 表单校验
       rules: {
@@ -441,25 +419,18 @@ export default {
           { required: true, message: "用户名称不能为空", trigger: "blur" },
           { min: 2, max: 20, message: '用户名称长度必须介于 2 和 20 之间', trigger: 'blur' }
         ],
-        nickName: [
-          { required: true, message: "用户昵称不能为空", trigger: "blur" }
-        ],
         password: [
           { required: true, message: "用户密码不能为空", trigger: "blur" },
           { min: 5, max: 20, message: '用户密码长度必须介于 5 和 20 之间', trigger: 'blur' }
         ],
-        email: [
-          {
-            type: "email",
-            message: "请输入正确的邮箱地址",
-            trigger: ["blur", "change"]
-          }
-        ],
-        phonenumber: [
-          { validator: phoneRegex, trigger: "blur" }
-        ],
       }
     };
+  },
+  computed: {
+    canEditUser() {
+      const permissions = this.$store.getters.permissions || [];
+      return permissions.includes('*:*:*') || permissions.includes('system:user:edit');
+    }
   },
   watch: {
     // 根据名称筛选部门树
@@ -475,6 +446,50 @@ export default {
     });
   },
   methods: {
+    avatarUrl,
+    openAvatarDialog(user) {
+      this.avatarTarget = user;
+      this.selectedAvatar = presetAvatars.includes(user.avatar) ? user.avatar : '';
+      this.avatarOpen = true;
+    },
+    saveSelectedAvatar() {
+      if (!this.selectedAvatar || !this.avatarTarget) return;
+      if (!this.avatarTarget.userId) {
+        this.$set(this.avatarTarget, 'avatar', this.selectedAvatar);
+        this.avatarOpen = false;
+        return;
+      }
+      this.avatarSaving = true;
+      selectUserAvatar(this.avatarTarget.userId, this.selectedAvatar).then(() => {
+        this.$set(this.avatarTarget, 'avatar', this.selectedAvatar);
+        if (String(this.avatarTarget.userId) === String(this.$store.getters.id)) {
+          this.$store.commit('SET_AVATAR', avatarUrl(this.selectedAvatar));
+        }
+        this.$modal.msgSuccess('头像已更新');
+        this.avatarOpen = false;
+        this.getList();
+      }).finally(() => { this.avatarSaving = false; });
+    },
+    beforeAvatarUpload(file) {
+      if (!['image/png', 'image/jpeg', 'image/gif'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+        this.$modal.msgError('仅支持不超过 2 MB 的 PNG、JPG、GIF 图片');
+        return false;
+      }
+      return true;
+    },
+    handleAvatarUpload({ file }) {
+      if (!this.avatarTarget || !this.avatarTarget.userId) return;
+      this.avatarSaving = true;
+      uploadUserAvatar(this.avatarTarget.userId, file).then(response => {
+        this.$set(this.avatarTarget, 'avatar', response.imgUrl);
+        if (String(this.avatarTarget.userId) === String(this.$store.getters.id)) {
+          this.$store.commit('SET_AVATAR', avatarUrl(response.imgUrl));
+        }
+        this.$modal.msgSuccess('头像已上传');
+        this.avatarOpen = false;
+        this.getList();
+      }).finally(() => { this.avatarSaving = false; });
+    },
     /** 查询用户列表 */
     getList() {
       this.loading = true;
@@ -523,11 +538,8 @@ export default {
         userId: undefined,
         deptId: undefined,
         userName: undefined,
-        nickName: undefined,
         password: undefined,
-        phonenumber: undefined,
-        email: undefined,
-        sex: undefined,
+        avatar: undefined,
         status: "0",
         remark: undefined,
         postIds: [],
@@ -545,7 +557,7 @@ export default {
       this.dateRange = [];
       this.resetForm("queryForm");
       this.queryParams.deptId = undefined;
-      this.$refs.tree.setCurrentKey(null);
+      if (this.$refs.tree) this.$refs.tree.setCurrentKey(null);
       this.handleQuery();
     },
     // 多选框选中数据
@@ -677,3 +689,15 @@ export default {
   }
 };
 </script>
+<style scoped>
+.user-hint { color: #606266; margin: 4px 0 18px; }
+.avatar-thumbnail { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
+.avatar-button { padding: 0; }
+.avatar-edit-text { margin-left: 10px; vertical-align: middle; }
+.avatar-hint { color: #606266; margin: 0 0 14px; }
+.avatar-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
+.avatar-choice { border: 2px solid transparent; border-radius: 12px; background: #f5f7fa; padding: 6px; cursor: pointer; }
+.avatar-choice:hover, .avatar-choice.selected { border-color: #409eff; }
+.avatar-choice img { display: block; width: 64px; height: 64px; margin: auto; border-radius: 50%; }
+@media (max-width: 640px) { .avatar-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+</style>

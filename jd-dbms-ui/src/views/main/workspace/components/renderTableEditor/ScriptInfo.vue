@@ -89,7 +89,7 @@ export default {
     }
   },
   mounted() {
-    this.rowDrop();
+    this.$nextTick(() => this.rowDrop());
   },
   methods: {
     addData() {
@@ -240,6 +240,7 @@ export default {
       const tbody = document.querySelector(
         ".scriptInfo .el-table__body-wrapper tbody"
       );
+      if (!tbody) return;
       const _this = this;
       Sortable.create(tbody, {
         animation: 150,

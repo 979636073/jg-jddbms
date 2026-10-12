@@ -7,6 +7,7 @@ import UserInfo from "../renderUserEditor/UserInfo.vue";
 import SqlPreview from "@/views/main/workspace/components/DataSource/SqlPreview.vue";
 import RoleGrantsList from "@/views/main/workspace/components/renderUserEditor/RoleGrantsList.vue";
 import ObjectPermissions from './objectPermissions.vue'
+import { RESOURCE_MUTATION_EVENT } from '@/utils/resourceMutation'
 export default {
   components: {
     SqlPreview,
@@ -37,6 +38,7 @@ export default {
       columnList: [],
       userInfo: null,
       roleGrantsList: [],
+      detailRequestVersion: 0,
 
       databaseSupportField: {
         columnTypes: [],
@@ -76,57 +78,54 @@ export default {
         this.initData();
       },
       immediate: true,
-      deep: true,
+      deep: false,
     },
     activeTab:{
       handler(newVal) {
         if(newVal == 'third') {
-          this.initData()
+          this.refreshScript()
         }
-        console.log(newVal)
       }
     }
 
   },
+  mounted() {
+    window.addEventListener(RESOURCE_MUTATION_EVENT, this.handleResourceMutation);
+  },
+  beforeDestroy() {
+    window.removeEventListener(RESOURCE_MUTATION_EVENT, this.handleResourceMutation);
+  },
   methods: {
-    initData() {
-      return new Promise((resolve) => {
-        this.currentConfig = this.queryResultData;
-        this.basicForm = this.currentConfig?.tableDetails;
-        if( this.$refs.objectPre){
-          this.$refs.objectPre.value = '';
-          this.$refs.objectPre.tableLeftData = [];
-          this.$refs.objectPre.tableData = [];
-        }
-        if (this.currentConfig?.tableUserRoles) {
-          this.roleGrantsList = this.currentConfig?.tableUserRoles;
-        } else {
-          if (this.currentConfig?.title !== "新建用户") {
-            let send = {
-              dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
-              databaseName: this.currentConfig?.uniqueData.databaseName,
-              userName: this.currentConfig?.uniqueData.userName,
-            };
-            userServer.getUserDetails(send).then((res) => {
-              this.basicForm = res.data.tableDetails;
-              this.roleGrantsList = res.data.tableUserRoles;
-              this.$refs.MonacoEditor?.setValue(res.data.querySql);
-              // this.formatSql();
-            });
-            // userServer.getRoleGrantsList(send).then((res) => {
-            //   this.roleGrantsList = res.data.tableDetails;
-            // });
-          } else {
-            this.basicForm = {
-              dataSourceId: "",
-              databaseName: "",
-              schemaName: "",
-              tableName: "",
-            };
-          }
-        }
-        resolve();
-      });
+    handleResourceMutation(event) {
+      const change = event.detail;
+      if (!change?.groups?.includes('users')
+          || String(change.dataSourceId) !== String(this.currentConfig?.uniqueData?.dataSourceId)) return;
+      if (this.activeTab === 'third') this.refreshScript();
+      const permissions = this.$refs.objectPre;
+      if (this.activeTab === 'permissions' && permissions?.selectedNames?.length
+          && !permissions.hasChanges && !permissions.loading) permissions.loadPermissions();
+    },
+    async initData() {
+      const version = ++this.detailRequestVersion;
+      this.currentConfig = this.queryResultData;
+      this.basicForm = this.currentConfig?.tableDetails || {};
+      this.roleGrantsList = this.currentConfig?.tableUserRoles || [];
+      this.$refs.objectPre?.reset();
+      if (!this.currentConfig?.uniqueData?.dataSourceId || this.currentConfig.title === '新建用户') return;
+      try {
+        const res = await userServer.getUserDetails({
+          dataSourceId: this.currentConfig.uniqueData.dataSourceId,
+          databaseName: this.currentConfig.uniqueData.databaseName,
+          userName: this.currentConfig.uniqueData.userName || this.currentConfig.title,
+        });
+        if (version !== this.detailRequestVersion) return;
+        if (!res.success || !res.data) throw new Error(res.errorMessage || '用户详情读取失败');
+        this.basicForm = res.data.tableDetails || {};
+        this.roleGrantsList = res.data.tableUserRoles || [];
+        this.$refs.MonacoEditor?.setValue(res.data.querySql || '');
+      } catch (error) {
+        if (version === this.detailRequestVersion) this.$message.error(error.message || '用户详情读取失败');
+      }
     },
     configChange() {
       if (this.currentConfig) {
@@ -137,6 +136,21 @@ export default {
           JSON.stringify(this.columnList)
         );
         this.currentConfig.activeName = this.activeName;
+      }
+    },
+
+    async refreshScript() {
+      if (!this.currentConfig || this.currentConfig.title === '新建用户') return;
+      try {
+        const res = await userServer.getUserDetails({
+          dataSourceId: this.currentConfig.uniqueData.dataSourceId,
+          databaseName: this.currentConfig.uniqueData.databaseName,
+          userName: this.currentConfig.uniqueData.userName || this.currentConfig.title,
+        });
+        if (res.success) this.$refs.MonacoEditor?.setValue(res.data.querySql || '');
+        else this.$message.error(res.errorMessage || '脚本查询失败');
+      } catch (error) {
+        this.$message.error(error?.message || '脚本查询失败，请重试');
       }
     },
 
@@ -288,9 +302,9 @@ export default {
         />
       </el-tab-pane>
       <el-tab-pane label="对象权限" name="permissions">
-        <ObjectPermissions :currentConfig="currentConfig" ref='objectPre'></ObjectPermissions>
+        <ObjectPermissions :currentConfig="currentConfig" ref='objectPre' @permissions-changed="refreshScript"></ObjectPermissions>
       </el-tab-pane>
-      <el-tab-pane label="Script" name="third">
+      <el-tab-pane label="脚本" name="third">
         <MonacoEditor
           ref="MonacoEditor"
           dom="editor"

@@ -792,6 +792,14 @@ public class TableServiceImpl implements TableService {
         if (Objects.isNull(param.getSchemaName())) {
             throw new BusinessException("参数缺失,模式名没有值");
         }
+        int pageNo = param.getPageNo() == null || param.getPageNo() < 1 ? 1 : param.getPageNo();
+        int pageSize = param.getPageSize() == null || param.getPageSize() < 1 ? 50 : param.getPageSize();
+        PageResult<Table> databasePage = Chat2DBContext.getMetaData().tableDetailsPage(
+                Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                param.getSearchKey(), pageNo, pageSize);
+        if (databasePage != null) {
+            return databasePage;
+        }
         List<Table> tables = new ArrayList<>();
         if (ResultType.TWO.getType().equals(param.getRequestType())) {
             String cacheKey = CacheConstants.SELECT_TABLE_DETAILS_DATA_SQL + param.getDataSourceId()+"_"+param.getSchemaName();
@@ -1152,7 +1160,8 @@ public class TableServiceImpl implements TableService {
     @Override
     public void dropConstraint(TypeQueryRequest param,Connection connection) throws SQLException {
         String sql = Chat2DBContext.getSqlBuilder().dropTableConstraint(param.getSchemaName(), param.getTableName(), param.getKeyName(), param.getName());
-        String[] split = sql.split(";");
+        List<String> split = SqlUtils.parse(sql,
+                com.jd.spi.util.JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType()));
         for (String s : split) {
             SQLExecutor.getInstance().execute(connection, s);
         }

@@ -42,7 +42,7 @@ export default {
       dmpToolOptions: [],
       exportProgress: "0%",
       loading2: false,
-      navType: "editor",
+      navType: "",
       ExportDialog: false,
       ImportDialog: false,
       radio: "user",
@@ -130,16 +130,18 @@ export default {
       exportUser: [],
       navList: [
         {
-          name: "新建窗口",
-          type: "editor",
-          icon: require("@/assets/main/top-ico3.png"),
-          iconHover: require("@/assets/main/top-ico3-hover.png"),
+          name: "数据迁移",
+          type: "migration",
+          route: "/data-migration/index",
+          elIcon: "el-icon-sort",
+          allowedRoles: ['admin', 'dbms_developer'],
         },
         {
-          name: "新建查询",
-          type: "search",
-          icon: require("@/assets/main/top-ico2.png"),
-          iconHover: require("@/assets/main/top-ico2-hover.png"),
+          name: "表结构对比",
+          type: "compare",
+          route: "/table-compare/index",
+          elIcon: "el-icon-document-copy",
+          allowedRoles: ['admin', 'dbms_developer', 'dbms_reader'],
         },
         {
           name: "导入文件",
@@ -154,12 +156,6 @@ export default {
           icon: require("@/assets/main/top-ico5.png"),
           iconHover: require("@/assets/main/top-ico5-hover.png"),
           hasRole: true,
-        },
-        {
-          name: "新建连接",
-          type: "datasource",
-          icon: require("@/assets/main/top-ico6.png"),
-          iconHover: require("@/assets/main/top-ico6-hover.png"),
         },
       ],
     };
@@ -215,9 +211,7 @@ export default {
       immediate: true,
       handler(val) {
         const matched = this.navList.find((item) => item.route === val.path);
-        this.navType = val.path.includes("/workspace/query/")
-          ? "search"
-          : (matched ? matched.type : "editor");
+        this.navType = matched ? matched.type : "";
       },
     },
     contextMenuVisible(value) {
@@ -268,6 +262,11 @@ export default {
     this.$EventBus.$off("openTaskCenter", this.openTaskCenter);
   },
   methods: {
+    canSeeNav(item) {
+      const roles = this.$store.state.user.roles || [];
+      return (!item.allowedRoles || item.allowedRoles.some(role => roles.includes(role))) &&
+        (!item.hasRole || this.userNameHasRole);
+    },
     closeAllnewSearch() {
       this.$confirm("是否确认关闭所有新建查询窗口?", "提示", {
         confirmButtonText: "确定",
@@ -429,51 +428,9 @@ export default {
       });
     },
     // 点击导航
-    async navClick(item, params) {
+    async navClick(item) {
       this.navType = item.type;
-      if (item.route) {
-        this.$router.push({ path: item.route });
-      } else if (item.name === "新建连接") {
-        this.$emit("manageDataSources");
-      } else if (item.name === "新建查询") {
-        if (!this.dataInfo?.dataSource?.id) {
-          this.$message.warning("请先在左侧资源树中选择数据源");
-          return;
-        }
-        let pageId = uuidv4();
-        this.$store.commit("SET_ISCLOSEALL", false);
-        const consoleContext = {
-          dataSourceId: this.dataInfo.dataSource.id,
-          dataSourceName: this.dataInfo.dataSource.alias,
-          databaseType: this.dataInfo.dataSource.type,
-          databaseName: this.$store.state.workspaceData.dataBaseInfo.databaseName || "",
-          schemaName: this.$store.state.workspaceData.dataBaseInfo.schemaName || this.dataInfo.userName,
-        };
-        await this.$store
-          .dispatch("workspaceData/createConsole", {
-            pageId,
-            ...consoleContext,
-          })
-          .then((res) => {
-            this.$router.push({
-              path: "/workspace/query/" + pageId,
-              query: {
-                dataSourceId: consoleContext.dataSourceId,
-                databaseName: consoleContext.databaseName,
-                schemaName: consoleContext.schemaName,
-              },
-            });
-          });
-      } else if (item.name == "新建窗口") {
-        // this.$store.dispatch("addWorkspaceTab", false);
-        let pageId = uuidv4();
-        this.$router.push({
-          path: "/workspace/look/" + pageId,
-          query: { ...params },
-        });
-      } else {
-        this.queryArchiveTitleFn();
-      }
+      this.queryArchiveTitleFn();
     },
     logManagement() {
       this.$router.push({ path: "/logManagement" });
@@ -489,7 +446,7 @@ export default {
       })
         .then(() => {
           this.$store.dispatch("LogOut").then(() => {
-            location.href = "/index";
+            location.href = "/workspace";
           });
         })
         .catch(() => {});
@@ -993,13 +950,25 @@ export default {
     <div class="nav_list">
       <template v-for="item in navList">
         <div
-          v-if="!item.hasRole || (item.hasRole && userNameHasRole)"
+          v-if="canSeeNav(item)"
           :key="item.type"
           :class="{ nav_item: true, nav_item_action: navType === item.type }"
-          @click="navClick(item)"
-          @contextmenu="creatRightMenu(item, $event)"
+          @click="!item.route && navClick(item)"
         >
+          <a
+            v-if="item.route"
+            class="nav-direct-button"
+            :href="$router.resolve({ path: item.route }).href"
+            target="_blank"
+            rel="noopener noreferrer"
+            :title="'在新标签页打开' + item.name"
+            @click.stop
+          >
+            <i :class="item.elIcon"></i>
+            <span>{{ item.name }}</span>
+          </a>
           <el-dropdown
+            v-else
             trigger="click"
             @command="handleCommand"
             :hide-on-click="true"
@@ -1096,9 +1065,6 @@ export default {
       <el-dropdown-menu slot="dropdown">
         <router-link to="/user/profile">
           <el-dropdown-item>个人中心</el-dropdown-item>
-        </router-link>
-        <router-link to="/data-migration/index">
-          <el-dropdown-item>数据迁移</el-dropdown-item>
         </router-link>
         <el-dropdown-item @click.native="logManagement">
           <span>日志管理</span>
@@ -1785,6 +1751,26 @@ export default {
         height: 15px;
         margin-right: 6px;
       }
+      .nav-direct-button {
+        display: flex;
+        align-items: center;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        i {
+          font-size: 15px;
+          margin-right: 6px;
+        }
+        &:focus-visible {
+          outline: 2px solid #006fff;
+          outline-offset: 3px;
+        }
+      }
     }
     .nav_item:last-child {
       margin-right: 0;
@@ -1894,6 +1880,23 @@ export default {
       color: #fff;
       font-weight: bold;
       margin-top: 2px;
+    }
+  }
+}
+@media (max-width: 800px) {
+  .header:not(.header-collapsed) {
+    height: 96px;
+    .nav_list {
+      top: 60px;
+      left: 0;
+      width: 100%;
+      max-width: 100%;
+      transform: none;
+      justify-content: flex-start;
+      .nav_item {
+        margin-right: 0;
+        padding: 0 12px;
+      }
     }
   }
 }

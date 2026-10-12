@@ -68,7 +68,7 @@ export default {
     };
   },
   mounted() {
-    this.rowDrop();
+    this.$nextTick(() => this.rowDrop());
   },
   methods: {
     addData() {
@@ -133,10 +133,11 @@ export default {
       });
     },
     rowDrop() {
-      const tbody = document.querySelector(
-        ".indexList .el-table__body-wrapper tbody"
-      );
-      const _this = this;
+     const tbody = document.querySelector(
+       ".indexList .el-table__body-wrapper tbody"
+     );
+     if (!tbody) return;
+     const _this = this;
       Sortable.create(tbody, {
         animation: 150,
         draggable: ".indexList .el-table__row",

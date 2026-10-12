@@ -12,6 +12,7 @@ import com.google.common.collect.Lists;
 import com.jd.biz.controller.data.source.vo.DataSourceConnectVo;
 import com.jd.common.enums.DBTypeEnum;
 import com.jd.biz.domain.api.enums.DataSourceKindEnum;
+import com.jd.biz.domain.api.enums.DataSourceAction;
 import com.jd.biz.domain.api.model.DataSource;
 import com.jd.biz.domain.api.param.datasource.*;
 import com.jd.biz.domain.api.service.DataSourceService;
@@ -96,6 +97,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataResult<DataSourceConnectVo> createWithPermission(DataSourceCreateParam param) {
+        dataSourceAccessBusinessService.checkPlatformAction(DataSourceAction.DATASOURCE_MANAGE);
         LambdaQueryWrapper<DataSourceDO> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(DataSourceDO::getHost, param.getHost())
                 .eq(DataSourceDO::getPort, param.getPort())
@@ -138,7 +140,6 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
             dataSourceDO.setServiceType("1");
             dataSourceDO.setSid("");
         }
-        dataSourceDO.setPasswordCopy(param.getPassword());
         dataSourceDO.setIsSave(param.getChecked());
         dataSourceDO.setGmtCreate(DateUtil.date());
         dataSourceDO.setGmtModified(DateUtil.date());
@@ -219,6 +220,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
     @Override
     public DataResult<Long> updateWithPermission(DataSourceUpdateParam param) {
         DataSource dataSource = queryExistent(param.getId(), null).getData();
+        dataSourceAccessBusinessService.checkActionPermission(dataSource, DataSourceAction.DATASOURCE_MANAGE);
         PermissionUtils.checkOperationPermission(dataSource.getUserId());
 
         // 更新请求可能不携带密码；此时必须沿用已保存的密码，不能用空值覆盖旧配置。
@@ -260,6 +262,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
     @Override
     public ActionResult deleteWithPermission(Long id) {
         DataSource dataSource = queryExistent(id, null).getData();
+        dataSourceAccessBusinessService.checkActionPermission(dataSource, DataSourceAction.DATASOURCE_MANAGE);
         PermissionUtils.checkOperationPermission(dataSource.getUserId());
         LambdaQueryWrapper<HistoryUserLogDO> historyUserLogDOLambdaQueryWrapper = new LambdaQueryWrapper<>();
         historyUserLogDOLambdaQueryWrapper.eq(HistoryUserLogDO::getDataSourceId, id);
@@ -286,6 +289,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
         }
 
         dataSourceAccessBusinessService.checkPermission(dataResult.getData());
+        dataSourceAccessBusinessService.checkActionPermission(dataResult.getData(), DataSourceAction.METADATA_READ);
 
         fillData(Lists.newArrayList(dataResult.getData()), selector);
 
@@ -295,6 +299,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
     @Override
     public DataResult<Long> copyByIdWithPermission(Long id) {
         DataSource dataSource = queryExistent(id, null).getData();
+        dataSourceAccessBusinessService.checkActionPermission(dataSource, DataSourceAction.DATASOURCE_MANAGE);
         PermissionUtils.checkOperationPermission(dataSource.getUserId());
 
         DataSourceDO dataSourceDO = getBaseMapper().selectById(id);
@@ -328,6 +333,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
 
     @Override
     public PageResult<DataSource> queryPageWithPermission(DataSourcePageQueryParam param, DataSourceSelector selector) {
+        dataSourceAccessBusinessService.checkPlatformAction(DataSourceAction.METADATA_READ);
         LoginUser loginUser = SecurityUtil.getLoginUser();
 //        Page<DataSourceDO> page = this.page(new Page<>(param.getPageNo(), param.getPageSize()), new LambdaQueryWrapper<DataSourceDO>().eq(DataSourceDO::getUserId, loginUser.getUserId()));
 
@@ -432,19 +438,14 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
         }
         if (upperMessage.contains("UNKNOWNHOSTEXCEPTION") || upperMessage.contains("UNKNOWN HOST")
                 || upperMessage.contains("NAME OR SERVICE NOT KNOWN")) {
-            return "无法解析数据库主机：" + StringUtils.defaultIfBlank(host, "未填写");
+            return "无法解析数据库主机，请检查主机地址";
         }
         if (upperMessage.contains("TIMED OUT") || upperMessage.contains("TIMEOUT")) {
             return "连接数据库超时，请检查主机、端口和网络";
         }
         if (upperMessage.contains("ORA-12541") || upperMessage.contains("CONNECTION REFUSED")
                 || upperMessage.contains("NETWORK ADAPTER COULD NOT ESTABLISH")) {
-            String target = StringUtils.defaultIfBlank(host, "未填写") + ":"
-                    + StringUtils.defaultIfBlank(port, "未填写");
-            if ("127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host)) {
-                return "无法连接到 " + target + "；Docker 部署时请将主机号改为 host.docker.internal";
-            }
-            return "无法连接到数据库 " + target + "，请检查地址、端口和数据库服务状态";
+            return "无法连接到数据库，请检查主机地址、端口和数据库服务状态";
         }
         if (upperMessage.contains("NO SUITABLE DRIVER") || upperMessage.contains("DRIVER.LOAD")) {
             return "JDBC 驱动不可用，请检查驱动配置";

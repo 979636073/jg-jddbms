@@ -64,4 +64,7 @@ public class DataSourceAccessDO implements Serializable {
      * 授权id,根据类型区分是用户还是团队
      */
     private Long accessObjectId;
+
+    /** Comma separated DataSourceAction codes. */
+    private String permissionCodes;
 }

@@ -120,19 +120,9 @@ const mutations = {
   },
   CHANGE_VIEWS_TITLE: (state, obj) => {
     let { id, title } = obj
-    try {
-      // debugger
-      state.titleMap.map(item => {
-        if (item.id == id) {
-          item.title = title
-          throw ''
-        }
-      })
-    }
-    catch (err) {
-      // console.log(err);
-      // console.log(state.titleMap);
-    }
+    const item = state.titleMap.find(view => view.id == id)
+    if (item) item.title = title
+    else state.titleMap.push({ id, title })
   },
 }
 

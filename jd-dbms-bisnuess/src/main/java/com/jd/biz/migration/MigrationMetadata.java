@@ -303,7 +303,7 @@ public class MigrationMetadata {
     }
 
     public String sourceDdl(Connection connection, String schema, String table, String type) throws SQLException, IOException {
-        if (!Arrays.asList("TABLE", "VIEW", "SEQUENCE", "SYNONYM", "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER").contains(type)) throw new BusinessException("对象定义类型不支持");
+        if (!Arrays.asList("TABLE", "VIEW", "SEQUENCE", "SYNONYM", "PROCEDURE", "FUNCTION", "PACKAGE", "TRIGGER", "INDEX", "CONSTRAINT", "REF_CONSTRAINT").contains(type)) throw new BusinessException("对象定义类型不支持");
         if ("PACKAGE".equals(type)) {
             Map<String, StringBuilder> parts = new LinkedHashMap<>();
             try (PreparedStatement query = prepare(connection, "SELECT TYPE, TEXT FROM ALL_SOURCE WHERE OWNER=? AND NAME=? AND TYPE IN ('PACKAGE','PACKAGE BODY') ORDER BY TYPE, LINE", schema, table); ResultSet rows = query.executeQuery()) {

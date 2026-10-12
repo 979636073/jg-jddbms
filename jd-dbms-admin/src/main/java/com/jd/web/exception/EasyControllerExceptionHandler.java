@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.google.common.collect.Maps;
 import com.jd.common.core.domain.AjaxResult;
 import com.jd.common.exception.ServiceException;
+import com.jd.common.exception.user.UserException;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.excption.SystemException;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
@@ -90,6 +91,14 @@ public class EasyControllerExceptionHandler {
 //        AjaxResult result = AjaxResult.error(ExceptionUtils.getMessage(exception));
         log.info("发生业务异常{}:{}", request.getRequestURI(), result, exception);
         return result;
+    }
+
+    /** Return an actionable login error instead of a generic system failure. */
+    @ExceptionHandler(UserException.class)
+    @ResponseStatus(value = HttpStatus.OK)
+    @ResponseBody
+    public AjaxResult handleUserException(UserException exception) {
+        return AjaxResult.error(exception.getMessage());
     }
 
     /**

@@ -1,6 +1,8 @@
 package com.jd.biz.migration;
 
 import com.jd.biz.domain.api.model.DataSource;
+import com.jd.biz.domain.api.enums.DataSourceAction;
+import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
 import com.jd.biz.domain.api.service.DataSourceService;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.spi.config.DriverConfig;
@@ -15,10 +17,16 @@ import java.util.Arrays;
 @Component
 public class MigrationConnections {
     @Resource private DataSourceService dataSourceService;
+    @Resource private DataSourceAccessBusinessService accessService;
 
     public DataSource authorized(Long id) {
+        return authorized(id, DataSourceAction.METADATA_READ);
+    }
+
+    public DataSource authorized(Long id, DataSourceAction action) {
         if (id == null) throw new BusinessException("请选择数据源");
         DataSource source = dataSourceService.queryExistent(id, null).getData();
+        accessService.checkActionPermission(source, action);
         if (!Arrays.asList("DM", "ORACLE").contains(source.getType())) throw new BusinessException("迁移只支持 DM 和 Oracle");
         if (source.getSsh() != null && source.getSsh().isUse()) {
             throw new BusinessException("首版迁移仅支持直连数据源，SSH 隧道尚未验收");

@@ -1,13 +1,13 @@
 <template>
   <div class="table_box">
     <el-table
-      :data="detailDataSource"
+      :data="pagedViews"
       @row-dblclick="handleCurrentChange"
-      height="800"
+      height="calc(100% - 52px)"
       :header-cell-style="{ background: '#f1f3f9', color: '#68728c' }"
       style="width: 100%"
     >
-      <el-table-column prop="name" label="View"></el-table-column>
+      <el-table-column prop="name" label="视图名称"></el-table-column>
       <el-table-column label="类型" width="90">
         <template slot-scope="scope">
           <el-tag
@@ -16,11 +16,12 @@
           >{{ isMaterializedView(scope.row) ? '物化视图' : '普通视图' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="schema" label="Schema"></el-table-column>
-      <el-table-column prop="valid" label="Valid"></el-table-column>
-      <el-table-column prop="created" label="created"></el-table-column>
-      <el-table-column prop="lastDDL" label="Last DDL"></el-table-column>
+      <el-table-column prop="schema" label="所属模式"></el-table-column>
+      <el-table-column prop="valid" label="有效状态"></el-table-column>
+      <el-table-column prop="created" label="创建时间"></el-table-column>
+      <el-table-column prop="lastDDL" label="最后结构变化时间"></el-table-column>
     </el-table>
+    <el-pagination v-if="filteredViews.length > pageSize" small layout="total, prev, pager, next" :total="filteredViews.length" :page-size="pageSize" :current-page.sync="page" />
   </div>
 </template>
 
@@ -36,15 +37,31 @@ export default {
     dataInfo: {
       type: Object,
       default: {}
+    },
+    filterName: {
+      type: String,
+      default: ""
     }
   },
   data() {
-    return {};
+    return { page: 1, pageSize: 100 };
   },
   computed: {
+    filteredViews() {
+      const keyword = this.filterName.trim().toLowerCase();
+      return keyword ? this.detailDataSource.filter(item => String(item.name || "").toLowerCase().includes(keyword)) : this.detailDataSource;
+    },
+    pagedViews() {
+      const start = (this.page - 1) * this.pageSize;
+      return this.filteredViews.slice(start, start + this.pageSize);
+    },
     pageId() {
       return this.$route.params.id;
     }
+  },
+  watch: {
+    detailDataSource() { this.page = 1; },
+    filterName() { this.page = 1; },
   },
   methods: {
     isMaterializedView(item) {

@@ -51,10 +51,14 @@ public class TableSpaceController {
      */
     @GetMapping("/list")
     public WebPageResult<TableVO> list(@Valid TableBriefQueryRequest request) {
-        ListResult<Table> tableSpaces = tableSpaceService.list(request.getDatabaseName(), request.getRequestType());
-        Integer pageSize = tableSpaces.getData() != null ? tableSpaces.getData().size() : 0;
-        List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableSpaces.getData());
-        return WebPageResult.of(tableVOS, Long.valueOf(tableSpaces.getData().size()), 1, pageSize);
+        try {
+            ListResult<Table> tableSpaces = tableSpaceService.list(request.getDatabaseName(), request.getRequestType());
+            Integer pageSize = tableSpaces.getData() != null ? tableSpaces.getData().size() : 0;
+            List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableSpaces.getData());
+            return WebPageResult.of(tableVOS, Long.valueOf(pageSize), 1, pageSize);
+        } catch (RuntimeException error) {
+            throw DatabasePrivilegeHints.translate(error, "DBA_FREE_SPACE", "DBA_DATA_FILES");
+        }
     }
 
     /**

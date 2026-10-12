@@ -58,7 +58,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
 	<select id="selectRolePermissionByUserId" parameterType="Long" resultMap="SysRoleResult">
 		<include refid="selectRoleVo"/>
-		WHERE r.DEL_FLAG = '0' and ur.USER_ID = #{userId}
+		WHERE r.DEL_FLAG = '0' and r.STATUS = '0' and ur.USER_ID = #{userId}
 	</select>
 
 	<select id="selectRoleAll" resultMap="SysRoleResult">

@@ -58,6 +58,7 @@ public class MigrationController {
     @GetMapping("/tasks/{id}") public DataResult<Task> get(@PathVariable Long id) { return DataResult.of(service.get(id, ContextUtils.getUserId())); }
     @PostMapping("/tasks") public DataResult<Task> create(@RequestBody Config config) { return DataResult.of(service.save(null, ContextUtils.getUserId(), config)); }
     @PutMapping("/tasks/{id}") public DataResult<Task> save(@PathVariable Long id, @RequestBody Config config) { return DataResult.of(service.save(id, ContextUtils.getUserId(), config)); }
+    @DeleteMapping("/tasks/{id}") public DataResult<Boolean> delete(@PathVariable Long id) { return DataResult.of(service.delete(id, ContextUtils.getUserId())); }
     @PostMapping("/tasks/{id}/precheck") public DataResult<Task> precheck(@PathVariable Long id) { return DataResult.of(service.precheck(id, ContextUtils.getUserId())); }
     @PostMapping("/tasks/{id}/start") public DataResult<Task> start(@PathVariable Long id, @RequestBody StartRequest request) { return DataResult.of(service.start(id, ContextUtils.getUserId(), request)); }
     @PostMapping("/tasks/{id}/cancel") public DataResult<Task> cancel(@PathVariable Long id) { return DataResult.of(service.cancel(id, ContextUtils.getUserId())); }

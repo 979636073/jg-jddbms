@@ -50,7 +50,7 @@
           </span> 
         </el-input>
       </el-form-item>
-      <!-- <el-form-item prop="code" v-if="captchaEnabled">
+      <el-form-item prop="code" v-if="captchaEnabled">
         <span slot="label">验证码</span>
         <el-input
           v-model="loginForm.code"
@@ -64,7 +64,7 @@
         <div class="login-code">
           <img :src="codeUrl" @click="getCode" class="login-code-img"/>
         </div>
-      </el-form-item> -->
+      </el-form-item>
       <el-checkbox
         v-model="loginForm.rememberMe"
         style="margin: 0px 0px 25px 0px"
@@ -104,7 +104,7 @@ export default {
       codeUrl: "",
       loginForm: {
         username: "admin",
-        password: "admin123",
+        password: "",
         rememberMe: false,
         code: "",
         uuid: "",
@@ -127,10 +127,22 @@ export default {
     };
   },
   created() {
-    // this.getCode();
     this.getCookie();
+    this.getCode();
   },
   methods: {
+    getCode() {
+      getCodeImg().then((res) => {
+        this.captchaEnabled = res.captchaEnabled !== false;
+        if (this.captchaEnabled) {
+          this.codeUrl = `data:image/gif;base64,${res.img}`;
+          this.loginForm.uuid = res.uuid;
+        }
+      }).catch(() => {
+        this.captchaEnabled = true;
+        this.$message.error('验证码获取失败，请刷新页面重试');
+      });
+    },
     showPwd() {
       if (this.passwordType === "password") {
         this.passwordType = "";
@@ -145,17 +157,18 @@ export default {
       const username = Cookies.get("username");
       const password = Cookies.get("password");
       const rememberMe = Cookies.get("rememberMe");
+      const savedPassword = password === undefined ? undefined : decrypt(password);
       this.loginForm = {
         username: username === undefined ? this.loginForm.username : username,
-        password:
-          password === undefined ? this.loginForm.password : decrypt(password),
-        rememberMe: rememberMe === undefined ? false : Boolean(rememberMe),
+        password: savedPassword === undefined ? this.loginForm.password : savedPassword,
+        rememberMe: rememberMe === "true",
+        code: "",
+        uuid: "",
       };
     },
     handleLogin() {
       this.$refs.loginForm.validate((valid) => {
         if (valid) {
-          localStorage.clear();
           this.loading = true;
           if (this.loginForm.rememberMe) {
             Cookies.set("username", this.loginForm.username, { expires: 30 });
@@ -177,11 +190,17 @@ export default {
                 this.loading = false;
                 return this.$message.error(res.errorMessage);
               }
-              this.$router.push({ path: "/workspace" });
+              const redirect = this.$route.query.redirect;
+              const destination = typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//') && !['/', '/index', '/login', '/404'].includes(redirect)
+                ? redirect
+                : '/workspace';
+              this.$router.replace(destination);
             })
             .catch((err) => {
               console.log(err);
               this.loading = false;
+              this.loginForm.code = '';
+              this.getCode();
             });
           }
       });

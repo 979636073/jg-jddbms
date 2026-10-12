@@ -17,7 +17,7 @@ const sideBarFile = path.join(__dirname, '../src/views/main/workspace/SideBar.vu
 const context = {
   module: { exports: {} },
   connectionServer: {}, sqlServer: {}, viewServer: {}, tableServer: {}, userServer: {}, tableSpaceServer: {},
-  SqlPreview: {}, CreateOption: {}, addTableSpaceVue: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {},
+  SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {},
   database: {}, uuidv4() { return 'node-id' }, copyText() {},
   sessionStorage: { setItem() {} },
   document: { title: '' },
@@ -78,8 +78,21 @@ assert.strictEqual(sessionValues.length, 1)
 assert.strictEqual(activateState.activeClass, -1, '切换数据源时应清理当前表选择，但不能创建外层页面')
 
 const navBarSource = fs.readFileSync(path.join(__dirname, '../src/views/main/workspace/NavBar.vue'), 'utf8')
-assert(navBarSource.includes('this.$emit("manageDataSources")'), '新建连接应在当前工作区打开连接管理')
-assert(!navBarSource.includes('window.open("/workspace?isShow=true")'), '新建连接不应再打开新的浏览器窗口')
+const navList = navBarSource.match(/navList:\s*\[([\s\S]*?)\n\s*\],/)[1]
+for (const name of ['新建窗口', '新建查询', '新建连接']) {
+  assert(!navList.includes(`name: "${name}"`), `顶部导航不应再显示${name}`)
+}
+assert(navList.includes('route: "/data-migration/index"'), '顶部导航应提供数据迁移入口')
+assert(navList.includes('route: "/table-compare/index"'), '顶部导航应提供表结构对比入口')
+assert(navBarSource.includes('target="_blank"'), '顶部功能入口应在同一浏览器打开新标签页')
+assert(!navBarSource.includes('window.open('), '顶部功能入口不应弹出独立浏览器窗口')
+const routerSource = fs.readFileSync(path.join(__dirname, '../src/router/index.js'), 'utf8')
+for (const path of ['/data-migration', '/table-compare']) {
+  assert(routerSource.includes(`path: '${path}',\n    component: Layout,\n    hidden: true,`), `${path} 不应再显示在后台管理菜单`)
+}
+assert(routerSource.includes("standaloneTool: true"), '独立工具页应启用无侧栏布局')
+const layoutSource = fs.readFileSync(path.join(__dirname, '../src/layout/index.vue'), 'utf8')
+assert(layoutSource.includes('<sidebar v-if="!sidebar.hide&&!isStandaloneTool"'), '独立工具页不应显示左侧树')
 
 const dialogSource = fs.readFileSync(path.join(__dirname, '../src/views/main/workspace/components/linkServerDialog/index.vue'), 'utf8')
 assert(dialogSource.includes('this.$emit("saved", res.data)'), '保存连接后应通知当前工作区刷新左树')

@@ -21,6 +21,12 @@ public class DataSourceVO {
      */
     private Long id;
 
+    /** 创建该连接的平台用户 ID，用于判断共享授权入口。 */
+    private Long userId;
+
+    /** 当前平台用户能否维护该连接及其共享授权。 */
+    private Boolean canManage;
+
     /**
      * 连接别名
      */

@@ -17,7 +17,7 @@
     <div class="result-toolbar">
       <div>
         <h3>字段对比结果</h3>
-        <p>高亮内容表示该属性在两张表中不一致。</p>
+        <p>先看“变化内容”中的源值与目标值；展开两侧属性可核对完整定义。</p>
       </div>
       <el-radio-group v-model="filter" size="small">
         <el-radio-button label="all">全部</el-radio-button>
@@ -29,8 +29,9 @@
     </div>
 
     <el-table
-      :data="filteredRows"
+      :data="pageRows"
       :row-class-name="tableRowClassName"
+      row-key="columnName"
       empty-text="当前筛选条件下没有字段"
       class="difference-table"
     >
@@ -39,24 +40,41 @@
           <span class="column-name">{{ scope.row.columnName }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="源表结构" min-width="340">
-        <template slot-scope="scope">
-          <column-structure :row="scope.row" side="source" />
-        </template>
-      </el-table-column>
-      <el-table-column label="状态" width="108" align="center">
+      <el-table-column label="结果" width="100" align="center">
         <template slot-scope="scope">
           <el-tag :type="statusType(scope.row.status)" size="mini" effect="plain">
             {{ statusText(scope.row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="目标表结构" min-width="340">
+      <el-table-column label="变化内容（源 → 目标）" min-width="330">
+        <template slot-scope="scope">
+          <div v-if="scope.row.status === 'changed'" class="change-list">
+            <div v-for="detail in scope.row.changeDetails" :key="detail.field" class="change-line">
+              <strong>{{ detail.label }}</strong>
+              <span class="change-line__before">{{ detail.source }}</span>
+              <i class="el-icon-right" />
+              <span class="change-line__after">{{ detail.target }}</span>
+            </div>
+          </div>
+          <span v-else-if="scope.row.status === 'source-only'" class="missing-value">目标表缺少该字段</span>
+          <span v-else-if="scope.row.status === 'target-only'" class="missing-value">源表缺少该字段</span>
+          <span v-else class="same-value">所有参与比较的属性一致</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="源表完整属性" min-width="310">
+        <template slot-scope="scope">
+          <column-structure :row="scope.row" side="source" />
+        </template>
+      </el-table-column>
+      <el-table-column label="目标表完整属性" min-width="310">
         <template slot-scope="scope">
           <column-structure :row="scope.row" side="target" />
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination v-if="filteredRows.length > pageSize" small layout="total, prev, pager, next"
+                   :total="filteredRows.length" :page-size="pageSize" :current-page.sync="page" />
   </div>
 </template>
 
@@ -84,10 +102,13 @@ const ColumnStructure = {
       return `${type}(${column.columnSize}${decimal})`
     },
     nullableText(value) {
-      return Number(value) === 1 || value === true || value === 'true' ? '可为空' : '不可为空'
+      return value === true || value === 1 || ['1', 'TRUE', 'Y', 'YES'].includes(String(value).toUpperCase()) ? '可为空' : '不可为空'
     },
     booleanText(value) {
-      return value === true || value === 1 || value === '1' || value === 'true' ? '是' : '否'
+      return value === true || value === 1 || ['1', 'TRUE', 'Y', 'YES'].includes(String(value).toUpperCase()) ? '是' : '否'
+    },
+    numberText(value) {
+      return value === null || value === undefined || value === '' || Number(value) === 0 ? '—' : value
     },
     valueText(value) {
       return value === null || value === undefined || value === '' ? '—' : value
@@ -100,12 +121,16 @@ const ColumnStructure = {
     }
     const property = (field, text) => h('span', { class: this.propertyClass(field) }, text)
     return h('div', { class: 'column-structure' }, [
-      h('div', { class: ['type-line', this.propertyClass('type')] }, this.columnTypeText(column)),
+      h('div', { class: ['type-line', this.propertyClass('type')] }, `完整类型：${this.columnTypeText(column)}`),
       h('div', { class: 'property-list' }, [
-        property('nullable', this.nullableText(column.nullable)),
+        property('dataType', `数据类型：${this.valueText(column.dataType)}`),
+        property('columnSize', `长度：${this.numberText(column.columnSize)}`),
+        property('decimalDigits', `小数位：${this.numberText(column.decimalDigits)}`),
+        property('nullable', `是否可空：${this.nullableText(column.nullable)}`),
         property('defaultValue', `默认值：${this.valueText(column.defaultValue)}`),
         property('primaryKey', `主键：${this.booleanText(column.primaryKey)}`),
         property('autoIncrement', `自增：${this.booleanText(column.autoIncrement)}`),
+        property('ordinalPosition', `字段顺序：${this.valueText(column.ordinalPosition)}`),
         property('comment', `注释：${this.valueText(column.comment)}`)
       ])
     ])
@@ -122,7 +147,7 @@ export default {
     }
   },
   data() {
-    return { filter: 'all' }
+    return { filter: 'all', page: 1, pageSize: 50 }
   },
   computed: {
     summary() {
@@ -143,7 +168,14 @@ export default {
     filteredRows() {
       if (this.filter === 'all') return this.rows
       return this.rows.filter(row => row.status === this.filter)
+    },
+    pageRows() {
+      return this.filteredRows.slice((this.page - 1) * this.pageSize, this.page * this.pageSize)
     }
+  },
+  watch: {
+    filter() { this.page = 1 },
+    rows() { this.page = 1 }
   },
   methods: {
     statusText(status) {
@@ -206,6 +238,13 @@ export default {
 }
 
 .column-name { color: #303133; font-family: Consolas, Monaco, monospace; font-weight: 600; }
+.change-list { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.change-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; line-height: 1.5; font-size: 12px; }
+.change-line strong { min-width: 70px; color: #b54708; }
+.change-line__before { color: #5b6470; overflow-wrap: anywhere; }
+.change-line__after { color: #b42318; font-weight: 600; overflow-wrap: anywhere; }
+.change-line i { color: #909399; }
+.same-value { color: #5b8b45; font-size: 12px; }
 
 ::v-deep .column-structure { padding: 5px 0; }
 ::v-deep .type-line { display: inline-block; margin-bottom: 7px; color: #303133; font-family: Consolas, Monaco, monospace; font-weight: 600; }

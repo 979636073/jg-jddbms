@@ -78,6 +78,10 @@ function queryObjAllRole (data) {
   })
 }
 
+function queryObjAllRoles(data) {
+  return request({ url: '/api/rdb/user/allObjectRoles', method: 'post', data })
+}
+
 // 对象权限保存
 function  saveObjectRole(data) {
   return  request({
@@ -85,6 +89,10 @@ function  saveObjectRole(data) {
     method: 'post',
     data
   })
+}
+
+function saveObjectRoles(data) {
+  return request({ url: '/api/rdb/user/addObjectRoles', method: 'post', data })
 }
 
 // 修改密码获取sql
@@ -118,6 +126,8 @@ export default {
   addUserRole,
   editUserRole,
   queryObjAllRole,
+  queryObjAllRoles,
   saveObjectRole,
+  saveObjectRoles,
   upatePassword,
 }

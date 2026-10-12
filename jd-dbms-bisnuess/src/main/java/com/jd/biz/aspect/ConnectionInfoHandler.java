@@ -8,6 +8,7 @@ import com.jd.biz.controller.data.source.request.DataSourceBaseRequestInfo;
 import com.jd.biz.controller.data.source.request.DataSourceConsoleRequestInfo;
 import com.jd.biz.controller.rdb.vo.ExecuteResultVO;
 import com.jd.biz.domain.api.model.DataSource;
+import com.jd.biz.domain.api.enums.DataSourceAction;
 import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
 import com.jd.biz.domain.api.service.DataSourceService;
 import com.jd.common.tools.base.excption.BusinessException;
@@ -25,6 +26,10 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import javax.servlet.http.HttpServletRequest;
 
 import javax.annotation.Resource;
 import java.util.Objects;
@@ -108,25 +113,34 @@ public class ConnectionInfoHandler {
         boolean isClose = true;
         try {
             Object[] params = proceedingJoinPoint.getArgs();
+            Long activeDataSourceId = null;
             if (params != null && params.length > 0) {
                 for (int i = 0; i < params.length; i++) {
                     Object param = params[i];
                     if (param instanceof DataSourceBaseRequest) {
                         Long dataSourceId = ((DataSourceBaseRequest)param).getDataSourceId();
+                        activeDataSourceId = dataSourceId;
                         String schemaName = ((DataSourceBaseRequest)param).getSchemaName();
                         String database = ((DataSourceBaseRequest)param).getDatabaseName();
                         Chat2DBContext.putContext(toInfo(dataSourceId, database, null, schemaName));
                     } else if (param instanceof DataSourceConsoleRequestInfo) {
                         Long dataSourceId = ((DataSourceConsoleRequestInfo)param).getDataSourceId();
+                        activeDataSourceId = dataSourceId;
                         Long consoleId = ((DataSourceConsoleRequestInfo)param).getConsoleId();
                         String database = ((DataSourceConsoleRequestInfo)param).getDatabaseName();
                         Chat2DBContext.putContext(toInfo(dataSourceId, database, consoleId, null));
                     } else if (param instanceof DataSourceBaseRequestInfo) {
                         Long dataSourceId = ((DataSourceBaseRequestInfo)param).getDataSourceId();
+                        activeDataSourceId = dataSourceId;
                         String database = ((DataSourceBaseRequestInfo)param).getDatabaseName();
                         Chat2DBContext.putContext(toInfo(dataSourceId, database));
                     }
                 }
+            }
+            if (activeDataSourceId != null) {
+                DataSource source = dataSourceService.queryById(activeDataSourceId).getData();
+                if (source == null) throw new ParamBusinessException("dataSourceId");
+                dataSourceAccessBusinessService.checkActionPermission(source, requestAction());
             }
             Object proceed = proceedingJoinPoint.proceed();
             if (proceed instanceof ListResult) {
@@ -145,6 +159,37 @@ public class ConnectionInfoHandler {
                 Chat2DBContext.detachContext();
             }
         }
+    }
+
+    private DataSourceAction requestAction() {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes)) {
+            return DataSourceAction.METADATA_READ;
+        }
+        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        String path = request.getRequestURI().substring(request.getContextPath().length()).toLowerCase(java.util.Locale.ROOT);
+        if (path.startsWith("/api/rdb/monitor/")) return DataSourceAction.MONITOR_VIEW;
+        if (path.startsWith("/api/rdb/dml/")) {
+            if (path.endsWith("/execute") || path.endsWith("/jdbcexecute") ||
+                    path.endsWith("/execute_ddl")) return DataSourceAction.SQL_EXECUTE;
+            if (path.endsWith("/execute_table") || path.endsWith("/getblobdata") ||
+                    path.endsWith("/count")) return DataSourceAction.DATA_READ;
+            if (path.endsWith("/execute_update") || path.endsWith("/execute_blob_sql") ||
+                    path.endsWith("/commitsession")) return DataSourceAction.DATA_WRITE;
+            return "GET".equals(request.getMethod()) ? DataSourceAction.DATA_READ : DataSourceAction.DATA_WRITE;
+        }
+        if ("GET".equals(request.getMethod()) &&
+                (path.endsWith("/createtablesql") || path.endsWith("/create/example") ||
+                 path.endsWith("/update/example") || path.endsWith("/modify/sql") ||
+                 path.endsWith("/gettemplatesql"))) {
+            return DataSourceAction.METADATA_READ;
+        }
+        if (path.startsWith("/api/rdb/") && path.matches(".*(/copy|/drop|/delete|/create|/update|/alter|/lock|/grant|/revoke|/import).*")) {
+            return DataSourceAction.SCHEMA_CHANGE;
+        }
+        if (path.startsWith("/api/rdb/")) {
+            return "GET".equals(request.getMethod()) ? DataSourceAction.METADATA_READ : DataSourceAction.SCHEMA_CHANGE;
+        }
+        return "GET".equals(request.getMethod()) ? DataSourceAction.METADATA_READ : DataSourceAction.DATA_WRITE;
     }
 
     public ConnectInfo toInfo(Long dataSourceId, String database, Long consoleId, String schemaName) {

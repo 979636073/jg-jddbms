@@ -3,6 +3,7 @@
       <ContainerBar
         @tableRefresh="tableRefresh"
         @updateViewNameTwo="updateViewNameTwo"
+        @restoreOverview="restoreOverview"
         :typeView="typeView"
         :detailDataSource="detailDataSource"
         :detailDataSourceTotal="detailDataSourceTotal"
@@ -16,6 +17,7 @@
 
 <script>
 import ContainerBar from "./ContainerBar.vue";
+import tableServer from "@/api/main/table";
 
 export default {
   props: {
@@ -23,7 +25,7 @@ export default {
   },
   computed: {
     loading() {
-      return Boolean(this.objectLoading[this.pageId]);
+      return Boolean(this.objectLoading[this.pageId]) || this.overviewLoading;
     }
   },
   components: {
@@ -39,6 +41,8 @@ export default {
       typeView: "",
       detailDataSource: null,
       detailDataSourceTotal: 0,
+      overviewLoading: false,
+      overviewRequestId: 0,
       tableFilterName: "",
       detailsObj: {}
     };
@@ -48,11 +52,61 @@ export default {
     this.$emit("openRouteObject", this.$route);
   },
   methods: {
+    async restoreOverview(context = {}) {
+      const dataSourceId = context.dataSourceId || this.$route.query.dataSourceId;
+      const dataSource = this.$store.state.workspace.dataSourceList.find(item => String(item.id) === String(dataSourceId)) ||
+        (String(this.dataInfo.dataSource?.id) === String(dataSourceId) ? this.dataInfo.dataSource : null);
+      const schema = context.schemaName || this.$route.query.schemaName || this.dataInfo.userName || '';
+      if (!dataSource || !schema) {
+        this.$message.error('无法恢复模式总览，请在左侧重新选择数据源和模式');
+        return;
+      }
+      const requestId = ++this.overviewRequestId;
+      this.dataInfo = { ...this.dataInfo, dataSource, userName: schema };
+      this.typeView = 'tables';
+      this.schema = schema;
+      this.tableFilterName = '';
+      this.detailDataSource = [];
+      this.detailDataSourceTotal = 0;
+      this.overviewLoading = true;
+      try {
+        const res = await tableServer.getTableList({
+          dataSourceId: dataSource.id,
+          dataSourceName: dataSource.alias,
+          databaseType: dataSource.type,
+          databaseName: context.databaseName || this.$route.query.databaseName || '',
+          schemaName: schema,
+          requestType: 2,
+          pageNo: 1,
+          pageSize: 200,
+          refresh: false,
+          isRefreshCache: false
+        });
+        if (requestId !== this.overviewRequestId) return;
+        if (!res.success) throw new Error(res.errorMessage || '读取表列表失败');
+        this.detailDataSource = (res.data?.data || []).map(item => {
+          const details = item.tableDetails || {};
+          return {
+            name: item.name, schema: details.schema || schema,
+            tableSpace: details.tableSpace, comment: item.comment || details.comment,
+            numRows: details.numRows, created: details.created,
+            lastDDL: details.lastDDL, type: details.type, path: details.path
+          };
+        });
+        this.detailDataSourceTotal = Number(res.data?.total) || this.detailDataSource.length;
+      } catch (error) {
+        if (requestId === this.overviewRequestId) this.$message.error(error.message || '模式总览加载失败');
+      } finally {
+        if (requestId === this.overviewRequestId) this.overviewLoading = false;
+      }
+    },
     setDetailsObj(val) {
       this.detailsObj = val;
     },
     isType(val, schema) {
       this.dataInfo = { ...this.$store.state.workspaceData.dataInfo };
+      this.detailDataSource = [];
+      this.detailDataSourceTotal = 0;
       this.$nextTick(() => {
         this.typeView = val;
         this.schema = schema;

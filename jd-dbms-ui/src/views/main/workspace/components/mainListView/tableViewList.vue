@@ -23,7 +23,9 @@
         :show-overflow-tooltip="true"
       ></el-table-column>
       <!-- <el-table-column prop="lastAnalyzed" label="最后分析时间"></el-table-column> -->
-      <el-table-column prop="numRows" label="记录行数"></el-table-column>
+      <el-table-column prop="numRows" label="统计行数">
+        <template slot-scope="scope">{{ scope.row.numRows == null ? '未统计' : scope.row.numRows }}</template>
+      </el-table-column>
       <el-table-column
         prop="created"
         label="创建时间"

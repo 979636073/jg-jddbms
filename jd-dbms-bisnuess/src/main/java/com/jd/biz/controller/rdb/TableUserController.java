@@ -32,6 +32,7 @@ import javax.validation.Valid;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @ConnectionInfoAspect
@@ -54,10 +55,14 @@ public class TableUserController {
      */
     @GetMapping("/list")
     public WebPageResult<TableVO> list(@Valid TableBriefQueryRequest request) {
-        ListResult<Table> tableDTOPageResult = tableUserService.tableUsers(request.getDatabaseName(), request.getRequestType());
-        Integer pageSize = tableDTOPageResult.getData() != null ? tableDTOPageResult.getData().size() : 0;
-        List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableDTOPageResult.getData());
-        return WebPageResult.of(tableVOS, Long.valueOf(tableDTOPageResult.getData().size()), 1, pageSize);
+        try {
+            ListResult<Table> tableDTOPageResult = tableUserService.tableUsers(request.getDatabaseName(), request.getRequestType());
+            Integer pageSize = tableDTOPageResult.getData() != null ? tableDTOPageResult.getData().size() : 0;
+            List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableDTOPageResult.getData());
+            return WebPageResult.of(tableVOS, Long.valueOf(pageSize), 1, pageSize);
+        } catch (RuntimeException error) {
+            throw DatabasePrivilegeHints.translate(error, "DBA_USERS");
+        }
     }
 
 
@@ -148,6 +153,11 @@ public class TableUserController {
         return ListResult.of(tableUserService.allObjectRole(request));
     }
 
+    @PostMapping("/allObjectRoles")
+    public DataResult<Map<String, List<TableObjectRoleData>>> allObjectRoles(@RequestBody @Valid TableBriefQueryRequest request) {
+        return DataResult.of(tableUserService.allObjectRoles(request));
+    }
+
 
     /**
      * 获取全部对象角色列表
@@ -157,6 +167,18 @@ public class TableUserController {
     @PostMapping("/addObjectRole")
     public DataResult<UserOperationResult> addObjectRole(@RequestBody @Valid TableBriefQueryRequest request) throws SQLException {
         UserOperationResult result = tableUserService.addObjectRole(request);
+        if (result.isSuccess()) {
+            return DataResult.of(result);
+        }
+        DataResult<UserOperationResult> response = DataResult.error("user.objectRole.change.failed", failureMessage(result));
+        response.setData(result);
+        return response;
+    }
+
+    @Log(title = "批量数据库对象权限授权", businessType = BusinessType.GRANT)
+    @PostMapping("/addObjectRoles")
+    public DataResult<UserOperationResult> addObjectRoles(@RequestBody @Valid TableBriefQueryRequest request) throws SQLException {
+        UserOperationResult result = tableUserService.addObjectRoles(request);
         if (result.isSuccess()) {
             return DataResult.of(result);
         }

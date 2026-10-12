@@ -31,6 +31,16 @@ import Layout from '@/layout'
 // 公共路由
 export const constantRoutes = [
   {
+    path: '/',
+    redirect: '/workspace',
+    hidden: true
+  },
+  {
+    path: '/index',
+    redirect: '/workspace',
+    hidden: true
+  },
+  {
     path: '/redirect',
     component: Layout,
     hidden: true,
@@ -103,7 +113,6 @@ export const constantRoutes = [
     path: '/user',
     component: Layout,
     hidden: true,
-    redirect: 'noredirect',
     children: [
       {
         path: 'profile',
@@ -130,26 +139,40 @@ export const constantRoutes = [
   {
     path: '/data-migration',
     component: Layout,
+    hidden: true,
     redirect: '/data-migration/index',
     children: [{
       path: 'index',
       component: () => import('@/views/main/dataMigration/index'),
       name: 'DataMigration',
-      meta: { title: '数据迁移', icon: 'documentation', noCache: true }
+      meta: { title: '数据迁移', icon: 'documentation', noCache: true, standaloneTool: true, allowedRoles: ['admin', 'dbms_developer'] }
     }]
   },
   {
     path: '/table-compare',
     component: Layout,
+    hidden: true,
     redirect: '/table-compare/index',
     children: [
       {
         path: 'index',
         component: () => import('@/views/main/tableCompare/index'),
         name: 'TableCompare',
-        meta: { title: '表结构对比', icon: 'search' }
+      meta: { title: '表结构对比', icon: 'search', standaloneTool: true, allowedRoles: ['admin', 'dbms_developer', 'dbms_reader'] }
       }
     ]
+  },
+  {
+    path: '/database-monitor',
+    component: Layout,
+    hidden: true,
+    redirect: '/database-monitor/index',
+    children: [{
+      path: 'index',
+      component: () => import('@/views/main/databaseMonitor/index'),
+      name: 'DatabaseMonitor',
+      meta: { title: '数据库运行监控', icon: 'monitor', noCache: true, allowedRoles: ['admin', 'dbms_developer', 'dbms_reader', 'dbms_auditor'] }
+    }]
   },
   {
     path: '/relation-graph',
@@ -164,10 +187,6 @@ export const constantRoutes = [
         meta: { title: '关联关系图', icon: 'share' }
       }
     ]
-  },
-  {
-    path: '*',
-    redirect: '/workspace',
   },
 ]
 

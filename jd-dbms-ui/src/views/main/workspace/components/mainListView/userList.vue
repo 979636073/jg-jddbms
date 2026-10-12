@@ -1,10 +1,14 @@
 <template>
   <div class="table_box">
+    <div class="user-list-tools">
+      <el-input v-model.trim="keyword" size="small" clearable placeholder="搜索用户" @input="page = 1" />
+      <span>共 {{ filteredUsers.length }} 个用户</span>
+    </div>
     <el-table
-      :data="detailDataSource"
-      @row-dblclick="handleCurrentChange"
+      :data="pagedUsers"
+      @row-click="handleCurrentChange"
       :header-cell-style="{ background: '#f1f3f9', color: '#68728c' }"
-      height="800"
+      height="calc(100% - 82px)"
     >
       <el-table-column prop="name" label="用户"> </el-table-column>
       <el-table-column prop="accountStatus" label="状态"> </el-table-column>
@@ -14,11 +18,11 @@
       </el-table-column>
       <el-table-column prop="created" label="创建时间"> </el-table-column>
     </el-table>
+    <el-pagination v-if="filteredUsers.length > pageSize" small layout="prev, pager, next" :total="filteredUsers.length" :page-size="pageSize" :current-page.sync="page" />
   </div>
 </template>
 
 <script>
-import { v4 as uuidv4 } from "uuid";
 import userServer from "@/api/main/user";
 export default {
   props: {
@@ -32,16 +36,26 @@ export default {
     },
   },
   data() {
-    return {};
+    return { userDetailRequestId: 0, keyword: '', page: 1, pageSize: 100 };
   },
   computed: {
+    filteredUsers() {
+      const keyword = this.keyword.toLowerCase();
+      return keyword ? this.detailDataSource.filter(item => String(item.name || '').toLowerCase().includes(keyword)) : this.detailDataSource;
+    },
+    pagedUsers() {
+      const start = (this.page - 1) * this.pageSize;
+      return this.filteredUsers.slice(start, start + this.pageSize);
+    },
     pageId() {
       return this.$route.params.id;
     },
   },
+  watch: { detailDataSource() { this.page = 1; } },
   methods: {
-    handleCurrentChange(items) {
-      this.$store.dispatch('jdTagsView/changeView', {title:items.name || items.tableDetails.tableSpace,id:this.$route.params.id});
+    async handleCurrentChange(items) {
+      if (!items?.name || !this.dataInfo?.dataSource?.id) return;
+      const requestId = ++this.userDetailRequestId;
       let send = {
         dataSourceId: this.dataInfo.dataSource.id,
         databaseType: this.dataInfo.dataSource.type,
@@ -55,12 +69,33 @@ export default {
         total: 0,
         type: this.dataInfo.dataSource.type,
       };
-      userServer.getUserDetails(send).then((res) => {
+      try {
+        const res = await userServer.getUserDetails(send);
+        if (requestId !== this.userDetailRequestId) return;
+        if (!res?.success || !res.data?.tableDetails) {
+          this.$message.error(res?.errorMessage || "用户详情加载失败");
+          return;
+        }
+        this.$router.replace({
+          path: this.$route.path,
+          query: {
+            ...this.$route.query,
+            dataSourceId: this.dataInfo.dataSource.id,
+            dataSourceName: this.dataInfo.dataSource.alias,
+            schemaName: this.dataInfo.userName || this.$route.query.schemaName,
+            tableName: items.name,
+            objectType: "user",
+            viewType: undefined,
+            path: undefined,
+          },
+        }).catch(() => {});
+        this.$store.dispatch('jdTagsView/changeView', { title: items.name, id: this.pageId });
         this.$store.dispatch("workspaceData/setDataCurrentData", {
           pageId: this.pageId,
           title: items.name,
           type: "editUser",
           tableDetails: res.data.tableDetails,
+          tableUserRoles: res.data.tableUserRoles,
           uniqueData: {
             dataSourceId: this.dataInfo.dataSource.id,
             databaseName: this.dataInfo.dataSource.alias,
@@ -69,7 +104,11 @@ export default {
             userName: items.name,
           },
         });
-      });
+      } catch (error) {
+        if (requestId === this.userDetailRequestId) {
+          this.$message.error(error?.message || "用户详情加载失败");
+        }
+      }
     },
   },
 };
@@ -81,6 +120,8 @@ export default {
   padding: 5px 10px 0px 10px;
   height: 100%;
 }
+.user-list-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 42px; }
+.user-list-tools .el-input { max-width: 260px; }
 ::v-deep .el-table--medium .el-table__cell {
   padding: 2px 0px !important;
 }

@@ -120,10 +120,7 @@ export default {
   },
   methods: {
     backToOverview() {
-      this.$store.dispatch("workspaceData/setDataCurrentData", {
-        pageId: this.$route.params.id,
-        uniqueData: false
-      });
+      this.$emit("restoreOverview", this.currentConfig?.uniqueData || {});
     },
     initData() {
       return new Promise(resolve => {

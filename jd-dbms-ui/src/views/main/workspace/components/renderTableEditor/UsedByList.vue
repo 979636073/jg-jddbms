@@ -56,8 +56,6 @@
 </template>
 
 <script>
-import G6 from "@antv/g6";
-
 export default {
   name: "Used",
   props: {
@@ -80,6 +78,7 @@ export default {
       relationTypeValue: this.relationType,
       displayMode: "tree",
       graph: null,
+      graphRequestId: 0,
     };
   },
   watch: {
@@ -123,13 +122,24 @@ export default {
   },
   methods: {
     destroyGraph() {
+      this.graphRequestId++;
       if (this.graph) {
         this.graph.destroy();
         this.graph = null;
       }
     },
-    initGraph() {
+    async initGraph() {
       if (!this.$refs.graphCanvas || !this.graphNodes.length) return;
+      const requestId = ++this.graphRequestId;
+      let G6;
+      try {
+        const module = await import("@antv/g6");
+        G6 = module.default || module;
+      } catch (error) {
+        if (requestId === this.graphRequestId) this.$message.error("关系图组件加载失败，请重试");
+        return;
+      }
+      if (requestId !== this.graphRequestId || this.displayMode !== "graph" || !this.$refs.graphCanvas) return;
       this.destroyGraph();
       this.graph = new G6.Graph({
         container: this.$refs.graphCanvas,

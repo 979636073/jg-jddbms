@@ -1,7 +1,14 @@
 package com.jd.web.controller.system;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,9 +21,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import com.jd.common.annotation.Log;
+import com.jd.common.config.HzbConfig;
 import com.jd.common.core.controller.BaseController;
 import com.jd.common.core.domain.AjaxResult;
 import com.jd.common.core.domain.entity.SysDept;
@@ -42,6 +51,8 @@ import com.jd.system.service.ISysUserService;
 @RequestMapping("/system/user")
 public class SysUserController extends BaseController
 {
+    private static final String PRESET_AVATAR_PATTERN = "^/avatar-presets/avatar-(0[1-9]|1[0-9]|20)\\.svg$";
+
     @Autowired
     private ISysUserService userService;
 
@@ -56,6 +67,9 @@ public class SysUserController extends BaseController
 
     @Autowired
     private ISysPostService postService;
+
+    @Autowired
+    private RoleGrantGuard roleGrantGuard;
 
     /**
      * 获取用户列表
@@ -128,6 +142,12 @@ public class SysUserController extends BaseController
     @PostMapping
     public AjaxResult add(@Validated @RequestBody SysUser user)
     {
+        roleGrantGuard.checkAssignableRoles(user.getRoleIds(), user.getUserId());
+        if (StringUtils.isNotEmpty(user.getAvatar()) && !user.getAvatar().matches(PRESET_AVATAR_PATTERN))
+        {
+            return error("请选择系统提供的头像");
+        }
+        user.setNickName(user.getUserName());
         if (!userService.checkUserNameUnique(user))
         {
             return error("新增用户'" + user.getUserName() + "'失败，登录账号已存在");
@@ -155,6 +175,17 @@ public class SysUserController extends BaseController
     {
         userService.checkUserAllowed(user);
         userService.checkUserDataScope(user.getUserId());
+        SysUser existingUser = userService.selectUserById(user.getUserId());
+        if (existingUser == null)
+        {
+            return error("用户不存在");
+        }
+        if (StringUtils.isNotEmpty(user.getAvatar()) && !user.getAvatar().equals(existingUser.getAvatar())
+                && !user.getAvatar().matches(PRESET_AVATAR_PATTERN))
+        {
+            return error("请选择系统提供的头像");
+        }
+        roleGrantGuard.checkAssignableRoles(user.getRoleIds(), user.getUserId());
         if (!userService.checkUserNameUnique(user))
         {
             return error("修改用户'" + user.getUserName() + "'失败，登录账号已存在");
@@ -168,7 +199,97 @@ public class SysUserController extends BaseController
             return error("修改用户'" + user.getUserName() + "'失败，邮箱账号已存在");
         }
         user.setUpdateBy(getUsername());
-        return toAjax(userService.updateUser(user));
+        int rows = userService.updateUser(user);
+        if (rows > 0) tokenService.delLoginUserSessions(user.getUserId(), null);
+        return toAjax(rows);
+    }
+
+    /** 在平台用户中为指定账号上传自定义头像。 */
+    @PreAuthorize("@ss.hasPermi('system:user:edit')")
+    @Log(title = "用户头像", businessType = BusinessType.UPDATE)
+    @PostMapping("/{userId}/avatar")
+    public AjaxResult uploadAvatar(@PathVariable Long userId, @RequestParam("avatarfile") MultipartFile file) throws Exception
+    {
+        if (SysUser.isAdmin(userId) && !userId.equals(getUserId()))
+        {
+            return error("不允许修改超级管理员头像");
+        }
+        userService.checkUserDataScope(userId);
+        SysUser user = userService.selectUserById(userId);
+        if (user == null)
+        {
+            return error("用户不存在");
+        }
+        if (file == null || file.isEmpty() || file.getSize() > 2 * 1024 * 1024)
+        {
+            return error("请选择不超过 2 MB 的图片");
+        }
+        String mime = file.getContentType();
+        if (!"image/png".equals(mime) && !"image/jpeg".equals(mime) && !"image/gif".equals(mime))
+        {
+            return error("仅支持 PNG、JPG、GIF 图片");
+        }
+        BufferedImage image = ImageIO.read(file.getInputStream());
+        if (image == null || image.getWidth() > 2048 || image.getHeight() > 2048)
+        {
+            return error("图片无效或尺寸超过 2048 × 2048");
+        }
+        Path directory = Paths.get(HzbConfig.getProfile(), "avatars");
+        Files.createDirectories(directory);
+        String avatar = "/profile/avatars/" + UUID.randomUUID() + ".png";
+        Path output = directory.resolve(avatar.substring(avatar.lastIndexOf('/') + 1));
+        if (!ImageIO.write(image, "png", output.toFile()))
+        {
+            return error("图片保存失败");
+        }
+        if (!saveAvatar(userId, avatar))
+        {
+            Files.deleteIfExists(output);
+            return error("头像更新失败");
+        }
+        AjaxResult result = success();
+        result.put("imgUrl", avatar);
+        return result;
+    }
+
+    /** 使用内置头像，头像编号由服务端严格校验。 */
+    @PreAuthorize("@ss.hasPermi('system:user:edit')")
+    @Log(title = "用户头像", businessType = BusinessType.UPDATE)
+    @PutMapping("/{userId}/avatar")
+    public AjaxResult selectAvatar(@PathVariable Long userId, @RequestBody Map<String, String> request)
+    {
+        if (SysUser.isAdmin(userId) && !userId.equals(getUserId()))
+        {
+            return error("不允许修改超级管理员头像");
+        }
+        userService.checkUserDataScope(userId);
+        if (userService.selectUserById(userId) == null)
+        {
+            return error("用户不存在");
+        }
+        String avatar = request.get("avatar");
+        if (avatar == null || !avatar.matches(PRESET_AVATAR_PATTERN))
+        {
+            return error("请选择系统提供的头像");
+        }
+        return toAjax(saveAvatar(userId, avatar) ? 1 : 0);
+    }
+
+    private boolean saveAvatar(Long userId, String avatar)
+    {
+        SysUser update = new SysUser(userId);
+        update.setAvatar(avatar);
+        update.setUpdateBy(getUsername());
+        if (userService.updateUserProfile(update) <= 0)
+        {
+            return false;
+        }
+        if (userId.equals(getUserId()))
+        {
+            getLoginUser().getUser().setAvatar(avatar);
+            tokenService.setLoginUser(getLoginUser());
+        }
+        return true;
     }
 
     /**
@@ -183,7 +304,9 @@ public class SysUserController extends BaseController
         {
             return error("当前用户不能删除");
         }
-        return toAjax(userService.deleteUserByIds(userIds));
+        int rows = userService.deleteUserByIds(userIds);
+        if (rows > 0) for (Long userId : userIds) tokenService.delLoginUserSessions(userId, null);
+        return toAjax(rows);
     }
 
     /**
@@ -216,7 +339,9 @@ public class SysUserController extends BaseController
         userService.checkUserAllowed(user);
         userService.checkUserDataScope(user.getUserId());
         user.setUpdateBy(getUsername());
-        return toAjax(userService.updateUserStatus(user));
+        int rows = userService.updateUserStatus(user);
+        if (rows > 0) tokenService.delLoginUserSessions(user.getUserId(), null);
+        return toAjax(rows);
     }
 
     /**
@@ -243,7 +368,9 @@ public class SysUserController extends BaseController
     public AjaxResult insertAuthRole(Long userId, Long[] roleIds)
     {
         userService.checkUserDataScope(userId);
+        roleGrantGuard.checkAssignableRoles(roleIds, userId);
         userService.insertUserAuth(userId, roleIds);
+        tokenService.delLoginUserSessions(userId, null);
         return success();
     }
 

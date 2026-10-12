@@ -12,8 +12,9 @@ import java.util.stream.Collectors;
 import static com.jd.biz.migration.MigrationModel.*;
 
 public final class MigrationDialect {
+    public static final int MAX_OBJECTS = 10000;
     private static final Set<String> SYSTEM_SCHEMAS = new HashSet<>(Arrays.asList(
-            "SYS", "SYSTEM", "SYSDBA", "SYSSSO", "SYSAUDITOR", "CTISYS", "SYSINFO", "MDSYS", "CTXSYS", "XDB"));
+            "SYS", "SYSTEM", "SYSSSO", "SYSAUDITOR", "CTISYS", "SYSINFO", "MDSYS", "CTXSYS", "XDB"));
 
     private MigrationDialect() { }
 
@@ -44,7 +45,7 @@ public final class MigrationDialect {
         if (config.fetchSize < 1 || config.fetchSize > 1000 || config.commitSize < 1 || config.commitSize > 1000) {
             throw new BusinessException("读取与提交批次必须为 1～1000 行");
         }
-        if (config.tables == null || config.tables.size() > 100) throw new BusinessException("单任务最多选择 100 张表");
+        if (config.tables == null || config.tables.size() > MAX_OBJECTS) throw new BusinessException("单任务最多选择 " + MAX_OBJECTS + " 个对象");
         if (!complete) return;
         if (config.sourceId == null || config.targetId == null || config.tables.isEmpty()) {
             throw new BusinessException("请选择源端、目标端及至少一张表");

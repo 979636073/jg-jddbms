@@ -3,6 +3,8 @@ import NavBar from "./NavBar.vue";
 import JdTagsView from "@/components/JdTagsView";
 import linkServerDialog from './components/linkServerDialog';
 import SideBar from './SideBar.vue';
+import connectionServer from '@/api/main/connection';
+import { v4 as uuidv4 } from 'uuid';
 
 export default {
   name: "index",
@@ -24,6 +26,10 @@ export default {
       resizeStartX: 0,
       resizeStartWidth: 280,
       objectLoading: {},
+      queryDialogVisible: false,
+      queryDataSources: [],
+      queryDataSourceId: '',
+      queryCreating: false,
     };
   },
   mounted(){
@@ -48,6 +54,81 @@ export default {
     this.stopResizeSideBar();
   },
   methods: {
+    async openNewQuery(request = {}) {
+      const requestedSource = request?.dataSource;
+      const connectedIds = this.$store.state.workspace.connectedDataSourceIds;
+      if (requestedSource) {
+        await this.createQueryForDataSource(requestedSource, request.extraParams || {});
+        return;
+      }
+      const active = this.dataInfo?.dataSource;
+      if (active && connectedIds[active.id]) {
+        await this.createQueryForDataSource(active, {
+          databaseName: this.dataInfo.databaseName || '',
+          schemaName: this.dataInfo.userName || '',
+        });
+        return;
+      }
+      try {
+        const response = await connectionServer.getList({ pageNo: 1, pageSize: 10000 });
+        if (!response.success) throw new Error(response.errorMessage || '读取数据源失败');
+        this.queryDataSources = response.data?.data || [];
+        const connected = this.queryDataSources.filter(source => connectedIds[source.id]);
+        if (connected.length === 1) {
+          await this.createQueryForDataSource(connected[0]);
+          return;
+        }
+        this.queryDataSourceId = '';
+        this.queryDialogVisible = true;
+      } catch (error) {
+        this.$message.error(error.message || '读取数据源失败');
+      }
+    },
+    async confirmNewQuery() {
+      const source = this.queryDataSources.find(item => String(item.id) === String(this.queryDataSourceId));
+      if (!source) return this.$message.warning('请选择数据源');
+      await this.createQueryForDataSource(source);
+    },
+    async createQueryForDataSource(dataSource, context = {}) {
+      if (this.queryCreating) return;
+      this.queryCreating = true;
+      try {
+        if (!this.$store.state.workspace.connectedDataSourceIds[dataSource.id]) {
+          const connected = await connectionServer.connect({ id: dataSource.id });
+          if (!connected.success) throw new Error(connected.errorMessage || '数据库连接失败');
+          this.handleDataSourceConnected(dataSource);
+        }
+        const schemaName = context.schemaName || dataSource.user || dataSource.userName || '';
+        const databaseName = context.databaseName || '';
+        this.$store.commit('workspaceData/SET_DATA_BASE_INFO', dataSource);
+        this.$store.commit('workspaceData/SET_DATA_INFO', {
+          dateSourceId: dataSource.id,
+          dateSourceName: dataSource.alias,
+          dataSource,
+          databaseName,
+          userName: schemaName,
+        });
+        this.$store.commit('SET_CURRENTCONNECTIONDETAILS', dataSource);
+        const pageId = uuidv4();
+        await this.$store.dispatch('workspaceData/createConsole', {
+          pageId,
+          dataSourceId: dataSource.id,
+          dataSourceName: dataSource.alias,
+          databaseType: dataSource.type,
+          databaseName,
+          schemaName,
+        });
+        this.queryDialogVisible = false;
+        await this.$router.push({
+          path: '/workspace/query/' + pageId,
+          query: { dataSourceId: dataSource.id, databaseName, schemaName },
+        });
+      } catch (error) {
+        this.$message.error(error.message || '新建查询失败');
+      } finally {
+        this.queryCreating = false;
+      }
+    },
     startResizeSideBar(event) {
       this.resizingSideBar = true;
       this.resizeStartX = event.clientX;
@@ -138,11 +219,12 @@ export default {
           :collapsed="headerCollapsed"
           @toggleHeader="headerCollapsed = !headerCollapsed"
           @manageDataSources="openDataSourceManager"
+          @newQuery="openNewQuery"
           @openRouteObject="openRouteObject"
         />
       </el-header>
       <div class="tag_list">
-        <JdTagsView />
+        <JdTagsView @newQuery="openNewQuery" />
       </div>
       <div class="workspace-body">
         <el-aside :style="{ width: sideBarWidth + 'px' }" :class="[opened ? 'show' : 'hide', { resizing: resizingSideBar }]">
@@ -151,7 +233,7 @@ export default {
             @queryDetailTable="handleTreeObjects"
             @filterChange="forwardTreeEvent('filterChange', $event)"
             @setDetailsObj="forwardTreeEvent('setDetailsObj', $event)"
-            @load="setObjectLoading" @isopenFn="isopenFn" @manageDataSources="openDataSourceManager" />
+            @load="setObjectLoading" @isopenFn="isopenFn" @manageDataSources="openDataSourceManager" @newQuery="openNewQuery" />
           <div class="sidebar-resizer" title="拖动调整左侧宽度" @mousedown.prevent="startResizeSideBar"></div>
         </el-aside>
         <div v-if="!opened" class="isOpen" @click="openSideBar"><img src="@/assets/main/1-1-sub侧边.png" alt /></div>
@@ -171,6 +253,18 @@ export default {
       @saved="handleDataSourceSaved"
       @connected="handleDataSourceConnected"
     />
+    <el-dialog title="选择数据源并新建查询" :visible.sync="queryDialogVisible" width="420px" append-to-body>
+      <el-select v-model="queryDataSourceId" filterable placeholder="请选择数据源" style="width: 100%">
+        <el-option v-for="source in queryDataSources" :key="source.id" :value="String(source.id)"
+          :label="`${source.alias || source.user || source.userName || source.id}${$store.state.workspace.connectedDataSourceIds[source.id] ? '（已连接）' : '（未连接）'}`" />
+      </el-select>
+      <div v-if="!queryDataSources.length" style="margin-top: 12px; color: #909399">暂无数据源，请先新增连接。</div>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="queryDialogVisible = false">取消</el-button>
+        <el-button v-if="!queryDataSources.length" type="primary" @click="queryDialogVisible = false; openDataSourceManager()">新增连接</el-button>
+        <el-button v-else type="primary" :loading="queryCreating" @click="confirmNewQuery">连接并新建查询</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -260,6 +354,12 @@ export default {
   height: 20px !important;
   flex: 0 0 20px !important;
 }
+@media (max-width: 800px) {
+  ::v-deep .el-header:not(.workspace-header-collapsed) {
+    height: 96px !important;
+    flex: 0 0 96px !important;
+  }
+}
 ::v-deep .el-main {
   padding: 0px;
 }
@@ -332,10 +432,18 @@ export default {
     border: 1px solid #eb4927;
     color: #ff5733;
   }
-  .el-button.is-disabled,
-  .el-button.is-disabled:hover,
-  .el-button.is-disabled:focus {
+  .el-button.is-disabled:not(.el-button--primary),
+  .el-button.is-disabled:not(.el-button--primary):hover,
+  .el-button.is-disabled:not(.el-button--primary):focus {
     color: #c0c4cc;
+  }
+  .el-button--primary.is-disabled,
+  .el-button--primary.is-disabled:hover,
+  .el-button--primary.is-disabled:focus {
+    background: #eef0f3;
+    border-color: #d8dce3;
+    color: #909399;
+    box-shadow: none;
   }
   .el-pagination {
     margin: 5px 0;

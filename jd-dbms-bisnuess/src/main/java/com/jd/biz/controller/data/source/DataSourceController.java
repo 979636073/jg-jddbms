@@ -8,11 +8,13 @@ import com.jd.biz.controller.data.source.vo.DataSourceConnectVo;
 import com.jd.biz.controller.data.source.vo.DataSourceVO;
 import com.jd.biz.controller.data.source.vo.DatabaseVO;
 import com.jd.biz.domain.api.model.DataSource;
+import com.jd.biz.domain.api.enums.DataSourceAction;
 import com.jd.biz.domain.api.param.ConsoleCloseParam;
 import com.jd.biz.domain.api.param.ConsoleConnectParam;
 import com.jd.biz.domain.api.param.datasource.*;
 import com.jd.biz.domain.api.service.ConsoleService;
 import com.jd.biz.domain.api.service.DataSourceService;
+import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
 import com.jd.common.tools.base.enums.DataSourceTypeEnum;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
@@ -20,6 +22,7 @@ import com.jd.common.tools.base.wrapper.result.ListResult;
 import com.jd.common.tools.base.wrapper.result.PageResult;
 import com.jd.common.tools.base.wrapper.result.web.WebPageResult;
 import com.jd.common.tools.common.exception.ConnectionException;
+import com.jd.common.tools.common.exception.PermissionDeniedBusinessException;
 import com.jd.biz.aspect.ConnectionInfoAspect;
 import com.jd.spi.model.Database;
 import com.jd.spi.ssh.SSHManager;
@@ -55,6 +58,9 @@ public class DataSourceController {
     private DataSourceService dataSourceService;
 
     @Autowired
+    private DataSourceAccessBusinessService dataSourceAccessBusinessService;
+
+    @Autowired
     private ConsoleService consoleService;
 
     @Autowired
@@ -71,6 +77,7 @@ public class DataSourceController {
      */
     @RequestMapping("/datasource/pre_connect")
     public ActionResult preConnect(@Validated @RequestBody DataSourceTestRequest request) {
+        dataSourceAccessBusinessService.checkPlatformAction(DataSourceAction.DATASOURCE_MANAGE);
         if(StringUtils.isBlank(request.getUser())){
             return ActionResult.fail("User不能为空");
         }
@@ -95,6 +102,7 @@ public class DataSourceController {
      */
     @RequestMapping("/ssh/pre_connect")
     public ActionResult sshConnect(@RequestBody SSHTestRequest request) {
+        dataSourceAccessBusinessService.checkPlatformAction(DataSourceAction.DATASOURCE_MANAGE);
         Session session = null;
         try {
             session = SSHManager.getSSHSession(sshWebConverter.toInfo(request));
@@ -168,6 +176,14 @@ public class DataSourceController {
         DataSourcePageQueryParam param = dataSourceWebConverter.queryReq2param(request);
         PageResult<DataSource> result = dataSourceService.queryPageWithPermission(param, DATA_SOURCE_SELECTOR);
         List<DataSourceVO> dataSourceVOS = dataSourceWebConverter.dto2vo(result.getData());
+        for (int i = 0; i < dataSourceVOS.size(); i++) {
+            try {
+                dataSourceAccessBusinessService.checkActionPermission(result.getData().get(i), DataSourceAction.DATASOURCE_MANAGE);
+                dataSourceVOS.get(i).setCanManage(true);
+            } catch (PermissionDeniedBusinessException denied) {
+                dataSourceVOS.get(i).setCanManage(false);
+            }
+        }
         return WebPageResult.of(dataSourceVOS, result.getTotal(), result.getPageNo(), result.getPageSize());
     }
 

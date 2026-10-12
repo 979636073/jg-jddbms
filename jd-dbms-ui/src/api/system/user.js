@@ -36,6 +36,24 @@ export function updateUser(data) {
   })
 }
 
+export function selectUserAvatar(userId, avatar) {
+  return request({
+    url: '/system/user/' + userId + '/avatar',
+    method: 'put',
+    data: { avatar }
+  })
+}
+
+export function uploadUserAvatar(userId, file) {
+  const data = new FormData()
+  data.append('avatarfile', file)
+  return request({
+    url: '/system/user/' + userId + '/avatar',
+    method: 'post',
+    data
+  })
+}
+
 // 删除用户
 export function delUser(userId) {
   return request({

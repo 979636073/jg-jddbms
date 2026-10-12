@@ -162,7 +162,7 @@ public enum DMColumnTypeEnum implements ColumnBuilder {
         }
         StringBuilder script = new StringBuilder();
 
-        script.append("\"").append(column.getName()).append("\"").append(" ");
+        script.append("\"").append(column.getName().replace("\"", "\"\"")).append("\"").append(" ");
         if (Arrays.asList(DMColumnTypeEnum.TIMESTAMP, DMColumnTypeEnum.DATETIME).contains(type)) {
             script.append(column.getColumnType()).append(" ");
         } else {

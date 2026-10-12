@@ -25,6 +25,9 @@ function getAllFieldByTable(data) {
     params: data
   })
 }
+function getSchemaInventory(data) {
+  return request({ url: '/api/rdb/schema-inventory', method: 'get', params: data })
+}
 function addTablePin(data) {
   return request({
     url: '/api/pin/table/add',
@@ -236,6 +239,7 @@ export default {
   getTableList,
   getAllTableList,
   getAllFieldByTable,
+  getSchemaInventory,
   addTablePin,
   deleteTablePin,
   deleteTable,

@@ -50,30 +50,27 @@ const actions = {
     currendChange({ commit }) {
         commit('CHANGE_FLAG')
     },
-    createConsole({ commit }, params) {
-        return new Promise((resolve) => {
-            const newConsole = {
-                ...params,
-                name: params.name || 'new console1',
-                ddl: params.ddl || '',
-                status: 'DRAFT',
-                operationType: params.operationType || 'console',
-                type: params.databaseType,
-            };
-            historyServer.createConsole(newConsole).then((res) => {
-                let data = {
-                    pageId: params.pageId,
-                    id: res.data,
-                    title: newConsole.name,
-                    type: newConsole.operationType,
-                    uniqueData: newConsole,
-                }
-                actions.setDataCurrentData({ commit }, data)
-                workspace.state.activeConsoleId = data.id
-                resolve()
-            })
-        })
-
+    async createConsole({ commit }, params) {
+        const newConsole = {
+            ...params,
+            name: params.name || 'new console1',
+            ddl: params.ddl || '',
+            status: 'DRAFT',
+            operationType: params.operationType || 'console',
+            type: params.databaseType,
+        };
+        const res = await historyServer.createConsole(newConsole);
+        if (!res.success) throw new Error(res.errorMessage || '新建查询失败');
+        const data = {
+            pageId: params.pageId,
+            id: res.data,
+            title: newConsole.name,
+            type: newConsole.operationType,
+            uniqueData: newConsole,
+        };
+        actions.setDataCurrentData({ commit }, data);
+        workspace.state.activeConsoleId = data.id;
+        return data;
     }
 }
 

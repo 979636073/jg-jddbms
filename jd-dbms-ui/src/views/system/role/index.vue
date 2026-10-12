@@ -1,5 +1,7 @@
 <template>
   <div class="app-container">
+    <h2>平台角色</h2>
+    <p class="role-hint">角色决定平台功能和数据库操作类型；具体可访问哪些数据源，请到“数据源控制”授权。</p>
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch">
       <el-form-item label="角色名称" prop="roleName">
         <el-input
@@ -84,7 +86,7 @@
           v-hasPermi="['system:role:remove']"
         >删除</el-button>
       </el-col>
-      <el-col :span="1.5">
+      <el-col v-if="false" :span="1.5">
         <el-button
           type="warning"
           plain
@@ -101,7 +103,10 @@
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="角色编号" prop="roleId" width="120" />
       <el-table-column label="角色名称" prop="roleName" :show-overflow-tooltip="true" width="150" />
-      <el-table-column label="权限字符" prop="roleKey" :show-overflow-tooltip="true" width="150" />
+      <el-table-column label="数据库操作范围" min-width="220">
+        <template slot-scope="scope">{{ roleSummary(scope.row.roleKey) }}</template>
+      </el-table-column>
+      <el-table-column label="角色编码" prop="roleKey" :show-overflow-tooltip="true" width="150" />
       <el-table-column label="显示顺序" prop="roleSort" width="100" />
       <el-table-column label="状态" align="center" width="100">
         <template slot-scope="scope">
@@ -137,7 +142,7 @@
           <el-dropdown size="mini" @command="(command) => handleCommand(command, scope.row)" v-hasPermi="['system:role:edit']">
             <el-button size="mini" type="text" icon="el-icon-d-arrow-right">更多</el-button>
             <el-dropdown-menu slot="dropdown">
-              <el-dropdown-item command="handleDataScope" icon="el-icon-circle-check"
+              <el-dropdown-item v-if="false" command="handleDataScope" icon="el-icon-circle-check"
                 v-hasPermi="['system:role:edit']">数据权限</el-dropdown-item>
               <el-dropdown-item command="handleAuthUser" icon="el-icon-user"
                 v-hasPermi="['system:role:edit']">分配用户</el-dropdown-item>
@@ -168,7 +173,7 @@
             </el-tooltip>
             权限字符
           </span>
-          <el-input v-model="form.roleKey" placeholder="请输入权限字符" />
+          <el-input v-model="form.roleKey" :disabled="form.roleId >= 10 && form.roleId <= 14" placeholder="请输入权限字符" />
         </el-form-item>
         <el-form-item label="角色顺序" prop="roleSort">
           <el-input-number v-model="form.roleSort" controls-position="right" :min="0" />
@@ -182,7 +187,7 @@
             >{{dict.label}}</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="菜单权限">
+        <el-form-item label="平台功能权限">
           <el-checkbox v-model="menuExpand" @change="handleCheckedTreeExpand($event, 'menu')">展开/折叠</el-checkbox>
           <el-checkbox v-model="menuNodeAll" @change="handleCheckedTreeNodeAll($event, 'menu')">全选/全不选</el-checkbox>
           <el-checkbox v-model="form.menuCheckStrictly" @change="handleCheckedTreeConnect($event, 'menu')">父子联动</el-checkbox>
@@ -345,6 +350,12 @@ export default {
     this.getList();
   },
   methods: {
+    roleSummary(key) {
+      return ({ admin: '全部权限', common: '旧版开发权限（待迁移）',
+        dbms_developer: '查询、修改、结构、SQL、迁移', dbms_reader: '结构与数据只读',
+        dbms_datasource: '连接与共享管理', dbms_auditor: '运行监控与审计',
+        dbms_security: '平台用户、角色和授权' })[key] || '按平台功能权限配置'
+    },
     /** 查询角色列表 */
     getList() {
       this.loading = true;
@@ -603,3 +614,6 @@ export default {
   }
 };
 </script>
+<style scoped>
+.role-hint { color: #606266; margin: 4px 0 18px; }
+</style>

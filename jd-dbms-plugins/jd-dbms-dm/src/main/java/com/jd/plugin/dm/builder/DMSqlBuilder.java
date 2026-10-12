@@ -19,7 +19,11 @@ import java.util.stream.Collectors;
 public class DMSqlBuilder extends DefaultSqlBuilder {
 
     private String format(String tableName) {
-        return "\"" + tableName + "\"";
+        return quoteIdentifier(tableName);
+    }
+
+    private String quoteLiteral(String value) {
+        return "'" + value.replace("'", "''") + "'";
     }
 
     private static final String spot = ".";
@@ -28,7 +32,8 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
     public String buildCreateTableSql(Table table) {
         StringBuilder script = new StringBuilder();
 
-        script.append("CREATE TABLE ").append("\"").append(table.getSchemaName()).append("\".\"").append(table.getName()).append("\" (").append("\n");
+        script.append("CREATE TABLE ").append(quoteIdentifier(table.getSchemaName())).append(".")
+                .append(quoteIdentifier(table.getName())).append(" (\n");
 
         for (TableColumn column : table.getColumnList()) {
             if (StringUtils.isBlank(column.getName()) || StringUtils.isBlank(column.getColumnType())) {
@@ -61,8 +66,9 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
         script.append("\n");
         for (TableColumn column : table.getColumnList()) {
             if (column != null && column.getAutoIncrement() != null && column.getAutoIncrement().equals(true)) {
-                script.append("ALTER TABLE ").append("\"").append(table.getSchemaName()).append("\".\"").append(table.getName()).append("\"")
-                        .append(" ADD COLUMN ").append("\"").append(column.getName()).append("\"").append(" identity(1, 1);\n");
+                script.append("ALTER TABLE ").append(quoteIdentifier(table.getSchemaName())).append(".")
+                        .append(quoteIdentifier(table.getName())).append(" ADD COLUMN ")
+                        .append(quoteIdentifier(column.getName())).append(" identity(1, 1);\n");
             }
         }
 
@@ -71,7 +77,8 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
 
     private String buildTableComment(Table table) {
         StringBuilder script = new StringBuilder();
-        script.append("COMMENT ON TABLE ").append("\"").append(table.getSchemaName()).append("\".\"").append(table.getName()).append("\" IS '").append(table.getComment()).append("'");
+        script.append("COMMENT ON TABLE ").append(quoteIdentifier(table.getSchemaName())).append(".")
+                .append(quoteIdentifier(table.getName())).append(" IS ").append(quoteLiteral(table.getComment()));
         return script.toString();
     }
 
@@ -87,9 +94,13 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
             }
         }
         if (StrUtil.isNotEmpty(column.getComment())) {
-            script.append("COMMENT ON COLUMN ").append("\"").append(column.getSchemaName()).append("\".\"").append(column.getTableName()).append("\".\"").append(column.getName()).append("\" IS '").append(column.getComment()).append("'");
+            script.append("COMMENT ON COLUMN ").append(quoteIdentifier(column.getSchemaName())).append(".")
+                    .append(quoteIdentifier(column.getTableName())).append(".")
+                    .append(quoteIdentifier(column.getName())).append(" IS ").append(quoteLiteral(column.getComment()));
         } else {
-            script.append("COMMENT ON COLUMN ").append("\"").append(column.getSchemaName()).append("\".\"").append(column.getTableName()).append("\".\"").append(column.getName()).append("\" IS ''");
+            script.append("COMMENT ON COLUMN ").append(quoteIdentifier(column.getSchemaName())).append(".")
+                    .append(quoteIdentifier(column.getTableName())).append(".")
+                    .append(quoteIdentifier(column.getName())).append(" IS ''");
         }
         script.append(";\n");
         return script.toString();
@@ -100,8 +111,9 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
         StringBuilder script = new StringBuilder();
 
         if (!StringUtils.equalsIgnoreCase(oldTable.getName(), newTable.getName())) {
-            script.append("ALTER TABLE ").append("\"").append(oldTable.getSchemaName()).append("\".\"").append(oldTable.getName()).append("\"");
-            script.append(" ").append("RENAME TO ").append("\"").append(newTable.getName()).append("\"").append(";\n");
+            script.append("ALTER TABLE ").append(quoteIdentifier(oldTable.getSchemaName())).append(".")
+                    .append(quoteIdentifier(oldTable.getName())).append(" RENAME TO ")
+                    .append(quoteIdentifier(newTable.getName())).append(";\n");
         }
         if (!StringUtils.equalsIgnoreCase(oldTable.getComment(), newTable.getComment())) {
             script.append("").append(buildTableComment(newTable)).append(";\n");
@@ -128,15 +140,43 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
 
 
 
-        String[] split = script.toString().split(";");
-        List<String> sql = new ArrayList<>();
-        for (String s : split) {
-            if (StringUtils.isNotBlank(s) && !sql.contains(s)) {
-                sql.add(s);
+        return normalizeStatements(script.toString());
+    }
+
+    private String normalizeStatements(String script) {
+        Set<String> statements = new LinkedHashSet<>();
+        StringBuilder current = new StringBuilder();
+        boolean inLiteral = false;
+        boolean inIdentifier = false;
+        for (int i = 0; i < script.length(); i++) {
+            char value = script.charAt(i);
+            if (value == '\'' && !inIdentifier) {
+                current.append(value);
+                if (inLiteral && i + 1 < script.length() && script.charAt(i + 1) == '\'') {
+                    current.append(script.charAt(++i));
+                } else {
+                    inLiteral = !inLiteral;
+                }
+            } else if (value == '"' && !inLiteral) {
+                current.append(value);
+                if (inIdentifier && i + 1 < script.length() && script.charAt(i + 1) == '"') {
+                    current.append(script.charAt(++i));
+                } else {
+                    inIdentifier = !inIdentifier;
+                }
+            } else if (value == ';' && !inLiteral && !inIdentifier) {
+                if (StringUtils.isNotBlank(current.toString())) {
+                    statements.add(current.toString().trim());
+                }
+                current.setLength(0);
+            } else {
+                current.append(value);
             }
         }
-        script = new StringBuilder(String.join(";", sql)).append(";");
-        return script.toString();
+        if (StringUtils.isNotBlank(current.toString())) {
+            statements.add(current.toString().trim());
+        }
+        return statements.isEmpty() ? "" : String.join(";\n", statements) + ";";
     }
 
     private TableColumn getOldColumn(TableColumn tableColumn, List<TableColumn> columnList) {

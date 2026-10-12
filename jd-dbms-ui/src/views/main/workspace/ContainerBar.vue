@@ -1,14 +1,14 @@
 <script>
-import renderSqlExecute from "./components/reanderSqlExecute/index.vue";
-import renderTableEditor from "./components/renderTableEditor/index.vue";
-import renderViewEditor from "./components/renderViewEditor/index.vue";
-import renderUserEditor from "./components/renderUserEditor/index.vue";
-import renderTableSpaceEditor from "./components/renderTableSpaceEditor/index.vue";
-import DataSourceConfig from "./components/DataSource/index.vue";
-import renderSearchResult from "./components/renderSearchResult/index.vue";
-import ViewAllTable from "./components/ViewAllTable";
-import ViewAllView from "./components/ViewAllView";
-import CreateSql from "@/views/main/workspace/components/CreateSql/index.vue";
+const renderSqlExecute = () => import("./components/reanderSqlExecute/index.vue");
+const renderTableEditor = () => import("./components/renderTableEditor/index.vue");
+const renderViewEditor = () => import("./components/renderViewEditor/index.vue");
+const renderUserEditor = () => import("./components/renderUserEditor/index.vue");
+const renderTableSpaceEditor = () => import("./components/renderTableSpaceEditor/index.vue");
+const DataSourceConfig = () => import("./components/DataSource/index.vue");
+const renderSearchResult = () => import("./components/renderSearchResult/index.vue");
+const ViewAllTable = () => import("./components/ViewAllTable");
+const ViewAllView = () => import("./components/ViewAllView");
+const CreateSql = () => import("@/views/main/workspace/components/CreateSql/index.vue");
 import TableViewList from "./components/mainListView/tableViewList.vue";
 import ViewList from "./components/mainListView/viewList.vue";
 import UserList from "./components/mainListView/userList.vue";
@@ -179,13 +179,10 @@ export default {
     //   });
     // },
     changeFlag() {
-      if (this.cachePageId != this.pageId) {
-        // console.log('其他tab页的操作，弹出');
-        return;
-      } else {
-        // console.log('当前tab页的操作，执行下一步');
-        this.currentConfig = this.dataCurrentDataMap.get(this.pageId);
-      }
+      this.currentConfig = this.dataCurrentDataMap.get(this.pageId) || null;
+    },
+    pageId() {
+      this.currentConfig = this.dataCurrentDataMap.get(this.pageId) || null;
     }
   },
   mounted() {
@@ -193,11 +190,12 @@ export default {
     this.currentConfig = this.dataCurrentDataMap.get(this.pageId);
   },
   methods: {
-    backToOverview() {
+    backToOverview(context = {}) {
       this.$store.dispatch("workspaceData/setDataCurrentData", {
         pageId: this.pageId,
         uniqueData: false
       });
+      this.$emit("restoreOverview", context);
     },
     // 手动更新currentConfig 中的Header
     // updateCurrentConfigHeader(headerList) {
@@ -344,6 +342,7 @@ export default {
           ref="renderTableEditor"
           :queryResultData="currentConfig"
           @tableRefresh="tableRefresh"
+          @restoreOverview="backToOverview"
           v-else-if="workspaceTabConnectionMap.renderTableEditor.includes(currentConfig.type)"
         />
         <renderViewEditor
@@ -405,6 +404,7 @@ export default {
         v-else-if="typeView == 'views'"
         :detailDataSource="detailDataSource"
         :dataInfo="dataInfo"
+        :filterName="filterName"
       />
       <UserList
         v-else-if="typeView == 'users'"

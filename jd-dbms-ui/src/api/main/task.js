@@ -39,7 +39,7 @@ export function clearFinishedTasks() {
   })
 }
 
-export async function downloadTaskFile(id, taskType) {
+export async function downloadTaskFile(id, taskType, row = {}) {
   const data = await downloadTask(id)
   if (data.type && data.type.indexOf('application/json') === 0) {
     const text = await data.text()
@@ -52,7 +52,10 @@ export async function downloadTaskFile(id, taskType) {
     Message.error(message)
     return
   }
-  const filename = taskType === 'UPLOAD_TABLE_STRUCTURE' ? `DMP导入_${id}.log` : `DMP导出_${id}.dmp`
+  const format = String(row.taskName || '').match(/·\s*(SQL|CSV|TSV|XLSX?|JSON|XML)$/i)
+  const filename = taskType === 'TABLE_EXPORT' ? `${row.tableName || '表数据'}_${id}.${format ? format[1].toLowerCase() : 'sql'}`
+    : taskType === 'SCHEMA_SQL_EXPORT' ? `${row.schemaName || '模式'}_${id}.sql`
+      : taskType === 'UPLOAD_TABLE_STRUCTURE' ? `DMP导入_${id}.log` : `DMP导出_${id}.dmp`
   saveAs(new Blob([data]), filename)
 }
 

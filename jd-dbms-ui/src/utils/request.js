@@ -6,10 +6,24 @@ import errorCode from '@/utils/errorCode'
 import { tansParams, blobValidate } from "@/utils/ruoyi";
 import cache from '@/plugins/cache'
 import { saveAs } from 'file-saver'
+import { mutationFromResponse, publishResourceMutation } from '@/utils/resourceMutation'
 
 let downloadLoadingInstance;
 // 是否显示重新登录
 export let isRelogin = { show: false };
+let standaloneRedirecting = false;
+
+function redirectExpiredStandaloneSession() {
+  if (!/^\/(data-migration|table-compare)(\/|$)/.test(window.location.pathname)) return false;
+  if (!standaloneRedirecting) {
+    standaloneRedirecting = true;
+    const redirect = window.location.pathname + window.location.search;
+    store.dispatch('FedLogOut').finally(() => {
+      window.location.replace(`/login?redirect=${encodeURIComponent(redirect)}`);
+    });
+  }
+  return true;
+}
 
 axios.defaults.headers['Content-Type'] = 'application/json;charset=utf-8'
 // 创建axios实例
@@ -78,18 +92,21 @@ service.interceptors.response.use(res => {
   // 未设置状态码则默认成功状态
   const code = res.data.code || res.data.success;
   // 获取错误信息
-  const msg = errorCode[code] || res.data.msg || errorCode['default']
+  const msg = errorCode[code] || res.data.msg || res.data.message || res.data.errorMessage || errorCode['default']
   // 二进制数据则直接返回
   if (res.request.responseType === 'blob' || res.request.responseType === 'arraybuffer') {
     return res.data
   }
   if (code === 401) {
+    if (redirectExpiredStandaloneSession()) {
+      return Promise.reject(new Error('登录状态已过期，请重新登录。'));
+    }
     if (!isRelogin.show) {
       isRelogin.show = true;
       MessageBox.confirm('登录状态已过期，您可以继续留在该页面，或者重新登录', '系统提示', { confirmButtonText: '重新登录', cancelButtonText: '取消', type: 'warning' }).then(() => {
         isRelogin.show = false;
         store.dispatch('LogOut').then(() => {
-          location.href = '/index';
+          location.href = '/workspace';
         })
       }).catch(() => {
         isRelogin.show = false;
@@ -106,11 +123,15 @@ service.interceptors.response.use(res => {
     Notification.error({ title: msg })
     return Promise.reject('error')
   } else {
+    publishResourceMutation(mutationFromResponse(res.config, res.data))
     return res.data
   }
 },
   error => {
     if (axios.isCancel(error)) {
+      return Promise.reject(error)
+    }
+    if (error.response && error.response.status === 401 && redirectExpiredStandaloneSession()) {
       return Promise.reject(error)
     }
     console.log('err' + error)

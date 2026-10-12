@@ -7,29 +7,29 @@
       height="800"
       style="width: 100%"
     >
-      <el-table-column prop="tableSpace" label="TableSpace"></el-table-column>
-      <el-table-column prop="status" label="Status"></el-table-column>
-      <el-table-column prop="totalSize" label="Size">
+      <el-table-column prop="tableSpace" label="表空间名称"></el-table-column>
+      <el-table-column prop="status" label="状态"></el-table-column>
+      <el-table-column prop="totalSize" label="总容量">
         <template slot-scope="scope">
           <span>{{ scope.row.totalSize + "MB" }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="freeSize" label="Free">
+      <el-table-column prop="freeSize" label="剩余容量">
         <template slot-scope="scope">
           <span>{{ scope.row.freeSize + "MB" }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="useSize" label="Used">
+      <el-table-column prop="useSize" label="已用容量">
         <template slot-scope="scope">
           <span>{{ scope.row.useSize + "MB" }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="usageRate" label="% Used" >
+      <el-table-column prop="usageRate" label="使用率" >
         <template slot-scope="scope">
           <el-progress :text-inside="true" :stroke-width="16" :percentage="Number(scope.row.usageRate) > 100 ? 100 :Number(scope.row.usageRate)"></el-progress>
         </template>
       </el-table-column>
-      <el-table-column prop="expandUpperLimit" label="Max Size">
+      <el-table-column prop="expandUpperLimit" label="最大容量">
         <template slot-scope="scope">
           <span>{{ scope.row.expandUpperLimit + "MB" }}</span>
         </template>

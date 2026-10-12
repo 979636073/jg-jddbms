@@ -17,6 +17,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,6 +50,7 @@ public class DmpToolRegistryService {
     public static final String STATUS_DETECTION_FAILED = "DETECTION_FAILED";
 
     private static final Pattern VERSION_PATTERN = Pattern.compile("(?<!\\d)(\\d{1,3}(?:\\.\\d{1,4}){1,4})(?!\\d)");
+    private static final Pattern DAMENG_BUILD_PATTERN = Pattern.compile("V(\\d{1,3}(?:\\.\\d{1,5}){3})-Build\\(");
     private static final int MAX_ZIP_ENTRIES = 10000;
 
     @Value("${dmp.tools.root:}")
@@ -63,8 +65,28 @@ public class DmpToolRegistryService {
     }
 
     public synchronized DmpToolPackage upload(MultipartFile file, String fallbackVersion) {
+        return upload(file, fallbackVersion, null, null, null);
+    }
+
+    public synchronized DmpToolPackage upload(MultipartFile file, String fallbackVersion,
+                                               String sourceUrl, String expectedSha256) {
+        return upload(file, fallbackVersion, sourceUrl, expectedSha256, null);
+    }
+
+    public synchronized DmpToolPackage upload(MultipartFile file, String fallbackVersion,
+                                               String sourceUrl, String expectedSha256, String fallbackPlatform) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException("请选择客户端工具包");
+        }
+        if (StrUtil.isNotBlank(sourceUrl) && !sourceUrl.matches("(?i)^https?://[^\\s]+$")) {
+            throw new BusinessException("来源地址必须是 HTTP 或 HTTPS 链接");
+        }
+        if (StrUtil.isNotBlank(expectedSha256) && !expectedSha256.matches("(?i)^[0-9a-f]{64}$")) {
+            throw new BusinessException("SHA-256 校验值格式不正确");
+        }
+        if (StrUtil.isNotBlank(fallbackPlatform)
+                && !fallbackPlatform.matches("(?i)^(WINDOWS|LINUX):(X86|X86_64|ARM64)$")) {
+            throw new BusinessException("运行平台格式不正确");
         }
         String originalName = Optional.ofNullable(file.getOriginalFilename()).orElse("tool.zip");
         if (!originalName.toLowerCase(Locale.ROOT).endsWith(".zip")) {
@@ -73,20 +95,28 @@ public class DmpToolRegistryService {
 
         Path staging = root().resolve("staging").resolve(UUID.randomUUID().toString()).normalize();
         Path archive = staging.resolve("package.zip");
+        Path destination = null;
         try {
             Files.createDirectories(staging);
             try (InputStream input = new BufferedInputStream(file.getInputStream())) {
                 Files.copy(input, archive, StandardCopyOption.REPLACE_EXISTING);
             }
             String checksum = sha256(archive);
-            Path extracted = staging.resolve("content");
-            unzip(archive, extracted);
-            DetectedTool detected = detect(extracted, fallbackVersion);
-
+            if (StrUtil.isNotBlank(expectedSha256) && !checksum.equalsIgnoreCase(expectedSha256.trim())) {
+                throw new BusinessException("工具包 SHA-256 与填写的校验值不一致");
+            }
+            readRegistry().stream()
+                    .filter(item -> checksum.equalsIgnoreCase(item.getChecksum()))
+                    .findFirst()
+                    .ifPresent(item -> {
+                        throw new BusinessException("该工具包已上传：" + item.getDatabaseType() + " / "
+                                + item.getToolFamily() + " / " + item.getVersion() + " / "
+                                + item.getOs() + " / " + item.getArch());
+                    });
             String id = UUID.randomUUID().toString();
-            Path destination = root().resolve("packages").resolve(id).normalize();
-            Files.createDirectories(destination.getParent());
-            Files.move(extracted, destination, StandardCopyOption.ATOMIC_MOVE);
+            destination = root().resolve("packages").resolve(id).normalize();
+            unzip(archive, destination);
+            DetectedTool detected = detect(destination, fallbackVersion, fallbackPlatform);
 
             DmpToolPackage toolPackage = new DmpToolPackage();
             toolPackage.setId(id);
@@ -100,6 +130,8 @@ public class DmpToolRegistryService {
             toolPackage.setPackagePath(destination.toString());
             toolPackage.setOriginalFileName(originalName);
             toolPackage.setChecksum(checksum);
+            toolPackage.setSourceUrl(StrUtil.trimToNull(sourceUrl));
+            toolPackage.setChecksumVerified(StrUtil.isNotBlank(expectedSha256));
             toolPackage.setEnabled(STATUS_AVAILABLE.equals(detected.status));
             toolPackage.setStatus(detected.status);
             toolPackage.setStatusMessage(detected.message);
@@ -108,14 +140,16 @@ public class DmpToolRegistryService {
                     && currentArch().equalsIgnoreCase(detected.arch));
 
             List<DmpToolPackage> packages = readRegistry();
+            ensureUnique(packages, toolPackage, null);
             packages.add(toolPackage);
             writeRegistry(packages);
             return toolPackage;
         } catch (BusinessException e) {
-            deleteRecursively(staging);
+            deleteRecursively(destination);
             throw e;
         } catch (Exception e) {
-            deleteRecursively(staging);
+            log.error("客户端工具包处理失败", e);
+            deleteRecursively(destination);
             throw new BusinessException("客户端工具包处理失败：" + e.getMessage());
         } finally {
             deleteRecursively(staging);
@@ -136,12 +170,115 @@ public class DmpToolRegistryService {
         return toolPackage;
     }
 
+    public synchronized DmpToolPackage update(String id, String version, String platform) {
+        if (!isValidVersion(version)) {
+            throw new BusinessException("请输入有效版本号，例如 8.1.4.200");
+        }
+        if (StrUtil.isBlank(platform)
+                || !platform.matches("(?i)^(WINDOWS|LINUX):(X86|X86_64|ARM64)$")) {
+            throw new BusinessException("请选择有效的运行平台");
+        }
+        List<DmpToolPackage> packages = readRegistry();
+        DmpToolPackage toolPackage = packages.stream()
+                .filter(item -> item.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("客户端工具不存在"));
+        String[] parts = platform.toUpperCase(Locale.ROOT).split(":", 2);
+        try {
+            Path packagePath = Paths.get(toolPackage.getPackagePath()).toAbsolutePath().normalize();
+            Path executable = Paths.get(toolPackage.getExportExecutable()).toAbsolutePath().normalize();
+            Path packagesRoot = root().resolve("packages").toAbsolutePath().normalize();
+            if (!packagePath.startsWith(packagesRoot) || !executable.startsWith(packagePath)
+                    || !Files.isRegularFile(executable)) {
+                throw new BusinessException("客户端工具文件不存在或不在管理目录内");
+            }
+            BinaryPlatform detected = detectPlatform(executable);
+            if (!"UNKNOWN".equals(detected.os) && !"UNKNOWN".equals(detected.arch)
+                    && (!detected.os.equals(parts[0]) || !detected.arch.equals(parts[1]))) {
+                throw new BusinessException("运行平台与客户端文件头不一致：" + detected.os + " / " + detected.arch);
+            }
+        } catch (IOException error) {
+            throw new BusinessException("读取客户端文件失败：" + error.getMessage());
+        }
+        String oldVersion = toolPackage.getVersion();
+        String oldOs = toolPackage.getOs();
+        String oldArch = toolPackage.getArch();
+        toolPackage.setVersion(version.trim());
+        toolPackage.setOs(parts[0]);
+        toolPackage.setArch(parts[1]);
+        try {
+            ensureUnique(packages, toolPackage, id);
+        } catch (BusinessException error) {
+            toolPackage.setVersion(oldVersion);
+            toolPackage.setOs(oldOs);
+            toolPackage.setArch(oldArch);
+            throw error;
+        }
+        boolean previouslyAvailable = STATUS_AVAILABLE.equals(toolPackage.getStatus());
+        toolPackage.setStatus(STATUS_AVAILABLE);
+        toolPackage.setStatusMessage("版本和运行平台已由管理员核对并修改");
+        if (!previouslyAvailable) {
+            toolPackage.setEnabled(true);
+        }
+        toolPackage.setCurrentPlatformCompatible(currentOs().equalsIgnoreCase(parts[0])
+                && currentArch().equalsIgnoreCase(parts[1]));
+        writeRegistry(packages);
+        return toolPackage;
+    }
+
+    public synchronized DmpToolPackage redetect(String id, String fallbackVersion) {
+        List<DmpToolPackage> packages = readRegistry();
+        DmpToolPackage toolPackage = packages.stream()
+                .filter(item -> item.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("客户端工具不存在"));
+        Path packagesRoot = root().resolve("packages").toAbsolutePath().normalize();
+        Path packagePath = Paths.get(toolPackage.getPackagePath()).toAbsolutePath().normalize();
+        if (!packagePath.startsWith(packagesRoot) || packagePath.equals(packagesRoot)
+                || !Files.isDirectory(packagePath)) {
+            throw new BusinessException("客户端工具目录不存在或不在管理目录内");
+        }
+        try {
+            DetectedTool detected = detect(packagePath, fallbackVersion,
+                    toolPackage.getOs() + ":" + toolPackage.getArch());
+            if (!toolPackage.getDatabaseType().equals(detected.databaseType)
+                    || !toolPackage.getToolFamily().equals(detected.toolFamily)) {
+                throw new BusinessException("重新检测的工具类型与原记录不一致");
+            }
+            DmpToolPackage candidate = new DmpToolPackage();
+            candidate.setDatabaseType(detected.databaseType);
+            candidate.setToolFamily(detected.toolFamily);
+            candidate.setVersion(detected.version);
+            candidate.setOs(detected.os);
+            candidate.setArch(detected.arch);
+            ensureUnique(packages, candidate, id);
+            boolean previouslyAvailable = STATUS_AVAILABLE.equals(toolPackage.getStatus());
+            toolPackage.setVersion(detected.version);
+            toolPackage.setOs(detected.os);
+            toolPackage.setArch(detected.arch);
+            toolPackage.setStatus(detected.status);
+            toolPackage.setStatusMessage(detected.message);
+            toolPackage.setCurrentPlatformCompatible(currentOs().equalsIgnoreCase(detected.os)
+                    && currentArch().equalsIgnoreCase(detected.arch));
+            if (STATUS_AVAILABLE.equals(detected.status) && !previouslyAvailable) {
+                toolPackage.setEnabled(true);
+            }
+            writeRegistry(packages);
+            return toolPackage;
+        } catch (IOException error) {
+            throw new BusinessException("重新检测失败：" + error.getMessage());
+        }
+    }
+
     public synchronized void delete(String id) {
         List<DmpToolPackage> packages = readRegistry();
         DmpToolPackage toolPackage = packages.stream()
                 .filter(item -> item.getId().equals(id))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("客户端工具不存在"));
+        if (Boolean.TRUE.equals(toolPackage.getEnabled())) {
+            throw new BusinessException("请先停用客户端工具，再删除该版本");
+        }
         packages.remove(toolPackage);
         writeRegistry(packages);
 
@@ -149,6 +286,30 @@ public class DmpToolRegistryService {
         Path target = Paths.get(toolPackage.getPackagePath()).toAbsolutePath().normalize();
         if (target.startsWith(packagesRoot) && !target.equals(packagesRoot)) {
             deleteRecursively(target);
+        }
+    }
+
+    private void ensureUnique(List<DmpToolPackage> packages, DmpToolPackage candidate, String excludedId) {
+        for (DmpToolPackage existing : packages) {
+            if (existing.getId().equals(excludedId)) {
+                continue;
+            }
+            if (StrUtil.isNotBlank(candidate.getChecksum())
+                    && candidate.getChecksum().equalsIgnoreCase(existing.getChecksum())) {
+                throw new BusinessException("该工具包已上传：" + existing.getDatabaseType() + " / "
+                        + existing.getToolFamily() + " / " + existing.getVersion() + " / "
+                        + existing.getOs() + " / " + existing.getArch());
+            }
+            if (!"UNKNOWN".equalsIgnoreCase(candidate.getVersion())
+                    && candidate.getDatabaseType().equalsIgnoreCase(existing.getDatabaseType())
+                    && candidate.getToolFamily().equalsIgnoreCase(existing.getToolFamily())
+                    && candidate.getVersion().equalsIgnoreCase(existing.getVersion())
+                    && candidate.getOs().equalsIgnoreCase(existing.getOs())
+                    && candidate.getArch().equalsIgnoreCase(existing.getArch())) {
+                throw new BusinessException("同类型、同版本、同平台的客户端已上传："
+                        + existing.getDatabaseType() + " / " + existing.getToolFamily() + " / "
+                        + existing.getVersion() + " / " + existing.getOs() + " / " + existing.getArch());
+            }
         }
     }
 
@@ -209,7 +370,7 @@ public class DmpToolRegistryService {
         }
     }
 
-    private DetectedTool detect(Path extracted, String fallbackVersion) throws IOException {
+    private DetectedTool detect(Path extracted, String fallbackVersion, String fallbackPlatform) throws IOException {
         List<Path> files;
         try (Stream<Path> stream = Files.walk(extracted)) {
             files = stream.filter(Files::isRegularFile).collect(Collectors.toList());
@@ -254,13 +415,26 @@ public class DmpToolRegistryService {
 
         makeExecutable(exportExecutable);
         makeExecutable(importExecutable);
-        BinaryPlatform platform = detectPlatform(exportExecutable);
-        VersionResult versionResult = detectVersion(exportExecutable, platform);
+        BinaryPlatform detectedPlatform = detectPlatform(exportExecutable);
+        boolean platformDetected = !"UNKNOWN".equals(detectedPlatform.os)
+                && !"UNKNOWN".equals(detectedPlatform.arch);
+        BinaryPlatform platform = platformDetected ? detectedPlatform : parseFallbackPlatform(fallbackPlatform);
+        VersionResult versionResult = platformDetected
+                ? detectVersion(exportExecutable, platform) : new VersionResult(null, "");
         String version = versionResult.version;
-        String message = versionResult.output;
+        String message = platformDetected ? versionResult.output
+                : "文件头未能识别运行平台，已使用上传时填写的运行平台。";
+        if ("DM".equals(databaseType) && StrUtil.isNotBlank(version)) {
+            String companionVersion = detectDamengCompanionVersion(exportExecutable, version.split("\\.")[0]);
+            if (StrUtil.isNotBlank(companionVersion)) {
+                message = "dexp 输出 V" + version + "；同包 dmserver.exe 标识为 V" + companionVersion;
+                version = companionVersion;
+            }
+        }
         if (StrUtil.isBlank(version) && isValidVersion(fallbackVersion)) {
             version = fallbackVersion.trim();
-            message = "未能从客户端输出中解析版本，已使用上传时填写的版本。";
+            message = (StrUtil.isBlank(message) ? "" : message + " ")
+                    + "未能从客户端输出中解析版本，已使用上传时填写的版本。";
         }
         String status = StrUtil.isBlank(version) ? STATUS_DETECTION_FAILED : STATUS_AVAILABLE;
         if (StrUtil.isBlank(message)) {
@@ -269,6 +443,14 @@ public class DmpToolRegistryService {
         return new DetectedTool(databaseType, family, version == null ? "UNKNOWN" : version,
                 platform.os, platform.arch, extracted.relativize(exportExecutable),
                 extracted.relativize(importExecutable), status, message);
+    }
+
+    private BinaryPlatform parseFallbackPlatform(String fallbackPlatform) {
+        if (StrUtil.isBlank(fallbackPlatform)) {
+            throw new BusinessException("无法自动识别运行平台，请上传时选择运行平台");
+        }
+        String[] parts = fallbackPlatform.toUpperCase(Locale.ROOT).split(":", 2);
+        return new BinaryPlatform(parts[0], parts[1]);
     }
 
     private Path findExecutable(List<Path> files, String name) {
@@ -296,13 +478,13 @@ public class DmpToolRegistryService {
         }
         if (length >= 64 && header[0] == 'M' && header[1] == 'Z') {
             int peOffset = ByteBuffer.wrap(header, 60, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
-            if (peOffset + 6 <= length) {
+            if (peOffset >= 0 && peOffset + 6 <= length) {
                 int machine = ByteBuffer.wrap(header, peOffset + 4, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xffff;
                 return new BinaryPlatform("WINDOWS", machine == 0xaa64 ? "ARM64" : machine == 0x8664 ? "X86_64" : "X86");
             }
             return new BinaryPlatform("WINDOWS", "UNKNOWN");
         }
-        return new BinaryPlatform(currentOs(), currentArch());
+        return new BinaryPlatform("UNKNOWN", "UNKNOWN");
     }
 
     private VersionResult detectVersion(Path executable, BinaryPlatform platform) {
@@ -320,9 +502,12 @@ public class DmpToolRegistryService {
             process = builder.start();
             if (!process.waitFor(8, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
+                process.waitFor(2, TimeUnit.SECONDS);
             }
+            Charset outputCharset = executable.getFileName().toString().toLowerCase(Locale.ROOT).startsWith("dexp")
+                    ? Charset.forName("GB18030") : Charset.defaultCharset();
             String text = Files.exists(output)
-                    ? new String(Files.readAllBytes(output), StandardCharsets.UTF_8)
+                    ? new String(Files.readAllBytes(output), outputCharset)
                     : "";
             String version = parseVersion(text, executable.getFileName().toString());
             return new VersionResult(version, compact(text));
@@ -331,6 +516,11 @@ public class DmpToolRegistryService {
         } finally {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
+                try {
+                    process.waitFor(2, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
             }
             try {
                 Files.deleteIfExists(output);
@@ -358,7 +548,7 @@ public class DmpToolRegistryService {
         }
     }
 
-    private String parseVersion(String output, String executableName) {
+    String parseVersion(String output, String executableName) {
         if (StrUtil.isBlank(output)) {
             return null;
         }
@@ -373,6 +563,35 @@ public class DmpToolRegistryService {
             if (matcher.find()) {
                 return matcher.group(1);
             }
+            if (lower.contains(toolName)) {
+                Matcher major = Pattern.compile("(?i)\\b(?:dexp|dimp)\\s+v(\\d{1,3})\\b").matcher(line);
+                if (major.find()) {
+                    return major.group(1);
+                }
+            }
+        }
+        return null;
+    }
+
+    String detectDamengCompanionVersion(Path exportExecutable, String majorVersion) {
+        Path companion = exportExecutable.getParent().resolve("dmserver.exe");
+        if (!Files.isRegularFile(companion)) {
+            return null;
+        }
+        try {
+            if (Files.size(companion) > 32L * 1024 * 1024) {
+                return null;
+            }
+            String binaryText = new String(Files.readAllBytes(companion), StandardCharsets.ISO_8859_1);
+            Matcher matcher = DAMENG_BUILD_PATTERN.matcher(binaryText);
+            while (matcher.find()) {
+                String candidate = matcher.group(1);
+                if (candidate.startsWith(majorVersion + ".")) {
+                    return candidate;
+                }
+            }
+        } catch (IOException error) {
+            log.warn("无法读取同包达梦组件版本: {}", companion, error);
         }
         return null;
     }

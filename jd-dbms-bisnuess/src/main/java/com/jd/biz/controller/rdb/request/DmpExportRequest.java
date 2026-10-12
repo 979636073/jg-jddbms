@@ -45,6 +45,9 @@ public class DmpExportRequest  extends DataSourceBaseRequest {
     /** ORACLE_DATAPUMP、ORACLE_LEGACY 或 DM_DEXP。 */
     private String dmpToolFamily;
 
+    /** 模式级内容选项；为空字段(null)表示全部内容。 */
+    private List<String> contentOptions;
+
     /** Oracle Data Pump 导出的目标兼容版本。 */
     private String targetVersion;
 

@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog title="授权用户" :visible.sync="userDialogVisible" :before-close="handleClose"  width="800px">
+    <el-dialog title="角色授权" :visible.sync="userDialogVisible" :before-close="handleClose"  width="800px">
       <span>
         <el-table
           :data="userRoleList"
@@ -15,17 +15,17 @@
             show-overflow-tooltip
           >
           </el-table-column>
-          <el-table-column prop="isGranted" label="Granted">
+          <el-table-column prop="isGranted" label="已授权">
             <template slot-scope="scope">
               <el-checkbox v-model="scope.row.isGranted" />
             </template>
           </el-table-column>
-          <el-table-column prop="isAdmin" label="Admin">
+          <el-table-column prop="isAdmin" label="管理员权限">
             <template slot-scope="scope">
               <el-checkbox v-model="scope.row.isAdmin" />
             </template>
           </el-table-column>
-          <el-table-column prop="isDefault" label="Default" v-if="currentConfig.uniqueData.databaseType == 'ORACLE'">
+          <el-table-column prop="isDefault" label="默认角色" v-if="currentConfig.uniqueData.databaseType == 'ORACLE'">
             <template slot-scope="scope">
               <el-checkbox v-model="scope.row.isDefault" />
             </template>

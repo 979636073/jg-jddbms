@@ -38,7 +38,7 @@
     </div>
 
     <el-table
-      :data="filteredRows"
+      :data="pageRows"
       :row-class-name="tableRowClassName"
       row-key="key"
       empty-text="当前条件下没有匹配的数据表"
@@ -51,37 +51,7 @@
               <strong>{{ scope.row.sourceName || scope.row.targetName }}</strong>
               <span>字段差异明细</span>
             </div>
-            <el-table :data="scope.row.fieldRows" size="mini" border>
-              <el-table-column prop="columnName" label="字段" min-width="150" />
-              <el-table-column label="源表结构" min-width="260">
-                <template slot-scope="fieldScope">
-                  <span v-if="fieldScope.row.source" :class="typeClass(fieldScope.row)">
-                    {{ columnTypeText(fieldScope.row.source) }}
-                  </span>
-                  <span v-else class="missing-value">无</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" width="96" align="center">
-                <template slot-scope="fieldScope">
-                  <el-tag :type="statusType(fieldScope.row.status)" size="mini" effect="plain">
-                    {{ fieldStatusText(fieldScope.row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="目标表结构" min-width="260">
-                <template slot-scope="fieldScope">
-                  <span v-if="fieldScope.row.target" :class="typeClass(fieldScope.row)">
-                    {{ columnTypeText(fieldScope.row.target) }}
-                  </span>
-                  <span v-else class="missing-value">无</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="变化属性" min-width="220">
-                <template slot-scope="fieldScope">
-                  {{ changedFieldText(fieldScope.row) }}
-                </template>
-              </el-table-column>
-            </el-table>
+            <field-compare-result :rows="scope.row.fieldRows" />
           </div>
           <div v-else class="no-field-detail">
             {{ scope.row.status === 'same' ? '两张表字段结构一致' : '另一侧不存在同名表，无字段差异明细' }}
@@ -122,24 +92,17 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination v-if="filteredRows.length > pageSize" small layout="total, prev, pager, next"
+                   :total="filteredRows.length" :page-size="pageSize" :current-page.sync="page" />
   </div>
 </template>
 
 <script>
-const FIELD_LABELS = {
-  dataType: '数据类型',
-  columnType: '字段类型',
-  columnSize: '长度',
-  decimalDigits: '小数位',
-  nullable: '可空',
-  defaultValue: '默认值',
-  primaryKey: '主键',
-  autoIncrement: '自增',
-  comment: '注释'
-}
+import FieldCompareResult from './FieldCompareResult'
 
 export default {
   name: 'WholeDatabaseResult',
+  components: { FieldCompareResult },
   props: {
     rows: {
       type: Array,
@@ -149,7 +112,9 @@ export default {
   data() {
     return {
       filter: 'all',
-      keyword: ''
+      keyword: '',
+      page: 1,
+      pageSize: 50
     }
   },
   computed: {
@@ -175,7 +140,16 @@ export default {
         const tableName = row.sourceName || row.targetName || ''
         return matchesStatus && tableName.toLocaleUpperCase().includes(keyword)
       })
+    },
+    pageRows() {
+      const start = (this.page - 1) * this.pageSize
+      return this.filteredRows.slice(start, start + this.pageSize)
     }
+  },
+  watch: {
+    filter() { this.page = 1 },
+    keyword() { this.page = 1 },
+    rows() { this.page = 1 }
   },
   methods: {
     tableStatusText(status) {
@@ -186,14 +160,6 @@ export default {
         same: '一致'
       }[status]
     },
-    fieldStatusText(status) {
-      return {
-        changed: '有变化',
-        'source-only': '仅源表',
-        'target-only': '仅目标表',
-        same: '一致'
-      }[status]
-    },
     statusType(status) {
       return {
         changed: 'danger',
@@ -201,24 +167,6 @@ export default {
         'target-only': 'info',
         same: 'success'
       }[status]
-    },
-    columnTypeText(column) {
-      if (column.columnType) return column.columnType
-      const type = column.dataType || '-'
-      if (!column.columnSize) return type
-      const decimal = column.decimalDigits ? `,${column.decimalDigits}` : ''
-      return `${type}(${column.columnSize}${decimal})`
-    },
-    typeClass(row) {
-      return row.changedFields.some(item => ['dataType', 'columnType', 'columnSize', 'decimalDigits'].includes(item))
-        ? 'is-different'
-        : ''
-    },
-    changedFieldText(row) {
-      if (row.status === 'source-only') return '目标表缺少该字段'
-      if (row.status === 'target-only') return '源表缺少该字段'
-      if (row.status === 'same') return '—'
-      return row.changedFields.map(field => FIELD_LABELS[field] || field).join('、')
     },
     tableRowClassName({ row }) {
       return `database-row--${row.status}`

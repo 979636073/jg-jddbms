@@ -34,6 +34,7 @@ import com.jd.common.tools.common.model.LoginUser;
 import com.jd.common.tools.common.util.ContextUtils;
 import com.jd.common.utils.file.FileUtils;
 import com.jd.spi.model.*;
+import com.jd.spi.sql.Chat2DBContext;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,7 @@ import javax.validation.Valid;
 import java.io.File;
 import java.io.PrintWriter;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.Objects;
 
 /**
@@ -85,11 +87,15 @@ public class DatabaseController {
 
     @GetMapping("list")
     public ListResult<DatabaseVO> databaseList(@Valid DataSourceBaseRequest request) {
+        if (Chat2DBContext.getDBConfig() != null && !Chat2DBContext.getDBConfig().isSupportDatabase()) {
+            return ListResult.of(Collections.emptyList());
+        }
         DatabaseQueryAllParam queryParam = DatabaseQueryAllParam.builder().dataSourceId(request.getDataSourceId())
                 .refresh(
                         request.getRefresh()).build();
         ListResult<Database> result = databaseService.queryAll(queryParam);
-        return ListResult.of(rdbWebConverter.databaseDto2vo(result.getData()));
+        return ListResult.of(rdbWebConverter.databaseDto2vo(
+                result.getData() == null ? Collections.emptyList() : result.getData()));
     }
 
     /**
@@ -128,7 +134,7 @@ public class DatabaseController {
     @PostMapping("/modify_database")
     public ActionResult modifyDatabase(@Valid @RequestBody UpdateDatabaseRequest request) {
         DatabaseCreateParam param = DatabaseCreateParam.builder().name(request.getDatabaseName())
-                .name(request.getNewDatabaseName()).build();
+                .newName(request.getNewDatabaseName()).build();
         return databaseService.modifyDatabase(param);
     }
 

@@ -234,7 +234,6 @@ public class RdbDmlController {
      */
     @RequestMapping(value = "/executeExplain", method = {RequestMethod.POST, RequestMethod.PUT})
     public ListResult<ExecuteResultVO> executeExplain(@RequestBody DmlRequest request) throws SQLException {
-        boolean ref = false;
         try {
             if (DBTypeEnum.DM.name().equals(Chat2DBContext.getConnectInfo().getDbType())) {
                 request.setSql("EXPLAIN FOR " + request.getSql());
@@ -244,7 +243,6 @@ public class RdbDmlController {
                 if (execute == null || !execute.getSuccess()) {
                     throw new BusinessException("ORACLE的执行计划失败");
                 }
-                ref = true;
                 request.setSql("SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())");
             }
             DlExecuteParam param = rdbWebConverter.request2param(request);
@@ -258,11 +256,6 @@ public class RdbDmlController {
                 errorMas = list.get(0);
             }
             throw new BusinessException(errorMas);
-        } finally {
-            if (ref) {
-                String sql = "SET AUTOTRACE OFF";
-                SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, new DefaultValueHandler());
-            }
         }
     }
 

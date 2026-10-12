@@ -4,58 +4,58 @@
       :title="title"
       :visible.sync="editDialogVisible"
       :before-close="handleClose"
-      width="600px"
+      width="640px"
     >
-      <span>
         <el-form
           label-position="left"
-          label-width="110px"
+          label-width="125px"
           :model="form"
           ref="form"
-          :rules='rules'
+          :rules="rules"
         >
+          <div class="form-section">基本信息</div>
           <el-form-item label="表空间名称" prop="tableSpace">
             <el-input
               placeholder="请输入表空间名称"
               size="mini"
               v-model="form.tableSpace"
+              maxlength="128"
             >
             </el-input>
           </el-form-item>
-          <el-form-item label="Datafile name" prop="path">
+          <el-form-item label="数据文件路径" prop="path">
             <el-input
-              placeholder="请输入内容"
+              placeholder="请输入数据库服务器上的数据文件完整路径"
               size="mini"
-              style="width: 350px"
+              class="path-input"
               v-model="form.path"
             >
             </el-input>
             <el-button
-              type="primary"
-              style="margin-left: 12px"
               size="mini"
               @click="addSpace"
-              >Find/Copy</el-button
+              >参考已有路径</el-button
             >
+            <div class="form-hint">创建时可参考已有数据文件的目录，系统会生成新的文件名。</div>
           </el-form-item>
 
-          <el-form-item label="Datafile Size" prop="totalSize">
+          <el-form-item label="初始容量" prop="totalSize">
             <el-input
               v-model="form.totalSize"
               size="mini"
               class="input-with-select"
               type="number"
               min="1"
-              oninput="if(value<1){value=1}"
+              placeholder="请输入大于零的容量"
             >
               <el-select
                 v-model="form.sizeUnit"
                 slot="append"
-                placeholder="请选择"
-                style="width: 100px"
+                placeholder="单位"
+                style="width: 112px"
               >
                 <el-option
-                  v-for="item in dict.type.data_byte_type"
+                  v-for="item in sizeUnits"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -64,29 +64,29 @@
               </el-select>
             </el-input>
           </el-form-item>
-          <el-form-item>
-            <el-checkbox v-model="autoCheck">Auto Extend</el-checkbox>
+          <div class="form-section">扩展设置</div>
+          <el-form-item label="自动扩展">
+            <el-checkbox v-model="autoCheck">空间不足时自动扩展</el-checkbox>
           </el-form-item>
-          <el-form-item label="Additional Space">
+          <el-form-item v-if="autoCheck" label="每次扩展容量">
             <el-input
-              :disabled="autoCheck"
+              :disabled="!autoCheck"
               v-model="form.autoSize"
               size="mini"
               class="input-with-select"
               type="number"
-              min="0"
-              max="2048"
-              oninput="if(value<0){value=0};if(value>2048){value=2048}"
+              min="1"
+              placeholder="请输入大于零的容量"
             >
               <el-select
-                :disabled="autoCheck"
+                :disabled="!autoCheck"
                 v-model="form.autoSizeUnit"
                 slot="append"
-                placeholder="请选择"
-                style="width: 100px"
+                placeholder="单位"
+                style="width: 112px"
               >
                 <el-option
-                  v-for="item in dict.type.data_byte_type"
+                  v-for="item in sizeUnits"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -95,30 +95,30 @@
               </el-select>
             </el-input>
           </el-form-item>
-          <el-form-item>
-            <el-checkbox v-model="checked" :disabled="autoCheck"
-              >Maximum size unlimited</el-checkbox
+          <el-form-item v-if="autoCheck" label="最大容量">
+            <el-checkbox v-model="checked" :disabled="!autoCheck"
+              >不设上限</el-checkbox
             >
           </el-form-item>
-          <el-form-item label="Maximum Size">
+          <el-form-item v-if="autoCheck && !checked" label="容量上限">
             <el-input
               v-model="form.expandUpperLimit"
-              :disabled="autoCheck || checked"
+              :disabled="!autoCheck || checked"
               size="mini"
               class="input-with-select"
               type="number"
-              min="128"
-              
+              min="1"
+              placeholder="请输入大于初始容量的上限"
             >
               <el-select
                 v-model="form.maxSizeUnit"
-                :disabled="autoCheck || checked"
+                :disabled="!autoCheck || checked"
                 slot="append"
-                placeholder="请选择"
-                style="width: 100px"
+                placeholder="单位"
+                style="width: 112px"
               >
                 <el-option
-                  v-for="item in dict.type.data_byte_type"
+                  v-for="item in sizeUnits"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value"
@@ -128,25 +128,25 @@
             </el-input>
           </el-form-item>
         </el-form>
-      </span>
       <span slot="footer" class="dialog-footer">
         <el-button @click="editHandleCloseFn(false)" size="mini"
-          >取 消</el-button
+          >取消</el-button
         >
-        <el-button type="primary" @click="saveTableSpace" size="mini"
-          >确 定</el-button
+        <el-button type="primary" :loading="saving" @click="saveTableSpace" size="mini"
+          >{{ isEditing ? '保存修改' : '创建表空间' }}</el-button
         >
       </span>
     </el-dialog>
     <!-- 文件选择 -->
     <el-dialog
-      title="Select a file name"
+      title="参考已有数据文件路径"
       :visible.sync="dialogSpace"
       width="800px"
       style="width: 100%"
       height="500"
     >
       <span>
+        <p class="form-hint">{{ isEditing ? '请选择需要使用的数据文件。' : '选择已有文件后，只会参考其所在目录，不会复用已有文件。' }}</p>
         <el-table
           :data="tableData"
           highlight-current-row
@@ -154,15 +154,16 @@
           style="width: 100%"
           height="410"
           border
+          v-loading="fileLoading"
         >
           <el-table-column
             prop="name"
-            label="表空间名称"
+            label="所属表空间"
             width="180"
             show-overflow-tooltip
           >
           </el-table-column>
-          <el-table-column prop="path" label="文件名称" show-overflow-tooltip>
+          <el-table-column prop="path" label="数据文件路径" show-overflow-tooltip>
           </el-table-column>
         </el-table>
         <!-- <div style="margin-top: 10px; float: right"> -->
@@ -176,8 +177,8 @@
         <!-- </div> -->
       </span>
       <span slot="footer" class="dialog-footer">
-        <el-button size="mini" @click="dialogSpace = false">取 消</el-button>
-        <el-button type="primary" size="mini" @click="submit">确 定</el-button>
+        <el-button size="mini" @click="dialogSpace = false">取消</el-button>
+        <el-button type="primary" size="mini" :disabled="!selectTable || !selectTable.path" @click="submit">使用所选路径</el-button>
       </span>
     </el-dialog>
   </div>
@@ -185,8 +186,14 @@
 
 <script>
 import tableSpaceServer from "@/api/main/tableSpace";
+
+const initialForm = () => ({
+  path: '', tableSpace: '', totalSize: '128', sizeUnit: 'MB',
+  autoSize: '', autoSizeUnit: 'MB', expandUpperLimit: '', maxSizeUnit: 'MB',
+  isUpdate: false,
+});
+
 export default {
-  dicts: ["data_byte_type"],
   props: {
     editDialogVisible: {
       type: Boolean,
@@ -198,7 +205,7 @@ export default {
     },
     saveType: {
       type: Number,
-      default: "1",
+      default: 1,
     },
     getTableDataList: {
       type: Function,
@@ -214,30 +221,26 @@ export default {
   },
   data() {
     return {
-      title: "新增表空间",
+      sizeUnits: [
+        { value: 'KB', label: '千字节' },
+        { value: 'MB', label: '兆字节' },
+        { value: 'GB', label: '吉字节' },
+      ],
       rules: {
         tableSpace: [{ required: true, message: "请输入表空间名称", trigger: "blur" }],
-        path:[{ required: true, message: "请选择路径", trigger: "blur" }],
-        totalSize:[{ required: true, message: "请输入大小", trigger: "blur" }]
+        path: [{ required: true, message: "请输入数据文件路径", trigger: "blur" }],
+        totalSize: [{ required: true, message: "请输入初始容量", trigger: "blur" }],
       },
-      form: {
-        path: "",
-        tableSpace: "",
-        totalSize: "128",
-        sizeUnit: "",
-        autoSize: "",
-        autoSizeUnit: "",
-        expandUpperLimit: "",
-        maxSizeUnit: "",
-        isUpdate: false,
-      },
+      form: initialForm(),
       oldTableSpace: {},
       tableData: [],
-      total: 1,
-      checked: false,
+      total: 0,
+      checked: true,
       autoCheck: false,
       dialogSpace: false,
-      selectTable: {},
+      selectTable: null,
+      saving: false,
+      fileLoading: false,
       queryParams: {
         pageNo: 1,
         pageSize: 10,
@@ -245,145 +248,157 @@ export default {
       dataSourceId: "",
     };
   },
+  computed: {
+    isEditing() { return Number(this.saveType) === 2; },
+    title() { return this.isEditing ? '修改表空间' : '新增表空间'; },
+  },
   watch: {
     editDialogVisible(newVal) {
       if (newVal) {
-        if (this.saveType == 2) {
-          this.form = JSON.parse(JSON.stringify(this.spaceInfo));
+        this.dataSourceId = this.dataBaseInfo.dataSourceId || this.dataBaseInfo.id;
+        this.selectTable = null;
+        this.checked = true;
+        this.autoCheck = false;
+        this.form = initialForm();
+        if (this.isEditing) {
           this.oldTableSpace = JSON.parse(JSON.stringify(this.spaceInfo));
-          this.form.path = this.oldTableSpace.path;
-          this.form.tableSpace = this.oldTableSpace.tableSpace;
-          this.form.totalSize = this.oldTableSpace.totalSize;
-          this.form.sizeUnit = this.oldTableSpace.sizeUnit;
-          this.form.autoSize = this.oldTableSpace.autoSize;
-          this.form.autoSizeUnit = this.oldTableSpace.autoSizeUnit;
-          this.form.expandUpperLimit = this.oldTableSpace.expandUpperLimit;
-          this.form.maxSizeUnit = this.oldTableSpace.maxSizeUnit;
-          this.checked = this.form.checked;
-          this.autoCheck = this.form.autoCheck;
-          this.dataSourceId = this.dataBaseInfo.dataSourceId;
-          this.form.isUpdate = true;
-          if(this.form.expandUpperLimit == '67108863') {
-            this.checked = true;
-          } else {
-            this.checked = false
-          }
+          this.form = { ...initialForm(), ...this.oldTableSpace, isUpdate: true };
+          this.autoCheck = Boolean(this.oldTableSpace.autoCheck)
+            || this.oldTableSpace.autoScaling === 'YES';
+          this.checked = ['67108863', '0'].includes(String(this.oldTableSpace.expandUpperLimit || ''));
         } else {
-          this.dataSourceId = this.dataBaseInfo.dataSourceId;
+          this.oldTableSpace = {};
         }
-        this.title = this.form.title;
+        this.$nextTick(() => this.$refs.form?.clearValidate());
       }
     },
   },
-  created() {
-    this.form.sizeUnit = "MB";
-    this.form.autoSizeUnit = "GB";
-    this.form.maxSizeUnit = "MB";
-  },
   methods: {
     editHandleCloseFn(val) {
-      this.form.path = "";
-      this.form.tableSpace = "";
-      this.form.totalSize = "";
-      this.form.sizeUnit = "";
-      this.form.autoSize = "";
-      this.form.autoSizeUnit = "";
-      this.form.expandUpperLimit = "";
-      this.form.maxSizeUnit = "";
-      this.form.isUpdate = false;
+      this.form = initialForm();
+      this.autoCheck = false;
+      this.checked = true;
+      this.selectTable = null;
       this.$emit("editHandleCloseFn", val);
     },
     handleClose() {
-      this.form.path = "";
-      this.form.tableSpace = "";
-      this.form.totalSize = "";
-      this.form.sizeUnit = "";
-      this.form.autoSize = "";
-      this.form.autoSizeUnit = "";
-      this.form.expandUpperLimit = "";
-      this.form.maxSizeUnit = "";
-      this.form.isUpdate = false;
-      this.$emit("editHandleCloseFn", false);
+      this.editHandleCloseFn(false);
     },
     addSpace() {
+      this.selectTable = null;
       this.dialogSpace = true;
       this.getList();
     },
-    getList() {
-      this.queryParams.dataSourceId = this.dataBaseInfo.id || this.dataSourceId;
-      tableSpaceServer.getTableSpaceFileName(this.queryParams).then((res) => {
+    async getList() {
+      this.fileLoading = true;
+      try {
+        const res = await tableSpaceServer.getTableSpaceFileName({
+          ...this.queryParams, dataSourceId: this.dataSourceId,
+        });
         if (res.success) {
-          this.tableData = res.data.data;
-          this.total = res.data.total;
+          this.tableData = res.data.data || [];
+          this.total = res.data.total || 0;
+        } else {
+          this.$message.error('读取数据文件列表失败');
         }
-      });
+      } catch (error) {
+        this.$message.error('读取数据文件列表失败');
+      } finally { this.fileLoading = false; }
     },
     handleCurrentChange(val) {
-      console.log(val);
       this.selectTable = val;
     },
     submit() {
-      this.form.path = this.selectTable.path;
+      if (!this.selectTable?.path) return;
+      if (this.isEditing) {
+        this.form.path = this.selectTable.path;
+      } else {
+        const name = this.form.tableSpace.trim();
+        if (!name) {
+          this.$message.warning('请先输入表空间名称');
+          return;
+        }
+        const existingPath = this.selectTable.path;
+        const separatorIndex = Math.max(existingPath.lastIndexOf('/'), existingPath.lastIndexOf('\\'));
+        if (separatorIndex < 0) {
+          this.$message.error('所选文件没有可用的目录，请手动输入路径');
+          return;
+        }
+        const directory = existingPath.slice(0, separatorIndex + 1);
+        const extension = /\.[^./\\]+$/.exec(existingPath)?.[0] || '.dbf';
+        this.form.path = `${directory}${name.replace(/[\\/]/g, '_')}_DATA${extension}`;
+      }
       this.dialogSpace = false;
+      this.$nextTick(() => this.$refs.form?.validateField('path'));
     },
-    saveTableSpace: function () {
-      this.$refs.form.validate((valid) => {
-        if (valid) {
-          if (
-            (this.expandUpperLimit != undefined ||
-              this.expandUpperLimit != "" ||
-              this.expandUpperLimit != "") &&
-            this.expandUpperLimit < this.totalSize
-          ) {
-            this.$modal.msgError("最大值需大于表空间大小！");
+    sizeInMb(value, unit) {
+      return Number(value) * ({ KB: 1 / 1024, MB: 1, GB: 1024 }[unit] || 1);
+    },
+    async saveTableSpace() {
+      if (this.saving) return;
+      const valid = await this.$refs.form.validate().catch(() => false);
+      if (!valid) return;
+      if (!Number.isFinite(Number(this.form.totalSize)) || Number(this.form.totalSize) <= 0) {
+        this.$message.error('初始容量必须大于零');
+        return;
+      }
+      if (this.autoCheck) {
+        if (!Number.isFinite(Number(this.form.autoSize)) || Number(this.form.autoSize) <= 0) {
+          this.$message.error('每次扩展容量必须大于零');
+          return;
+        }
+        if (!this.checked) {
+          if (!Number.isFinite(Number(this.form.expandUpperLimit)) || Number(this.form.expandUpperLimit) <= 0) {
+            this.$message.error('请输入有效的容量上限');
             return;
           }
-          this.form.checked = this.checked;
-          this.form.autoCheck = this.autoCheck;
-          // if (this.form.autoCheck) {
-          //   this.form.autoSize = "0";
-          // }
-          if (this.form.checked) {
-            this.form.expandUpperLimit = "0";
-          }
-          if (this.form.isUpdate) {
-            const params = {
-              dataSourceId: this.dataSourceId,
-              newTableSpace: this.form,
-              oldTableSpace: this.oldTableSpace,
-            };
-            tableSpaceServer.updateTableSpace(params).then((res) => {
-              if (res.success) {
-                this.$modal.msgSuccess("修改成功");
-                this.$emit('refshTableData',this.form.path);
-                this.editHandleCloseFn(false);
-              } else {
-                this.$message.error(res.errorCode)
-              }
-            });
-          } else {
-            this.form.dataSourceId = this.dataSourceId || this.dataBaseInfo.id;
-            tableSpaceServer.createTableSpace(this.form).then((res) => {
-              if (res.success) {
-                this.$modal.msgSuccess("新增成功");
-                this.getTableDataList(this.schema);
-                this.editHandleCloseFn(false);
-              } else {
-                this.$message.error(res.errorCode);
-              }
-            });
+          if (this.sizeInMb(this.form.expandUpperLimit, this.form.maxSizeUnit)
+              <= this.sizeInMb(this.form.totalSize, this.form.sizeUnit)) {
+            this.$message.error('容量上限必须大于初始容量');
+            return;
           }
         }
-      });
-    },
-    changeFn() {
-      console.log(this.memorySize);
+      }
+      const payload = {
+        ...this.form,
+        dataSourceId: this.dataSourceId,
+        autoSize: this.autoCheck ? this.form.autoSize : '',
+        expandUpperLimit: this.autoCheck && !this.checked ? this.form.expandUpperLimit : '',
+      };
+      this.saving = true;
+      try {
+        const res = this.isEditing
+          ? await tableSpaceServer.updateTableSpace({
+            dataSourceId: this.dataSourceId, newTableSpace: payload, oldTableSpace: this.oldTableSpace,
+          })
+          : await tableSpaceServer.createTableSpace(payload);
+        if (!res.success) {
+          this.$message.error(this.isEditing ? '修改失败，请检查表空间设置及数据库权限' : '创建失败，请检查名称、数据文件路径、容量及数据库权限');
+          return;
+        }
+        this.$modal.msgSuccess(this.isEditing ? '修改成功' : '创建成功');
+        if (this.isEditing) this.$emit('refshTableData', payload.path);
+        else this.getTableDataList?.(this.schema);
+        this.editHandleCloseFn(false);
+      } catch (error) {
+        this.$message.error(this.isEditing ? '修改失败，请检查表空间设置及数据库权限' : '创建失败，请检查名称、数据文件路径、容量及数据库权限');
+      } finally { this.saving = false; }
     },
   },
 };
 </script>
 
 <style lang='scss' scoped>
+.form-section {
+  margin: 4px 0 14px;
+  padding-left: 9px;
+  border-left: 3px solid #409eff;
+  color: #242f57;
+  font-size: 13px;
+  font-weight: 600;
+}
+.path-input { width: calc(100% - 114px); margin-right: 8px; }
+.form-hint { margin: 4px 0 0; color: #68728c; font-size: 12px; line-height: 18px; }
 ::v-deep .el-table--medium .el-table__cell {
   padding: 5px 0;
 }

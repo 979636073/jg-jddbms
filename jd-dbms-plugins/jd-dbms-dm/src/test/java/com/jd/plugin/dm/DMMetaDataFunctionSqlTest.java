@@ -23,4 +23,13 @@ public class DMMetaDataFunctionSqlTest {
     public void shouldEscapeSchemaLiteral() {
         Assert.assertTrue(DMMetaData.buildFunctionsSql("SYS'DBA").contains("OWNER = 'SYS''DBA'"));
     }
+
+    @Test
+    public void shouldQueryStandaloneIndexesWithoutConstraintOrClusterIndexes() {
+        String sql = DMMetaData.buildStandaloneIndexDdlSql("JD'DBMS", "MY'TABLE");
+        Assert.assertTrue(sql.contains("TABLE_OWNER = 'JD''DBMS'"));
+        Assert.assertTrue(sql.contains("TABLE_NAME = 'MY''TABLE'"));
+        Assert.assertTrue(sql.contains("INDEX_TYPE NOT IN ('CLUSTER', 'VIRTUAL')"));
+        Assert.assertTrue(sql.contains("CONSTRAINT_TYPE IN ('P', 'U')"));
+    }
 }
