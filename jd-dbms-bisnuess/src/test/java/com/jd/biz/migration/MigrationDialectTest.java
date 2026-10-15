@@ -29,16 +29,47 @@ public class MigrationDialectTest {
             for (String type : new String[] { "BLOB", "CLOB", "NCLOB" }) { Column lob = column(type, null, null, 0); MigrationDialect.mapType(lob, source, target); assertEquals(type, lob.targetType); }
         }
     }
+
+    @Test public void mapsDmDatetimeWithoutLosingFractionalSeconds() {
+        for (String target : new String[] { "DM", "ORACLE" }) {
+            Column datetime = column("DATETIME", null, 6, 0);
+            MigrationDialect.mapType(datetime, "DM", target);
+            assertEquals("TIMESTAMP", datetime.kind);
+            assertEquals("TIMESTAMP(6)", datetime.targetType);
+        }
+        Column seconds = column("DATETIME", null, 0, 0);
+        MigrationDialect.mapType(seconds, "DM", "ORACLE");
+        assertEquals("TIMESTAMP(0)", seconds.targetType);
+        try { MigrationDialect.mapType(column("DATETIME", null, 9, 0), "DM", "ORACLE"); fail(); }
+        catch (BusinessException expected) { }
+    }
     @Test public void mapsIntegerWithoutAccidentallyLosingItsScale() {
         Column number = column("BIGINT", null, null, 0); MigrationDialect.mapType(number, "DM", "ORACLE"); assertEquals("NUMBER(19,0)", number.targetType);
     }
-    @Test public void mapsDmTextAsNationalLobWithoutStringFallback() {
+    @Test public void defaultsDmTextToClobAndAllowsConfirmedNclob() {
         for (String target : new String[] { "DM", "ORACLE" }) {
             Column lob = column("TEXT", null, null, 0); MigrationDialect.mapType(lob, "DM", target);
-            assertEquals("NCLOB", lob.kind); assertEquals("NCLOB", lob.targetType);
+            assertEquals("CLOB", lob.kind); assertEquals("CLOB", lob.targetType);
+            FieldMapping mapping = new FieldMapping(); mapping.source = lob.name; mapping.targetType = "NCLOB";
+            try { MigrationConversion.apply(column("TEXT", null, null, 0), mapping, "DM", target); fail(); }
+            catch (BusinessException expected) { }
+            mapping.conversionConfirmed = true;
+            Column national = column("TEXT", null, null, 0);
+            MigrationConversion.apply(national, mapping, "DM", target);
+            assertEquals("NCLOB", national.kind); assertEquals("NCLOB", national.targetType);
+            assertNull(national.sourceExpression);
         }
         try { MigrationDialect.mapType(column("TEXT", null, null, 0), "ORACLE", "DM"); fail(); }
         catch (BusinessException expected) { }
+    }
+    @Test public void dmTargetTextMetadataMatchesConfirmedNclobOnlyForThatField() {
+        Column planned = column("NCLOB", null, null, 0); planned.name = "NAT";
+        MigrationDialect.mapType(planned, "ORACLE", "DM");
+        Column actual = column("TEXT", null, null, 0); actual.name = "NAT";
+        MigrationDialect.mapType(actual, "DM", "DM");
+        MigrationMetadata.matchDmNclob(java.util.Collections.singletonList(planned), java.util.Collections.singletonList(actual), "DM");
+        MigrationMetadata.compatible(java.util.Collections.singletonList(planned), java.util.Collections.singletonList(actual));
+        assertEquals("NCLOB", actual.targetType);
     }
     @Test public void blocksUnsupportedTypesAndLossyPrecision() {
         for (String type : new String[] { "BFILE", "TIMESTAMP(6) WITH TIME ZONE", "BINARY_FLOAT", "MY_TYPE" }) {

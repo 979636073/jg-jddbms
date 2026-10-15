@@ -1,0 +1,25 @@
+{
+  "date": "2026-09-29",
+  "status": "development_regression_passed_commercial_acceptance_incomplete",
+  "migration_host": { "tests": 42, "failures": 0, "errors": 0, "skipped": 0 },
+  "migration_arm64": { "tests": 42, "exitCode": 0, "architecture": "aarch64", "os": "Linux", "java": "1.8.0_504", "simulated": true, "containerMemoryMiB": 512, "cpus": 2, "xmxMiB": 256 },
+  "backend_module_regression": { "tests": 191, "failures": 0, "errors": 0, "optInLiveSkipped": 11 },
+  "frontend_scripts_passed": 16,
+  "backend_package": "PASS",
+  "backend_jar_sha256": "7135B220032892C4806DBCD8BD3FF84AE79AF3ACD3EF3CE57F997C87EEB8163A",
+  "frontend_production_build": "PASS_WITH_62_EXISTING_WARNINGS",
+  "dm_performance_arm64": { "rows": 10001, "blobBytes": 8388608, "clobCharacters": 1200000, "copySeconds": 12.053165067, "baselineCopyVerificationSeconds": 31.269179757, "copyRowsPerSecond": 829.7405656030911, "jvmMaxHeapBytes": 259522560, "sumOfHeapPoolPeaksBytesNotRss": 35472928, "verification": "FULL_CONTENT_HASH_PASS", "isSla": false },
+  "real_database_scope": {
+    "tables_fields_lob_constraints_indexes_recovery": ["DM-DM", "DM-ORACLE", "ORACLE-ORACLE", "ORACLE-DM"],
+    "target_append_clear_rebuild_service_persistence": ["DM-DM", "DM-ORACLE", "ORACLE-ORACLE", "ORACLE-DM"],
+    "simple_program_object_samples": ["DM-DM"],
+    "oracle_complex_objects": "NOT_TESTED_MISSING_CREATE_PRIVILEGES",
+    "http_auth": "MockMvc test identity, not production JWT/TCP",
+    "restart": "Actual isolated TASK persistence with service restart simulation, not container termination during commit"
+  },
+  "browser_scope": "Production dist with isolated in-memory UI fixtures; no database execution or simulated successful migration",
+  "existing_service_containers_updated": false,
+  "remote_repository_pushed": false,
+  "dmp_work": "PAUSED",
+  "release_gates": "See 支持矩阵与发布门槛.md for unimplemented plan items and required acceptance conditions"
+}

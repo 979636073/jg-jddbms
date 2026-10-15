@@ -65,7 +65,7 @@ export default {
   data() {
     return {
       // 正在修改的tab
-      cachePageId: "",
+      cachePageId: this.$route.params.id,
       editing: {
         key: "",
         label: ""
@@ -108,7 +108,7 @@ export default {
       return this.$store.state.workspace.currentConnectionDetails;
     },
     pageId() {
-      return this.$route.params.id;
+      return this.cachePageId;
     },
     dataCurrentDataMap() {
       return this.$store.state.workspaceData.dataCurrentData;

@@ -61,10 +61,12 @@ public class ProcedureServiceImpl implements ProcedureService {
 
     String buildCreateOrReplaceSql(String procedureBody) {
         String sql = procedureBody.trim();
-        if (!sql.toUpperCase(Locale.ROOT).startsWith("CREATE")) {
-            sql = "CREATE OR REPLACE " + sql;
+        if (sql.toUpperCase(Locale.ROOT).startsWith("CREATE OR REPLACE ")) {
+            return sql;
         }
-        return sql;
+        return sql.toUpperCase(Locale.ROOT).startsWith("CREATE ")
+                ? sql.replaceFirst("(?i)^CREATE\\s+", "CREATE OR REPLACE ")
+                : "CREATE OR REPLACE " + sql;
     }
 
 

@@ -11,7 +11,6 @@ import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
 import com.alibaba.druid.sql.parser.ParserException;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.jd.common.constant.GenConstants;
 import com.jd.common.tools.base.constant.EasyToolsConstant;
 import com.jd.common.tools.base.enums.DataSourceTypeEnum;
 import com.jd.common.tools.base.excption.BusinessException;
@@ -493,7 +492,12 @@ public class SQLExecutor implements CommandExecutor {
                                 if (chat2dbAutoRowIdIndex == i) {
                                     continue;
                                 }
-                                row.add(valueHandler.getString(rs, i, limitRowSize));
+                                // 列表仅返回 BLOB 存在标记，点击查看后才读取内容。
+                                if (limitRowSize && resultSetMetaData.getColumnType(i) == java.sql.Types.BLOB) {
+                                    row.add(rs.getBlob(i) == null ? null : "A");
+                                } else {
+                                    row.add(valueHandler.getString(rs, i, limitRowSize));
+                                }
                             }
                         } else {
                             for (int i = 1; i <= col; i++) {
@@ -1085,19 +1089,32 @@ public class SQLExecutor implements CommandExecutor {
         }
         // 仅对 SELECT 统计总数；控制台可通过 skipCount 跳过额外的全量查询。
         if (SqlTypeEnum.SELECT.getCode().equals(sqlType)) {
-            if (Boolean.TRUE.equals(param.getSkipCount())) {
+            // An empty page beyond page one does not establish the table's exact size.
+            if (Boolean.TRUE.equals(param.getSkipCount())
+                    && (pageNo == 1 || CollUtil.isNotEmpty(executeResult.getDataList()))) {
                 long lowerBound = (long) Math.max(pageNo - 1, 0) * pageSize
                         + CollectionUtils.size(executeResult.getDataList())
                         + (Boolean.TRUE.equals(executeResult.getHasNextPage()) ? 1 : 0);
                 executeResult.setTotal(Long.toString(lowerBound));
                 executeResult.setTotalExact(!Boolean.TRUE.equals(executeResult.getHasNextPage()));
             } else {
-                String sql = "select count(*) as COUNT FROM (" +  originalSql + ") a";
-                executeResult.setTotal(getCount(sql));
+                String sql = "select count(*) as COUNT FROM (\n" + originalSql + "\n) a";
+                if (Boolean.TRUE.equals(executeResult.getSuccess())) {
+                    try {
+                        executeResult.setTotal(getCount(sql, executeResult.getSessionId(),
+                                param.getExecutionId(), param.getQueryTimeoutSeconds()));
+                    } catch (SQLException e) {
+                        ExecuteResult failure = buildFailureResult(originalSql, e, param.getExecutionId(), executeResult.getSessionId());
+                        executeResult.setSuccess(false);
+                        executeResult.setMessage("统计查询总数失败：" + failure.getMessage());
+                        executeResult.setCancelled(failure.getCancelled());
+                        executeResult.setTimedOut(failure.getTimedOut());
+                    }
+                }
                 executeResult.setTotalExact(StrUtil.isNotBlank(executeResult.getTotal()));
             }
         }
-        if (GenConstants.ZERO_STR.equals(executeResult.getTotal()) || StrUtil.isBlank(executeResult.getTotal())) {
+        if (StrUtil.isBlank(executeResult.getTotal())) {
             if (CollUtil.isEmpty(executeResult.getDataList())) {
                 executeResult.setTotal(null);
             } else {
@@ -1111,15 +1128,23 @@ public class SQLExecutor implements CommandExecutor {
 
     public String getCount(String sql) {
         try {
-            return SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, resultSet -> {
-                String count = "";
-                while (resultSet.next()) {
-                    count =  resultSet.getString("COUNT");
-                }
-                return count;
-            });
+            return getCount(sql, null, null, null);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private String getCount(String sql, String sessionId, String executionId, Integer timeout) throws SQLException {
+        Connection connection = StrUtil.isNotBlank(sessionId)
+                ? getOwnedSession(sessionId).getConnection() : Chat2DBContext.getConnection();
+        try (Statement statement = connection.createStatement()) {
+            configureStatement(statement, timeout);
+            RunningStatement running = registerRunningStatement(executionId, statement);
+            try (ResultSet resultSet = statement.executeQuery(sql)) {
+                return resultSet.next() ? resultSet.getString(1) : "0";
+            } finally {
+                unregisterRunningStatement(executionId, running);
+            }
         }
     }
 

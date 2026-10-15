@@ -33,6 +33,9 @@ export default {
     getTableDetails: {
       type: Function,
     },
+    loadColumns: {
+      type: Function,
+    },
     isLoading: {
       type: Boolean,
       default: false,
@@ -99,7 +102,8 @@ export default {
     tableRowClassName({ row, rowIndex }) {
       return row.editStatus == 'DELETE' ? "delete-row" : row.editStatus == 'ADD' || row.editStatus == 'MODIFY'? "update-row":"";
     },
-    openIncludeColModal(row) {
+    async openIncludeColModal(row) {
+      if (this.loadColumns && !await this.loadColumns()) return;
       this.$nextTick(() => {
         this.$refs.includeColModal.init(row.columnList);
       });

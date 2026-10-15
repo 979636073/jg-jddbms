@@ -270,9 +270,6 @@ export default {
       }
     },
   },
-  mounted() {
-    this.getDatabaseFieldTypeList();
-  },
   methods: {
     handleCheck(row, index) {
       console.log(this.selectIndex,index);
@@ -348,6 +345,7 @@ export default {
         dataSourceId: this.dataBaseInfo.id,
         databaseName: this.dataBaseInfo.alias,
       };
+      if (!send.dataSourceId) return;
       tableServer.getDatabaseFieldTypeList(send).then((res) => {
         this.columnType = res.data?.columnTypes;
       });
@@ -405,6 +403,16 @@ export default {
 </script>
 
 <style lang='scss' scoped>
+::v-deep .el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 94vh;
+  margin-top: 3vh !important;
+}
+::v-deep .el-dialog .el-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+}
 ::v-deep .el-table--medium .el-table__cell {
   padding: 5px 0;
 }

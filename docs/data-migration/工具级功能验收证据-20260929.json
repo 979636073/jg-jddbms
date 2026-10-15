@@ -1,0 +1,96 @@
+{
+  "date": "2026-09-29",
+  "scope": "达到商业工具级功能完整度及真实使用质量，不是商业发布",
+  "implemented": [
+    "表级并发1至4、依赖波次、共享行速率、单LOB执行槽及多写入器提交状态",
+    "默认及单表目标表空间映射",
+    "受限显式类型转换、标量属性投影及业务语义确认",
+    "未完成对象及必要依赖的新目标完整重迁移草稿",
+    "DM-DM、DM-Oracle、Oracle-Oracle、Oracle-DM复杂对象人工转换及有效性核对"
+  ],
+  "environments": {
+    "dm": "DM8 03134284458-20251113-301923-20178 / JDBC 8.1.2.141",
+    "oracle": "Oracle 11g EE 11.2.0.1.0 / ojdbc8 21.1.0.0 / orai18n 21.5.0.0",
+    "host": "Windows 11 amd64 / Java 17.0.20.1",
+    "arm": "Docker Desktop linux/arm64模拟 / Zulu Java 8u504 / 2 CPU / 512MiB / -Xmx256m",
+    "sameEngineTopology": "同实例不同专用QA表，不是同引擎跨实例验收"
+  },
+  "hostBackend": {
+    "tests": 229,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "skipDetails": { "existingNonMigrationPrivilegeTests": 2, "optInQaPermissionSetup": 1 },
+    "migrationTests": 78,
+    "migrationExecutedPass": 77,
+    "migrationSkipped": 1,
+    "qaPermissionSetupExecutedSeparately": true,
+    "adminPackage": "PASS"
+  },
+  "frontend": {
+    "regressionScriptsPass": 16,
+    "productionBuild": "PASS",
+    "existingWarnings": 62,
+    "warnings": "Monaco CSS顺序及包体积，不是新增业务错误",
+    "browserViewports": ["1440x900", "1280x720"],
+    "browserChecks": ["转换确认保存及再打开", "配置正文滚动及底部操作可达", "新目标选择不包含成功对象及二次确认", "并发3、目标模式及表空间保存后重载保留"],
+    "browserLastErrors": 0,
+    "browserIsolation": "正式dist加独立UI fixture；不连接数据库，不伪造迁移成功"
+  },
+  "armRegression": {
+    "firstCombined": { "tests": 76, "failures": 2, "reason": "LOB取消被驱动包装；故障代理清理锁超时" },
+    "secondCombined": { "tests": 77, "passed": 76, "failures": 1, "seconds": 439.516, "remainingFailure": "QA TCP代理关闭后转发读仍阻塞" },
+    "faultFixtureCorrection": "仅测试代理增加accept超时及显式shutdown输入输出/关闭socket，没有继续增加生产逻辑或测试等待",
+    "focusedFaultRetest": { "tests": 1, "failures": 0, "errors": 0, "seconds": 39.266, "exitCode": 0 },
+    "focusedHostRetest": { "tests": 1, "failures": 0, "seconds": 7.621, "exitCode": 0 },
+    "finalInterpretation": "综合76项通过，加故障1项修正后定向补测通过；不声称单轮77项全通过"
+  },
+  "realFaultEvidence": {
+    "network": ["批次前切断QA TCP连接", "提交前切断QA TCP连接", "真实commit成功后包装层注入应用响应异常并切断连接"],
+    "commitResponseLimit": "最后一项不是抓包证明数据库ACK在线路上丢失",
+    "result": "无误报成功、无虚增提交；新连接核对后恢复，已提交1行被复用且无重复",
+    "hardKillArm": { "qaRun": "F892B4C1", "kill": "SIGKILL", "recoveredStatus": "MIG_INTERRUPTED", "reusedRows": 48, "completedRows": 200, "uniquePrimaryKeys": 200, "fullContentHash": "PASS" },
+    "firstNaturalCompletionExcludedFromHardKillEvidence": true,
+    "permissionsAndQuota": "临时QA用户缺CREATE TABLE预检查阻断；零配额执行失败且提交0；只调整该QA配额后新目标完成",
+    "http": "真实TCP HTTP、现有SecurityConfig/JWT/Redis、JDBC/TASK；匿名及所属用户拒绝、重复启动拒绝、50行完整校验",
+    "httpLimit": "隔离登录用户服务，不是完整生产用户表和验证码流程"
+  },
+  "resourceSample": {
+    "rows": 10001,
+    "blobBytes": 8388608,
+    "clobCharacters": 1200000,
+    "host": { "copySeconds": 1.1523788, "totalSeconds": 2.5985307, "copyRowsPerSecond": 8678.569928568628, "sumOfHeapPoolPeaksBytes": 163731944, "maxHeapBytes": 8472494080 },
+    "arm": { "copySeconds": 12.131029099, "totalSeconds": 32.439125993, "copyRowsPerSecond": 824.414805898406, "sumOfHeapPoolPeaksBytes": 78743504, "maxHeapBytes": 259522560 },
+    "verification": "FULL_CONTENT_HASH_PASS",
+    "limit": "单次测试阶段；堆池各自峰值之和不是RSS/同时峰值/整体应用内存，不是生产SLA。ARM资源样本通过不等于同轮故障用例通过"
+  },
+  "qaCleanup": {
+    "temporaryUsersAndObjects": "本轮随机QA对象及用户精确清理；Oracle PURGE/DROP USER，不保留回收站恢复",
+    "failedFaultObjectsCleaned": ["JQA_NET_7902E88C", "JQA_NET_FDDECD2C"],
+    "retainedQaPermissionChanges": { "user": "JQORO_260926", "privileges": ["CREATE VIEW", "CREATE SEQUENCE", "CREATE SYNONYM", "CREATE PROCEDURE", "CREATE TRIGGER", "CREATE TYPE"], "authorization": "用户允许自行准备专用QA", "businessUsersChanged": false },
+    "temporaryArmContainers": "已自动删除",
+    "temporaryRedis": "已停止并自动删除",
+    "previewAndBrowserSession": "已关闭",
+    "existingServiceContainers": "6个既有应用/Redis服务健康，未替换或重启"
+  },
+  "screenshots": [
+    "转换策略-1440-20260929.png",
+    "转换策略-1280-20260929.png",
+    "新目标重迁移-1280-20260929.png",
+    "并发空间-草稿重载-20260929.png"
+  ],
+  "buildSha256": {
+    "jd-dbms-admin/target/jd-dbms-admin.jar": "C20049B00EFD8ACDBB447944499FBFA2DB4E5773FDAE19CE09AE29B0CB27293D",
+    "jd-dbms-ui/dist/index.html": "1B55FB411ACC9A45A71A45FA118DA42E4B823AC5755F2301BEE090B41D695C6F"
+  },
+  "notClaimed": [
+    "任意程序自动语义转换、完整UDT无损克隆、分区/物化视图/CDC/物理数据库克隆",
+    "程序新目标专门故障重跑实库路径已单独覆盖（该路径依赖/确认清空已做单元测试）",
+    "更多数据库版本/字符集、同引擎跨实例或跨主机",
+    "最大规模/单LOB/长期压力、完整生产登录、物理ARM性能或SLA",
+    "商业发布、许可认证或发布签字"
+  ],
+  "existingContainersUpdated": false,
+  "committedOrPushed": false,
+  "dmpDevelopmentRemainsPaused": true
+}

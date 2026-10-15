@@ -1,6 +1,8 @@
 package com.jd.biz.domain.core.cache;
 
 import org.springframework.util.StringUtils;
+import com.alibaba.fastjson2.JSON;
+import java.util.Arrays;
 
 public class CacheKey {
 
@@ -33,14 +35,18 @@ public class CacheKey {
     }
 
     public static String getColumnKey(Long dataSourceId, String databaseName, String schemaName,String tableName) {
-        StringBuffer stringBuffer = new StringBuffer("columns_dataSourceId_" + dataSourceId);
-        if (!StringUtils.isEmpty(databaseName)) {
-            stringBuffer.append("_databaseName_" + databaseName);
-        }
-        if (!StringUtils.isEmpty(schemaName)) {
-            stringBuffer.append("_schemaName_" + schemaName);
-        }
-        stringBuffer.append("_tableName_"+tableName);
-        return stringBuffer.toString();
+        return getColumnPrefix(dataSourceId) + JSON.toJSONString(Arrays.asList(databaseName, schemaName, tableName));
+    }
+
+    public static String getColumnPrefix(Long dataSourceId) {
+        return "columns_v2_datasource_" + dataSourceId + ":";
+    }
+
+    public static String getRelationKey(Long dataSourceId, String databaseName, String schemaName, String tableName, String direction) {
+        return getRelationPrefix(dataSourceId) + JSON.toJSONString(Arrays.asList(databaseName, schemaName, tableName, direction));
+    }
+
+    public static String getRelationPrefix(Long dataSourceId) {
+        return "relations_v1_datasource_" + dataSourceId + ":";
     }
 }

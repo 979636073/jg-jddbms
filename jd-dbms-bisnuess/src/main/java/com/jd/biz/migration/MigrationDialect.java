@@ -137,11 +137,12 @@ public final class MigrationDialect {
             if (column.length < 1 || column.length > 2000) throw new BusinessException("RAW/二进制长度超出首版范围");
             column.targetType = ("ORACLE".equals(target) ? "RAW" : "VARBINARY") + "(" + column.length + ")";
         } else if ("DM".equals(source) && type.equals("TEXT")) {
-            // DM exposes NCLOB as TEXT in ALL_TAB_COLUMNS; retain the national-character LOB path.
-            column.kind = "NCLOB"; column.targetType = "NCLOB";
+            // DM reports both TEXT and NCLOB as TEXT; use CLOB unless the mapping explicitly selects NCLOB.
+            column.kind = "CLOB"; column.targetType = "CLOB";
         } else if (type.matches("BLOB|CLOB|NCLOB")) {
             column.kind = type; column.targetType = type;
-        } else if (type.equals("DATE") || type.matches("TIMESTAMP(?:\\(\\d+\\))?")) {
+        } else if (type.equals("DATE") || type.matches("TIMESTAMP(?:\\(\\d+\\))?")
+                || ("DM".equals(source) && type.matches("DATETIME(?:\\(\\d+\\))?"))) {
             column.kind = "TIMESTAMP";
             int scale = type.equals("DATE") ? 0 : (column.scale == null ? 6 : column.scale);
             if (scale < 0 || scale > 6) throw new BusinessException("首版时间精度最多 6 位，不允许静默丢失精度");

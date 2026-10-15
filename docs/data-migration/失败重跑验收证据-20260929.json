@@ -1,0 +1,62 @@
+{
+  "date": "2026-09-29",
+  "scope": ["确定 SQL 错误时继续独立对象", "稳定主键单表受限重跑", "DDL 执行检查点", "配置内容比较与 UI 回归"],
+  "commercialReleaseApproved": false,
+  "host": {
+    "os": "Windows 11",
+    "architecture": "amd64",
+    "java": "17.0.20.1",
+    "migrationLiveSuite": { "tests": 59, "failures": 0, "errors": 0, "skipped": 0 },
+    "laterAddedNoKeyRetryTest": "在随后全后端 209 用例中通过；迁移最终为 51 单元 + 9 实库",
+    "backendRegression": { "tests": 209, "failures": 0, "errors": 0, "skipped": 11 },
+    "finalServiceRegression": { "tests": 18, "failures": 0, "errors": 0, "skipped": 0, "whitespaceOnlyEditPreservesArmTestedBytecode": true },
+    "backendSkippedNote": "按需实库：迁移 9 个已另行启用通过，另 2 个既有授权实库未启用",
+    "frontendScripts": 16,
+    "frontendBuild": "PASS",
+    "existingFrontendBuildWarnings": 62,
+    "adminPackage": "PASS"
+  },
+  "arm64": {
+    "tests": 60,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exitCode": 0,
+    "elapsedSeconds": 169.189,
+    "os": "Linux",
+    "architecture": "aarch64",
+    "java": "Zulu 1.8.0_504",
+    "cpuLimit": 2,
+    "memoryLimitMiB": 512,
+    "heapOption": "-Xmx256m",
+    "note": "独立 --rm 测试容器，既有运行时镜像 + 新 jar/test-classes；Docker Desktop 跨架构模拟，不是物理 ARM / 完整生产认证应用验收",
+    "sample": { "rows": 10001, "blobBytes": 8388608, "clobCharacters": 1200000, "copySeconds": 12.126744193, "baselineCopyVerificationSeconds": 31.211506596, "verification": "FULL_CONTENT_HASH_PASS" }
+  },
+  "liveWorkflow": {
+    "directions": ["DM-DM", "DM-ORACLE", "ORACLE-ORACLE", "ORACLE-DM"],
+    "path": "MockMvc -> Controller -> Service -> JDBC -> MyBatis TASK（随机 QA 控制表）",
+    "checks": ["目标 CHECK 故意失败", "独立表完成", "依赖表未写入", "解除本测试专用约束后只补失败表缺失行", "成功表行数和统计不变", "依赖未重跑，仍 PARTIAL", "对象检查指纹不能串用", "越权检查拒绝"],
+    "productionJwtAndNetworkHttp": false,
+    "oracleComplexObjects": "NOT TESTED：现有专用 QA 账号缺 CREATE SEQUENCE/VIEW/SYNONYM/PROCEDURE/TRIGGER，不自动授权",
+    "cleanup": "仅精确删除本次随机 QA 对象；Oracle QA 表 PURGE；未改业务数据、用户、权限或配额"
+  },
+  "browser": {
+    "url": "http://127.0.0.1:38082/data-migration/index",
+    "mode": "正式 dist + 只读实库失败报告/内存草稿隔离服务；不代理数据库、不运行真实迁移",
+    "viewports": ["1280x720", "1440x900"],
+    "checks": ["失败/完成/依赖阻断区分", "成功对象无需重跑", "重跑检查请求被 fixture 明确拒绝，不呈现假成功", "错误策略选择、保存及重载保留", "配置字段顺序不清除预检查", "12px 正文", "360px 策略框标签完整", "滚动后保存操作可达"],
+    "runtimeScriptErrorsAtFinalCheck": 0,
+    "temporaryNavigationFailures": "构建清理 dist 期间提前访问曾出现 404；最终构建完成后重新打开、重载和检查",
+    "screenshots": ["失败重跑验收-结果-1280.png", "失败重跑验收-对象-1280.png", "失败重跑验收-策略-1440-修复后.png", "失败重跑验收-策略-1280-修复后.png"]
+  },
+  "artifacts": {
+    "adminJarSha256": "55F6209AD5B537963A654C2B4BDAA97A7B7C7F69711730E15F1AB9E749AA42A3",
+    "frontendIndexSha256": "FAF9C717B096FBC9C402DE562DB57DA378ADFD9C32195AD72CC418629355D83F",
+    "migrationChunk": "static/js/chunk-193eb886.c645f4ff.js",
+    "migrationChunkSha256": "031455D6CABB22F962B8318788E6D3CC313FBAA715A66B0BEF6A6CA52C953BFB"
+  },
+  "existingContainersUpdated": false,
+  "remoteCommittedOrPushed": false,
+  "dmpWork": "PAUSED",
+  "remaining": ["有界可配置并发", "表空间/自定义类型转换", "无稳定键/无基线/程序对象等更广范围的重新迁移", "Oracle 复杂对象三方向验收", "生产认证 HTTP 与真实故障/长期压力/跨主机/规模指标", "完整产品及驱动商业许可证确认"]
+}

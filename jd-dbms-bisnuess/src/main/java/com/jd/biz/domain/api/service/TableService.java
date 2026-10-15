@@ -67,6 +67,8 @@ public interface TableService {
      */
     DataResult<Table> query(TableQueryParam param, TableSelector selector);
 
+    DataResult<Table> querySection(TableQueryParam param, String section);
+
     /**
      * 构建sql
      *

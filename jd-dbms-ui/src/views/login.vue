@@ -50,21 +50,6 @@
           </span> 
         </el-input>
       </el-form-item>
-      <el-form-item prop="code" v-if="captchaEnabled">
-        <span slot="label">验证码</span>
-        <el-input
-          v-model="loginForm.code"
-          auto-complete="off"
-          placeholder="验证码"
-          style="width: 63%"
-          @keyup.enter.native="handleLogin"
-        >
-          <svg-icon slot="prefix" icon-class="validCode" class="el-input__icon input-icon" />
-        </el-input>
-        <div class="login-code">
-          <img :src="codeUrl" @click="getCode" class="login-code-img"/>
-        </div>
-      </el-form-item>
       <el-checkbox
         v-model="loginForm.rememberMe"
         style="margin: 0px 0px 25px 0px"
@@ -92,7 +77,6 @@
 </template>
 
 <script>
-import { getCodeImg } from "@/api/login";
 import Cookies from "js-cookie";
 import { encrypt, decrypt } from "@/utils/jsencrypt";
 
@@ -101,13 +85,10 @@ export default {
   data() {
     return {
       passwordType: "password",
-      codeUrl: "",
       loginForm: {
         username: "admin",
         password: "",
         rememberMe: false,
-        code: "",
-        uuid: "",
       },
       loginRules: {
         username: [
@@ -116,11 +97,8 @@ export default {
         password: [
           { required: true, trigger: "blur", message: "请输入您的密码" },
         ],
-        code: [{ required: true, trigger: "change", message: "请输入验证码" }],
       },
       loading: false,
-      // 验证码开关
-      captchaEnabled: true,
       // 注册开关
       register: false,
       flag: false,
@@ -128,21 +106,8 @@ export default {
   },
   created() {
     this.getCookie();
-    this.getCode();
   },
   methods: {
-    getCode() {
-      getCodeImg().then((res) => {
-        this.captchaEnabled = res.captchaEnabled !== false;
-        if (this.captchaEnabled) {
-          this.codeUrl = `data:image/gif;base64,${res.img}`;
-          this.loginForm.uuid = res.uuid;
-        }
-      }).catch(() => {
-        this.captchaEnabled = true;
-        this.$message.error('验证码获取失败，请刷新页面重试');
-      });
-    },
     showPwd() {
       if (this.passwordType === "password") {
         this.passwordType = "";
@@ -162,8 +127,6 @@ export default {
         username: username === undefined ? this.loginForm.username : username,
         password: savedPassword === undefined ? this.loginForm.password : savedPassword,
         rememberMe: rememberMe === "true",
-        code: "",
-        uuid: "",
       };
     },
     handleLogin() {
@@ -199,8 +162,6 @@ export default {
             .catch((err) => {
               console.log(err);
               this.loading = false;
-              this.loginForm.code = '';
-              this.getCode();
             });
           }
       });

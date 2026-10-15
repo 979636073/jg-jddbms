@@ -5,6 +5,10 @@ import java.util.Map;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +46,29 @@ public class TokenService
     // 令牌秘钥
     @Value("${token.secret}")
     private String secret;
+
+    @Value("${dbms.profile}")
+    private String profile;
+
+    @PostConstruct
+    public void initializeSecret()
+    {
+        try
+        {
+            if (StringUtils.isBlank(secret))
+            {
+                secret = new String(Files.readAllBytes(Paths.get(profile, ".secrets", "token-secret")),
+                        StandardCharsets.UTF_8).trim();
+            }
+            // Validate signing configuration before accepting login requests.
+            Jwts.builder().setSubject("startup-validation").signWith(SignatureAlgorithm.HS512, secret).compact();
+        }
+        catch (Exception e)
+        {
+            throw new IllegalStateException("登录签名密钥缺失或无效，请配置 JDDBMS_TOKEN_SECRET，"
+                    + "或在 dbms.profile/.secrets/token-secret 中保存有效的 Base64 密钥", e);
+        }
+    }
 
     // 令牌有效期（默认30分钟）
     @Value("${token.expireTime}")

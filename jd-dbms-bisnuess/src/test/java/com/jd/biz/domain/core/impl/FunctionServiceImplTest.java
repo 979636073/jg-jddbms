@@ -42,6 +42,15 @@ public class FunctionServiceImplTest {
         assertEquals(sql, service.buildCreateOrReplaceSql(sql));
     }
 
+    @Test
+    public void shouldReplaceExistingFunctionWhenDefinitionStartsWithCreate() {
+        FunctionServiceImpl service = new FunctionServiceImpl();
+        String sql = "CREATE FUNCTION F_TEST RETURN NUMBER AS BEGIN RETURN 2; END;";
+
+        assertEquals("CREATE OR REPLACE FUNCTION F_TEST RETURN NUMBER AS BEGIN RETURN 2; END;",
+                service.buildCreateOrReplaceSql(sql));
+    }
+
     private void putContext(Connection connection) {
         ConnectInfo connectInfo = new ConnectInfo();
         connectInfo.setDbType("DM");

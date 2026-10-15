@@ -18,7 +18,8 @@ final class MigrationObjects {
              ResultSet rows = query.executeQuery()) {
             while (rows.next()) {
                 String owner = rows.getString(1), name = rows.getString(2);
-                if (owner == null || systemSchema(owner) || (owner.equals(plan.sourceSchema) && name.equals(plan.source))) continue;
+                if (owner == null || systemSchema(owner) || ("PUBLIC".equals(owner) && "DUAL".equals(name))
+                        || (owner.equals(plan.sourceSchema) && name.equals(plan.source))) continue;
                 Mapping dependency = config.tables.stream().filter(m -> sourceSchema(config, m).equals(owner) && m.source.equals(name)).findFirst()
                         .orElseThrow(() -> new BusinessException("对象引用未选中的业务依赖，请加入依赖对象，不能自动指向旧库"));
                 plan.dependencies.add(qualified(sourceSchema(config, dependency), dependency.source));

@@ -3,6 +3,8 @@ import Vue from 'vue'
 import Cookies from 'js-cookie'
 
 import Element from 'element-ui'
+import VueEasyTree from '@wchbrad/vue-easy-tree'
+import '@wchbrad/vue-easy-tree/src/assets/index.scss'
 
 Element.Dialog.props.closeOnClickModal.default = false;
 import './assets/styles/element-variables.scss'
@@ -57,6 +59,7 @@ Vue.prototype.$EventBus = new Vue();
 
 // 全局组件挂载
 Vue.component('DictTag', DictTag)
+Vue.component('VueEasyTree', VueEasyTree)
 Vue.component('Pagination', Pagination)
 Vue.component('RightToolbar', RightToolbar)
 Vue.component('Editor', () => import('@/components/Editor'))

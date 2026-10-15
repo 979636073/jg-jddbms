@@ -1,5 +1,6 @@
 <script>
-import renderSearchResult from "@/views/main/workspace/components/renderSearchResult/index.vue";
+import SqlResultTable from "./SqlResultTable.vue";
+import { prepareSqlResult } from "@/utils/sqlResult";
 import MonacoEditor from "@/components/MonacoEditor/index.vue";
 import sqlServer from "@/api/main/sql";
 import historyServer from "@/api/main/history";
@@ -9,7 +10,7 @@ import { downloadFile } from "@/utils/file";
 import { copyText } from "@/utils";
 import draggable from "vuedraggable";
 export default {
-  components: { MonacoEditor, renderSearchResult, draggable },
+  components: { MonacoEditor, SqlResultTable, draggable },
   props: {
     currentConfig: {
       type: Object,
@@ -157,7 +158,6 @@ export default {
   },
   watch: {
     sessionId(val) {
-      console.log(val, "val");
       if (val) {
         let { uniqueData } = this.currentConfig;
         let sql =
@@ -224,7 +224,6 @@ export default {
   },
   mounted() {
     this.loadRecentSqlScripts();
-    console.log(this.currentConfig.sqlData, "this.currentConfig.sqlData");
     this.sqlContent =
       this.$refs.MonacoEditor.getSelectValue() ||
       this.$refs.MonacoEditor.getValue();
@@ -574,8 +573,7 @@ export default {
           isCommit: this.isCommit,
           executionId: this.createExecutionId(),
           queryTimeoutSeconds: this.queryTimeoutSeconds,
-          // 控制台只展示当前结果页，跳过达梦上代价较高的全量 count(*)。
-          skipCount: true,
+          skipCount: false,
         };
         this.currentExecutionId = send.executionId;
         if (this.sessionId) send.sessionId = this.sessionId;
@@ -649,11 +647,11 @@ export default {
             : "";
           this.resultTab = results.some((item) => item.success) ? "success" : "error";
           this.isShow = results.length > 0;
-          console.log(res.data, "(res.data");
           // if (res.data[0].success) {
 
           results.forEach(result => {
             result.params = { ...send, sql: result.originalSql || send.sql, sessionId: result.sessionId || send.sessionId, executionId: undefined };
+            prepareSqlResult(result);
           });
           const lastSessionResult = [...results].reverse().find(result => result.sessionId);
           this.sessionId = lastSessionResult ? lastSessionResult.sessionId : "";
@@ -977,45 +975,30 @@ export default {
         this.searchSql += ` ${str} `;
       }
     },
-    saveFilterData() {
-      let currentSql = this.successList[this.successCurrentIndex].originalSql;
-      let { uniqueData } = this.currentConfig;
-      let send = {
-        consoleId: this.currentConfig.id,
-        dataSourceId: uniqueData.dataSourceId,
-        dataSourceName: uniqueData.dataSourceName,
-        databaseType: uniqueData.databaseType,
-        hasNextPage: true,
-        pageNo: 1,
-        pageSize: 200,
-        schemaName: uniqueData.schemaName,
-        sql: currentSql,
-        status: "DRAFT",
-        supportDatabase: false,
-        supportSchema: true,
-        total: 0,
-        type: uniqueData.type,
-        isErrorExecute: this.radioData == "1" ? false : true,
-      };
-
-      if (this.searchSql) {
-        send.sql = `SELECT * FROM (${currentSql}) WHERE ${this.searchSql}`;
-      } else if (
-        currentSql.indexOf("(") != -1 &&
-        currentSql.indexOf(")") != -1
-      ) {
-        let i1 = currentSql.indexOf("(") + 1;
-        let i2 = currentSql.indexOf(")");
-        send.sql = currentSql.slice(i1, i2);
-      }
-      sqlServer.executeSql(send).then((res) => {
-        if (res.data[0].success) {
-          res.data[this.successCurrentIndex].params = send;
-          this.$emit("setCurrentConfig", "sqlData", res.data);
+    async saveFilterData() {
+      const selected = this.successList[this.successCurrentIndex];
+      if (!selected || this.sqlLoading) return;
+      const baseSql = selected.filterBaseSql || selected.params.sql;
+      const send = { ...selected.params, pageNo: 1, skipCount: false, isLog: false,
+        sql: this.searchSql ? `SELECT * FROM (\n${baseSql}\n) JDDBMS_FILTER WHERE ${this.searchSql}` : baseSql,
+        executionId: undefined };
+      this.sqlLoading = true;
+      try {
+        const response = await sqlServer.executeSql(send);
+        const result = response.data && response.data[0];
+        if (!response.success || !result || !result.success) {
+          throw new Error((result && result.message) || response.errorMessage || "过滤失败");
         }
-        this.sqlLoading = false;
+        if (!this.currentConfig.sqlData.includes(selected)) return;
+        const filtered = prepareSqlResult({ ...selected, ...result, filterBaseSql: baseSql,
+          params: { ...send, sessionId: result.sessionId || send.sessionId } });
+        this.$emit("setCurrentConfig", "sqlData", this.currentConfig.sqlData.map(item => item === selected ? filtered : item));
         this.closeDialog();
-      });
+      } catch (error) {
+        this.$message.error(error.message || "过滤失败");
+      } finally {
+        this.sqlLoading = false;
+      }
     },
 
     async tableCellClick(row, column, cell, event) {
@@ -1230,15 +1213,13 @@ export default {
                 {{ (item.sqlType === 'SELECT' ? '结果 ' : '语句 ') + (index + 1) }}
               </el-tag>
             </div>
-            <renderSearchResult
+            <SqlResultTable
               v-if="
                 successList[successCurrentIndex] &&
                 successList[successCurrentIndex].sqlType === 'SELECT' &&
                 successList[successCurrentIndex].success
               "
-              @executeSQL="executeSQL"
               :queryResultData="successList[successCurrentIndex]"
-              :readonly="true"
               :key="successCurrentIndex"
               @setQueryResultData="updateResult"
             />
@@ -1660,6 +1641,9 @@ export default {
           padding: 0 16px 4px;
           .el-tab-pane {
             height: 100%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
             .tag_list {
               flex-shrink: 0;
               display: flex;

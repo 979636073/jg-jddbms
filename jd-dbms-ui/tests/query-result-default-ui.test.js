@@ -11,7 +11,7 @@ const source = componentSource.match(/<script>([\s\S]*?)<\/script>/)[1]
 const sqlServer = {}
 const context = {
   module: { exports: {} },
-  renderSearchResult: {}, MonacoEditor: {}, sqlServer, historyServer: {}, tableServer: {},
+  SqlResultTable: {}, prepareSqlResult: result => result, MonacoEditor: {}, sqlServer, historyServer: {}, tableServer: {},
   downloadFile() {}, copyText() {}, draggable: {},
   window: { crypto: {} }, localStorage: { getItem() { return null }, setItem() {} }
 }

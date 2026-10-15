@@ -29,7 +29,7 @@ async function main() {
   const sidebar = readComponent(workspaceFile)
   const template = compiler.compile(sidebar.template.content)
   assert.deepStrictEqual(template.errors, [])
-  const resourceTree = findNode(template.ast, node => node.tag === 'el-tree' && node.attrsMap.class === 'resource-tree')
+  const resourceTree = findNode(template.ast, node => node.tag === 'vue-easy-tree' && node.attrsMap.class === 'resource-tree')
   assert(resourceTree && resourceTree.events && resourceTree.events['node-click'], '资源树对象点击入口不存在')
 
   const panel = readComponent(panelFile)

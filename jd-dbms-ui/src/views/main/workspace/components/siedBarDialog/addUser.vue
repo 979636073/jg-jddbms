@@ -30,6 +30,7 @@
                   type="password"
                 >
                 </el-input>
+                <div class="password-hint">密码还需满足目标数据库的复杂度策略</div>
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -284,13 +285,13 @@ export default {
             dataSourceId: this.dataBaseInfo.id,
           };
           userServer.addUserRole(params).then((res) => {
-            if (res.code == 200) {
+            if (res.code === 200 || res.success === true) {
               this.getTableDataList(this.schema);
               this.userHandleCloseFn();
               this.getDataBaseTreeData()
               this.$message.success('新建用户成功!');
             } else {
-              this.$message.error(res.errorCode);
+              this.$message.error(res.errorMessage || res.msg || res.errorCode || '创建用户失败');
             }
           });
         }
@@ -318,5 +319,10 @@ export default {
 }
 ::v-deep .el-form-item {
   margin-bottom: 22px;
+}
+.password-hint {
+  color: #909399;
+  font-size: 12px;
+  line-height: 18px;
 }
 </style>

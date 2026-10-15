@@ -52,6 +52,18 @@ export default {
     this.$emit("openRouteObject", this.$route);
   },
   methods: {
+    showSchemaOverview(context) {
+      const schema = context.schemaName || context.databaseName;
+      this.$store.dispatch('jdTagsView/changeView', {
+        title: `${schema} 模式总览`,
+        id: this.pageId
+      });
+      this.$store.dispatch('workspaceData/setDataCurrentData', {
+        pageId: this.pageId,
+        uniqueData: false
+      });
+      this.restoreOverview(context);
+    },
     async restoreOverview(context = {}) {
       const dataSourceId = context.dataSourceId || this.$route.query.dataSourceId;
       const dataSource = this.$store.state.workspace.dataSourceList.find(item => String(item.id) === String(dataSourceId)) ||

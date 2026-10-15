@@ -125,7 +125,7 @@ export default {
         const allObjects = [];
         let pageNo = 1;
         const pageSize = 1000;
-        while (true) {
+        for (;;) {
           const res = await sqlServer.getTableList({
             dataSourceId: this.currentConfig.uniqueData.dataSourceId,
             dataSourceName: this.currentConfig.uniqueData.databaseName,

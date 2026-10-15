@@ -6,6 +6,8 @@ const compiler = require('vue-template-compiler')
 const source = fs.readFileSync(path.join(__dirname, '../src/views/main/dataMigration/index.vue'), 'utf8')
 const page = compiler.parseComponent(source)
 assert.deepStrictEqual(compiler.compile(page.template.content).errors, [])
+assert(source.includes('达梦的 TEXT 与 NCLOB 均显示为 TEXT，默认迁为 CLOB'))
+assert(source.includes('s.row.sourceType === \'TEXT\'') && source.includes('value="NCLOB" label="NCLOB"'), '达梦 TEXT 字段须允许显式选择 NCLOB')
 const pending = []
 const migration = {
   delete: id => { migration.deletedId = id; return Promise.resolve(true) },

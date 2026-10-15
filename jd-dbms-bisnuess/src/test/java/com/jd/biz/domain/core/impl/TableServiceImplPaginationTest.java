@@ -1,13 +1,17 @@
 package com.jd.biz.domain.core.impl;
 
 import com.jd.biz.domain.api.param.TablePageQueryParam;
+import com.jd.common.core.redis.RedisCache;
 import com.jd.common.tools.base.wrapper.result.PageResult;
+import com.jd.framework.config.FastJson2JsonRedisSerializer;
 import com.jd.spi.model.Table;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TableServiceImplPaginationTest {
 
@@ -47,5 +51,37 @@ public class TableServiceImplPaginationTest {
         assertEquals(Long.valueOf(4), result.getTotal());
         assertEquals(Arrays.asList("T3", "T4"), Arrays.asList(
                 result.getData().get(0).getName(), result.getData().get(1).getName()));
+    }
+
+    @Test
+    public void shouldUseCachedDatabasePageWithoutOpeningConnection() throws Exception {
+        TableServiceImpl service = new TableServiceImpl();
+        PageResult<Table> cached = PageResult.of(Arrays.asList(Table.builder().name("T1").build()), 1L, 1, 50);
+        RedisCache cache = new RedisCache() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public <T> T getCacheObject(String key) {
+                assertTrue(key.startsWith("TABLE_DETAILS_PAGE:42:"));
+                return (T) cached;
+            }
+        };
+        Field field = TableServiceImpl.class.getDeclaredField("redisCache");
+        field.setAccessible(true);
+        field.set(service, cache);
+
+        PageResult<Table> result = service.pageQuery(TablePageQueryParam.builder()
+                .dataSourceId(42L).schemaName("QA").pageNo(1).pageSize(50).build(), null);
+
+        assertEquals("T1", result.getData().get(0).getName());
+    }
+
+    @Test
+    public void shouldDeserializeCachedPageWithTableRows() {
+        FastJson2JsonRedisSerializer<Object> serializer = new FastJson2JsonRedisSerializer<>(Object.class);
+        PageResult<Table> page = PageResult.of(Arrays.asList(Table.builder().name("T1").build()), 1L, 1, 50);
+
+        Object restored = serializer.deserialize(serializer.serialize(page));
+
+        assertEquals("T1", ((Table) ((PageResult<?>) restored).getData().get(0)).getName());
     }
 }

@@ -1,0 +1,20 @@
+const assert = require('assert')
+const fs = require('fs')
+const path = require('path')
+const compiler = require('vue-template-compiler')
+
+const source = fs.readFileSync(path.join(__dirname, '../src/views/main/dmpTools/index.vue'), 'utf8')
+const component = compiler.parseComponent(source)
+const compiled = compiler.compile(component.template.content)
+assert.deepStrictEqual(compiled.errors, [])
+const dialogs = compiled.ast.children.filter(node => node.tag === 'el-dialog')
+assert.strictEqual(dialogs.length, 2)
+for (const dialog of dialogs) {
+  assert.strictEqual(dialog.attrsMap.class, 'dmp-client-dialog')
+  assert.strictEqual(dialog.attrsMap['append-to-body'], '')
+}
+const css = component.styles.map(style => style.content).join('\n')
+assert.match(css, /\.dmp-client-dialog\s*::v-deep\s*\.el-dialog\s*\{[^}]*max-height:\s*88vh/s)
+assert.match(css, /\.dmp-client-dialog\s*::v-deep\s*\.el-dialog__body\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/s)
+assert.match(css, /\.el-dialog__footer\s*\{[^}]*flex-shrink:\s*0/s)
+console.log('客户端弹窗正文内滚动、固定操作区及模板编译回归通过')

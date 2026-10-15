@@ -64,7 +64,7 @@
         </template>
       </el-table-column>
     </el-table>
-    <el-dialog title="上传客户端工具包" :visible.sync="uploadVisible" width="520px" append-to-body>
+    <el-dialog title="上传客户端工具包" :visible.sync="uploadVisible" width="520px" append-to-body class="dmp-client-dialog">
       <el-form label-position="top" size="small">
         <el-form-item label="官方客户端 ZIP">
           <el-upload drag action="" accept=".zip" :auto-upload="false" :limit="1" :file-list="uploadFiles"
@@ -88,7 +88,7 @@
         <el-button type="primary" size="small" :loading="uploading" @click="submitUpload">上传并检测</el-button>
       </span>
     </el-dialog>
-    <el-dialog title="修改客户端信息" :visible.sync="editVisible" width="480px" append-to-body>
+    <el-dialog title="修改客户端信息" :visible.sync="editVisible" width="480px" append-to-body class="dmp-client-dialog">
       <el-form label-position="top" size="small">
         <el-form-item label="版本号">
           <el-input v-model.trim="editVersion" placeholder="例如 8.1.4.200" maxlength="60" />
@@ -119,6 +119,7 @@ export default {
       editVisible: false, editing: false, editId: '', editVersion: '', editPlatform: '',
       platforms: [
         { value: 'WINDOWS:X86_64', label: 'Windows x64' },
+        { value: 'LINUX:X86_64', label: 'Linux x64' },
         { value: 'LINUX:X86', label: 'Linux x86' },
         { value: 'LINUX:ARM64', label: 'Linux ARM64' }
       ] }
@@ -236,5 +237,18 @@ export default {
 ::v-deep .el-alert--warning .el-alert__title { color: #704700; }
 ::v-deep .el-alert--warning .el-alert__icon { color: #9b6500; }
 ::v-deep .el-upload, ::v-deep .el-upload-dragger { width: 100%; }
+.dmp-client-dialog ::v-deep .el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  max-width: calc(100vw - 32px);
+  margin-bottom: 0;
+}
+.dmp-client-dialog ::v-deep .el-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+}
+.dmp-client-dialog ::v-deep .el-dialog__header,
+.dmp-client-dialog ::v-deep .el-dialog__footer { flex-shrink: 0; }
 @media (max-width: 900px) { .page-header { align-items: flex-start; flex-direction: column; } }
 </style>

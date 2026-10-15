@@ -3,6 +3,7 @@ package com.jd;
 import cn.hutool.core.lang.UUID;
 import com.jd.common.tools.common.model.ConfigJson;
 import com.jd.common.tools.common.util.ConfigUtils;
+import com.jd.config.H2MetadataBootstrap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.SpringApplication;
@@ -51,7 +52,9 @@ public class Application
                     currentVersion);
         }
         System.out.println("启动耗时：" + (System.currentTimeMillis() - s1) + "ms");
-        SpringApplication.run(Application.class, args);
+        SpringApplication application = new SpringApplication(Application.class);
+        application.addListeners(new H2MetadataBootstrap());
+        application.run(args);
         System.out.println("项目启动成功");
     }
 }

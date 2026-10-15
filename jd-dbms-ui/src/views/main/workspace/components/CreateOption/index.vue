@@ -32,8 +32,9 @@ export default {
   methods: {
     init(nodeData) {
       this.dialogVisible = true
-      this.objectForm.type = nodeData.treeNodeType
-      this.uniqueData = nodeData.extraParams
+      this.objectForm = { type: nodeData.groupType, name: '', tableName: '', status: '' }
+      this.uniqueData = { ...nodeData.extraParams }
+      if (nodeData.groupType !== 'triggers') return
 
       let send = {
         dataSourceId: this.uniqueData?.dataSourceId,
@@ -69,14 +70,19 @@ export default {
               send.procedureName = this.objectForm.name
               break;
             case 'triggers':
+              if (!send.tableName) {
+                this.$message.warning('请选择触发器所在的数据表')
+                return
+              }
               send.triggerName = this.objectForm.name
               break;
           }
           sqlServer[apiMap[this.objectForm.type]](send)
             .then(res => {
+              if (!res.success || !res.data?.sql) throw new Error(res.errorMessage || '生成对象模板失败')
               let id = uuidv4()
-              this.$store.dispatch('addWorkspaceTab', {
-                id: id,
+              this.$store.dispatch('workspaceData/setDataCurrentData', {
+                pageId: id,
                 title: this.objectForm.name,
                 type: 'createSql',
                 uniqueData: {
@@ -86,9 +92,10 @@ export default {
                   objectType: this.objectForm.type
                 },
               })
-              this.$store.commit('SET_ACTIVECONSOLEID', id)
               this.dialogVisible = false
+              this.$router.push({ path: '/workspace/look/' + id })
             })
+            .catch(error => this.$message.error(error.message || '生成对象模板失败'))
         } else {
           return false;
         }
@@ -114,13 +121,13 @@ export default {
 
 <template>
   <el-dialog
-    title="New PL/SQL Object Create Options"
+    title="新增数据库对象"
     :visible.sync="dialogVisible"
     width="30%"
     :before-close="handleClose">
     <el-form ref="form" :rules="rules" :model="objectForm" label-width="100px">
       <el-form-item label="类型" prop="type">
-        <el-select v-model="objectForm.type" @change="changeType" placeholder="请选择类型">
+        <el-select v-model="objectForm.type" disabled placeholder="请选择类型">
           <el-option label="函数" value="functions"></el-option>
           <el-option label="存储过程" value="procedures"></el-option>
           <el-option label="触发器" value="triggers"></el-option>
@@ -130,7 +137,7 @@ export default {
         <el-input v-model="objectForm.name"></el-input>
       </el-form-item>
       <template v-if="objectForm.type === 'triggers'">
-        <el-form-item label="触发器表名">
+        <el-form-item label="触发器表名" required>
           <el-select v-model="objectForm.tableName" filterable placeholder="请选择表名">
             <el-option
               v-for="item in tableList"

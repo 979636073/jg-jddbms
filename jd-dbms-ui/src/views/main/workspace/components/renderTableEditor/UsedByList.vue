@@ -77,19 +77,19 @@ export default {
       radio: "tree",
       relationTypeValue: this.relationType,
       displayMode: "tree",
-      graph: null,
       graphRequestId: 0,
     };
   },
   watch: {
     tableData: {
       handler() {
+        this.destroyGraph();
         if (this.displayMode === "graph") this.$nextTick(this.initGraph);
       },
     },
     displayMode(value) {
       if (value === "graph") this.$nextTick(this.initGraph);
-      else this.destroyGraph();
+      else this.graphRequestId++;
     },
   },
   computed: {
@@ -123,13 +123,17 @@ export default {
   methods: {
     destroyGraph() {
       this.graphRequestId++;
-      if (this.graph) {
-        this.graph.destroy();
-        this.graph = null;
+      if (this._relationGraph) {
+        this._relationGraph.destroy();
+        this._relationGraph = null;
       }
     },
     async initGraph() {
       if (!this.$refs.graphCanvas || !this.graphNodes.length) return;
+      if (this._relationGraph) {
+        this._relationGraph.changeSize(this.$refs.graphCanvas.clientWidth || 800, this.$refs.graphCanvas.clientHeight || 520);
+        return;
+      }
       const requestId = ++this.graphRequestId;
       let G6;
       try {
@@ -141,10 +145,11 @@ export default {
       }
       if (requestId !== this.graphRequestId || this.displayMode !== "graph" || !this.$refs.graphCanvas) return;
       this.destroyGraph();
-      this.graph = new G6.Graph({
+      // Keep the large G6 instance outside Vue's reactive data.
+      this._relationGraph = new G6.Graph({
         container: this.$refs.graphCanvas,
         width: this.$refs.graphCanvas.clientWidth || 800,
-        height: 520,
+        height: this.$refs.graphCanvas.clientHeight || 520,
         fitView: true,
         fitViewPadding: 40,
         layout: { type: "dagre", rankdir: "LR", nodesep: 40, ranksep: 100 },
@@ -178,8 +183,8 @@ export default {
           },
         },
       }));
-      this.graph.data({ nodes, edges });
-      this.graph.render();
+      this._relationGraph.data({ nodes, edges });
+      this._relationGraph.render();
     },
     relationLabel(node) {
       const localColumn = node && (node.foreignColumnName || node.foreignColumn || node.column);
@@ -201,10 +206,10 @@ export default {
       return count;
     },
     zoomGraph(ratio) {
-      if (this.graph) this.graph.zoom(ratio, { x: 400, y: 260 });
+      if (this._relationGraph) this._relationGraph.zoom(ratio, { x: 400, y: 260 });
     },
     fitGraph() {
-      if (this.graph) this.graph.fitView(40);
+      if (this._relationGraph) this._relationGraph.fitView(40);
     },
     changeRelationType(value) {
       this.$emit("changeRelationType", value);
@@ -227,7 +232,7 @@ export default {
 .graph-limit-tip { margin-left: 12px; color: #909399; font-size: 12px; }
 .er-graph-wrap {
   width: 100%;
-  height: 520px;
+  height: clamp(200px, calc(100vh - 380px), 520px);
   overflow: hidden;
   background: #f7f9fc;
   border: 1px solid #ebeef5;

@@ -324,7 +324,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
         Integer offset = param.getPageSize();
         Page<DataSourceDO> page = new Page<>(start, offset);
         IPage<DataSourceDO> iPage = getBaseMapper().selectPage(page, queryWrapper);
-        List<DataSource> dataSources = dataSourceConverter.do2dto(iPage.getRecords());
+        List<DataSource> dataSources = dataSourceConverter.do2summary(iPage.getRecords());
 
         fillData(dataSources, selector);
 
@@ -342,7 +342,7 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
                 BooleanUtils.isTrue(loginUser.getAdmin()), loginUser.getUserId(), param.getSearchKey(), param.getKind(),
                 EasySqlUtils.orderBy(param.getOrderByList()));
 
-        List<DataSource> dataSources = dataSourceConverter.do2dto(iPage.getRecords());
+        List<DataSource> dataSources = dataSourceConverter.do2summary(iPage.getRecords());
 
         fillData(dataSources, selector);
         for (DataSource dataSource : dataSources) {

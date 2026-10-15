@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.jd.biz.domain.api.enums.DataSourceKindEnum;
 import com.jd.biz.domain.api.param.datasource.DataSourceCreateParam;
+import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
 import com.jd.biz.domain.repository.entity.DataSourceDO;
 import com.jd.biz.domain.repository.mapper.DataSourceMapper;
 import com.jd.common.core.domain.entity.SysUser;
@@ -42,6 +43,12 @@ public class DataSourceServiceImplTest {
                 DataSourceDO.class);
         DataSourceServiceImpl service = new DataSourceServiceImpl();
         setBaseMapper(service, inspectingMapper(42L));
+        Field accessField = DataSourceServiceImpl.class.getDeclaredField("dataSourceAccessBusinessService");
+        accessField.setAccessible(true);
+        accessField.set(service, Proxy.newProxyInstance(
+                DataSourceAccessBusinessService.class.getClassLoader(),
+                new Class<?>[]{DataSourceAccessBusinessService.class},
+                (proxy, method, args) -> null));
 
         DataSourceCreateParam param = new DataSourceCreateParam();
         param.setHost("database.internal");

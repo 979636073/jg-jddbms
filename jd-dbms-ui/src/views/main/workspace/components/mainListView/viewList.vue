@@ -100,7 +100,7 @@ export default {
         this.$store.dispatch("workspaceData/setDataCurrentData", {
           pageId: this.pageId,
           title: item.name,
-          type: materializedView ? "editTableData" : "editView",
+          type: "editView",
           ...result,
           canEdit: materializedView ? false : result.canEdit,
           params: send,

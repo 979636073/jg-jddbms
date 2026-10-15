@@ -1,14 +1,17 @@
 <template>
-  <div class="app-container">
-    <h2>平台角色</h2>
-    <p class="role-hint">角色决定平台功能和数据库操作类型；具体可访问哪些数据源，请到“数据源控制”授权。</p>
-    <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch">
+  <div class="app-container role-page">
+    <div class="role-heading">
+      <div><h2>平台角色</h2><p class="role-hint">管理平台功能与数据库操作权限；数据源范围请在“数据源控制”中授权。</p></div>
+      <span class="role-total">共 {{ total }} 个角色</span>
+    </div>
+    <div class="role-filters" v-show="showSearch">
+    <el-form :model="queryParams" ref="queryForm" size="small" :inline="true">
       <el-form-item label="角色名称" prop="roleName">
         <el-input
           v-model="queryParams.roleName"
           placeholder="请输入角色名称"
           clearable
-          style="width: 240px"
+          style="width: 180px"
           @keyup.enter.native="handleQuery"
         />
       </el-form-item>
@@ -17,7 +20,7 @@
           v-model="queryParams.roleKey"
           placeholder="请输入权限字符"
           clearable
-          style="width: 240px"
+          style="width: 180px"
           @keyup.enter.native="handleQuery"
         />
       </el-form-item>
@@ -26,7 +29,7 @@
           v-model="queryParams.status"
           placeholder="角色状态"
           clearable
-          style="width: 240px"
+          style="width: 140px"
         >
           <el-option
             v-for="dict in dict.type.sys_normal_disable"
@@ -39,7 +42,7 @@
       <el-form-item label="创建时间">
         <el-date-picker
           v-model="dateRange"
-          style="width: 240px"
+          style="width: 220px"
           value-format="yyyy-MM-dd"
           type="daterange"
           range-separator="-"
@@ -52,8 +55,9 @@
         <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
       </el-form-item>
     </el-form>
+    </div>
 
-    <el-row :gutter="10" class="mb8">
+    <el-row :gutter="10" class="role-toolbar">
       <el-col :span="1.5">
         <el-button
           type="primary"
@@ -99,7 +103,8 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="roleList" @selection-change="handleSelectionChange">
+    <div class="role-table-wrap">
+    <el-table v-loading="loading" :data="roleList" height="100%" stripe @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="角色编号" prop="roleId" width="120" />
       <el-table-column label="角色名称" prop="roleName" :show-overflow-tooltip="true" width="150" />
@@ -151,7 +156,9 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
+    <div class="role-pagination">
     <pagination
       v-show="total>0"
       :total="total"
@@ -159,9 +166,11 @@
       :limit.sync="queryParams.pageSize"
       @pagination="getList"
     />
+    </div>
 
     <!-- 添加或修改角色配置对话框 -->
-    <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
+    <el-dialog class="role-edit-dialog" :title="title" :visible.sync="open" width="680px" append-to-body>
+      <div class="role-dialog-content">
       <el-form ref="form" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="角色名称" prop="roleName">
           <el-input v-model="form.roleName" placeholder="请输入角色名称" />
@@ -187,7 +196,7 @@
             >{{dict.label}}</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="平台功能权限">
+        <el-form-item label="平台功能权限" class="role-permission-item">
           <el-checkbox v-model="menuExpand" @change="handleCheckedTreeExpand($event, 'menu')">展开/折叠</el-checkbox>
           <el-checkbox v-model="menuNodeAll" @change="handleCheckedTreeNodeAll($event, 'menu')">全选/全不选</el-checkbox>
           <el-checkbox v-model="form.menuCheckStrictly" @change="handleCheckedTreeConnect($event, 'menu')">父子联动</el-checkbox>
@@ -206,6 +215,7 @@
           <el-input v-model="form.remark" type="textarea" placeholder="请输入内容"></el-input>
         </el-form-item>
       </el-form>
+      </div>
       <div slot="footer" class="dialog-footer">
         <el-button type="primary" @click="submitForm">确 定</el-button>
         <el-button @click="cancel">取 消</el-button>
@@ -213,7 +223,8 @@
     </el-dialog>
 
     <!-- 分配角色数据权限对话框 -->
-    <el-dialog :title="title" :visible.sync="openDataScope" width="500px" append-to-body>
+    <el-dialog class="role-edit-dialog" :title="title" :visible.sync="openDataScope" width="600px" append-to-body>
+      <div class="role-dialog-content">
       <el-form :model="form" label-width="80px">
         <el-form-item label="角色名称">
           <el-input v-model="form.roleName" :disabled="true" />
@@ -248,6 +259,7 @@
           ></el-tree>
         </el-form-item>
       </el-form>
+      </div>
       <div slot="footer" class="dialog-footer">
         <el-button type="primary" @click="submitDataScope">确 定</el-button>
         <el-button @click="cancelDataScope">取 消</el-button>
@@ -615,5 +627,20 @@ export default {
 };
 </script>
 <style scoped>
-.role-hint { color: #606266; margin: 4px 0 18px; }
+.role-page { height: 100%; min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: #f6f9fc; }
+.role-heading { display: flex; align-items: center; justify-content: space-between; flex: none; margin-bottom: 16px; }
+.role-heading h2 { color: #26354a; font-size: 20px; margin: 0 0 6px; }
+.role-hint { color: #69788e; font-size: 12px; margin: 0; }
+.role-total { color: #69788e; font-size: 12px; white-space: nowrap; }
+.role-filters { flex: none; padding: 14px 16px 0; margin-bottom: 12px; background: #fff; border: 1px solid #e5e9f2; border-radius: 4px; }
+.role-filters ::v-deep .el-form-item { margin-bottom: 14px; }
+.role-toolbar { flex: none; padding: 10px 12px; background: #fff; border: 1px solid #e5e9f2; border-bottom: 0; border-radius: 4px 4px 0 0; }
+.role-table-wrap { flex: 1; min-height: 0; background: #fff; border-left: 1px solid #e5e9f2; border-right: 1px solid #e5e9f2; }
+.role-table-wrap ::v-deep .el-table { width: 100%; }
+.role-pagination { flex: none; min-height: 54px; background: #fff; border: 1px solid #e5e9f2; border-top: 0; border-radius: 0 0 4px 4px; }
+.role-pagination ::v-deep .pagination-container { margin: 0; padding: 10px 14px !important; }
+.role-dialog-content { max-height: 65vh; overflow-y: auto; padding-right: 8px; }
+.role-edit-dialog ::v-deep .el-dialog__body { padding: 16px 20px; }
+.role-edit-dialog ::v-deep .el-dialog__footer { border-top: 1px solid #e5e9f2; padding-top: 14px; }
+.role-permission-item ::v-deep .tree-border { max-height: 260px; overflow-y: auto; }
 </style>

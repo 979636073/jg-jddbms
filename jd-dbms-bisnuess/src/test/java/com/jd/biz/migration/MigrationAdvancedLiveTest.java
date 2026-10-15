@@ -2,6 +2,7 @@ package com.jd.biz.migration;
 
 import com.alibaba.fastjson2.JSON;
 import com.jd.biz.domain.api.model.DataSource;
+import com.jd.biz.domain.api.enums.DataSourceAction;
 import org.junit.Test;
 import java.nio.file.*;
 import java.sql.*;
@@ -15,6 +16,59 @@ public class MigrationAdvancedLiveTest {
     @Test public void dmToOracle() throws Exception { run("DM", "ORACLE"); }
     @Test public void oracleToOracle() throws Exception { run("ORACLE", "ORACLE"); }
     @Test public void oracleToDm() throws Exception { run("ORACLE", "DM"); }
+
+    @Test public void failedOracleViewRetriesIntoReviewedNewTarget() throws Exception {
+        MigrationLiveTest environment = new MigrationLiveTest();
+        DataSource oracle = environment.environment("ORACLE"), storeInfo = new DataSource();
+        storeInfo.setType("DM"); storeInfo.setDriverConfig(environment.driver("DM"));
+        storeInfo.setUrl(MigrationLiveTest.hostUrl(System.getenv("JDDBMS_META_DB_URL")));
+        storeInfo.setUserName(System.getenv("JDDBMS_META_DB_USERNAME")); storeInfo.setPassword(System.getenv("JDDBMS_META_DB_PASSWORD"));
+        MigrationConnections raw = new MigrationConnections();
+        String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+        String sourceName = "JQA_" + token + "_S", targetName = "JQA_" + token + "_T", storeName = "JQA_" + token + "_TASK";
+        String schema = oracle.getUserName(), retryTarget = null;
+        Config config = new Config(); config.name = "Oracle 视图失败后重试"; config.sourceId = 1L; config.targetId = 2L;
+        config.sourceSchema = schema; config.targetSchema = schema; config.scope = "ALL";
+        Mapping view = new Mapping(); view.type = "VIEW"; view.source = sourceName; view.target = targetName;
+        view.manualDdl = "CREATE VIEW " + qualified(schema, targetName) + " AS SELECT X FROM " + qualified(schema, "JQA_" + token + "_MISSING");
+        view.ddlConfirmed = true; config.tables.add(view);
+        MigrationService service = null; boolean sourceCreated = false, storeCreated = false;
+        try (Connection source = raw.open(oracle); Connection target = raw.open(oracle); Connection store = raw.open(storeInfo)) {
+            try {
+                execute(source, "CREATE VIEW " + qualified(schema, sourceName) + " AS SELECT 1 X FROM DUAL"); sourceCreated = true;
+                execute(store, "CREATE TABLE " + qualified(storeInfo.getUserName(), storeName) + " (ID BIGINT IDENTITY(1,1) PRIMARY KEY, GMT_CREATE TIMESTAMP, GMT_MODIFIED TIMESTAMP, DATA_SOURCE_ID BIGINT, DATABASE_NAME VARCHAR(128), SCHEMA_NAME VARCHAR(128), TABLE_NAME VARCHAR(128), DELETED CHAR(1), USER_ID BIGINT, TASK_TYPE VARCHAR(64), TASK_STATUS VARCHAR(64), TASK_PROGRESS VARCHAR(64), TASK_NAME VARCHAR(256), DOWNLOAD_URL VARCHAR(512), CONTENT BLOB)"); storeCreated = true;
+                MigrationConnections connections = new MigrationConnections() {
+                    @Override public DataSource authorized(Long id) { return authorized(id, DataSourceAction.METADATA_READ); }
+                    @Override public DataSource authorized(Long id, DataSourceAction action) { return id == 1L || id == 2L ? oracle : null; }
+                };
+                service = new MigrationService(MigrationWorkflowLiveTest.persistentMapper(raw, storeInfo, storeName), connections, new MigrationMetadata());
+                Task draft = service.save(null, 42L, config), checked = service.precheck(draft.id, 42L);
+                assertEquals(JSON.toJSONString(checked.assessment), "MIG_READY", checked.status);
+                StartRequest start = new StartRequest(); start.offlineConfirmed = true; start.fingerprint = checked.assessment.fingerprint;
+                service.start(draft.id, 42L, start); Task failed = await(service, draft.id);
+                assertEquals(failed.message, "MIG_FAILED", failed.status);
+                assertNull(MigrationMetadata.objectType(target, schema, targetName));
+                Task retry = service.retryDraft(draft.id, 42L, failed.objects.get(0).source);
+                assertEquals(draft.id, retry.parentTaskId); retryTarget = retry.config.tables.get(0).target;
+                assertNull(retry.config.tables.get(0).manualDdl); assertFalse(retry.config.tables.get(0).ddlConfirmed);
+                assertEquals("MIG_BLOCKED", service.precheck(retry.id, 42L).status);
+                retry.config.tables.get(0).manualDdl = "CREATE VIEW " + qualified(schema, retryTarget) + " AS SELECT 1 X FROM DUAL";
+                retry.config.tables.get(0).ddlConfirmed = true;
+                service.save(retry.id, 42L, retry.config); checked = service.precheck(retry.id, 42L);
+                assertEquals(JSON.toJSONString(checked.assessment), "MIG_READY", checked.status);
+                start.fingerprint = checked.assessment.fingerprint; service.start(retry.id, 42L, start);
+                Task finished = await(service, retry.id); assertEquals(finished.message, "MIG_COMPLETED", finished.status);
+                assertEquals("1", value(target, "SELECT X FROM " + qualified(schema, retryTarget)));
+                assertNull(MigrationMetadata.objectType(target, schema, targetName));
+            } finally {
+                if (service != null) service.shutdown();
+                if (retryTarget != null && MigrationMetadata.objectType(target, schema, retryTarget) != null) execute(target, "DROP VIEW " + qualified(schema, retryTarget));
+                if (MigrationMetadata.objectType(target, schema, targetName) != null) execute(target, "DROP VIEW " + qualified(schema, targetName));
+                if (sourceCreated) execute(source, "DROP VIEW " + qualified(schema, sourceName));
+                if (storeCreated) drop(store, storeInfo.getUserName(), storeName, "DM", token);
+            }
+        }
+    }
 
     private void run(String from, String to) throws Exception {
         MigrationLiveTest environment = new MigrationLiveTest(); DataSource sourceInfo = environment.environment(from), targetInfo = environment.environment(to), storeInfo = environment.environment("DM");

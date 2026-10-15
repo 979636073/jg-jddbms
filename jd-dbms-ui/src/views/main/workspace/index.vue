@@ -231,6 +231,7 @@ export default {
           <SideBar ref="databaseTree" :dataBaseInfo="dataBaseInfo" :dataInfo="dataInfo"
             @isType="handleTreeType"
             @queryDetailTable="handleTreeObjects"
+            @showSchemaOverview="forwardTreeEvent('showSchemaOverview', $event)"
             @filterChange="forwardTreeEvent('filterChange', $event)"
             @setDetailsObj="forwardTreeEvent('setDetailsObj', $event)"
             @load="setObjectLoading" @isopenFn="isopenFn" @manageDataSources="openDataSourceManager" @newQuery="openNewQuery" />

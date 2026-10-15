@@ -166,6 +166,14 @@ public abstract class DataSourceConverter {
      */
     public abstract List<DataSource> do2dto(List<DataSourceDO> dataSourceDOList);
 
+    @org.mapstruct.Named("summary")
+    @org.mapstruct.InheritConfiguration(name = "do2dto")
+    @Mapping(target = "password", ignore = true)
+    public abstract DataSource do2summary(DataSourceDO dataSourceDO);
+
+    @org.mapstruct.IterableMapping(qualifiedByName = "summary")
+    public abstract List<DataSource> do2summary(List<DataSourceDO> dataSourceDOList);
+
     /**
      * Fill in detailed information
      *

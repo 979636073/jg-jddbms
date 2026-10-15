@@ -42,7 +42,7 @@ public class DlExecuteParam {
      */
     private Boolean isCommit;
 
-    private Boolean queryTemplate;
+    private Boolean queryTemplate = false;
 
     /**
      * DB名称
@@ -116,6 +116,9 @@ public class DlExecuteParam {
      * 是否查数据列
      */
     private Boolean isColumn = true;
+
+    /** Explicitly refresh editing metadata; ordinary paging reuses it. */
+    private Boolean refresh = false;
 
     /**
      * isRollback

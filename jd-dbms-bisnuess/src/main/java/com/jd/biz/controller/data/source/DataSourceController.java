@@ -15,6 +15,8 @@ import com.jd.biz.domain.api.param.datasource.*;
 import com.jd.biz.domain.api.service.ConsoleService;
 import com.jd.biz.domain.api.service.DataSourceService;
 import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
+import com.jd.common.annotation.Log;
+import com.jd.common.enums.BusinessType;
 import com.jd.common.tools.base.enums.DataSourceTypeEnum;
 import com.jd.common.tools.base.wrapper.result.ActionResult;
 import com.jd.common.tools.base.wrapper.result.DataResult;
@@ -211,6 +213,8 @@ public class DataSourceController {
      * @param request
      * @return
      */
+    @Log(title = "新增数据源", businessType = BusinessType.INSERT,
+            isSaveRequestData = false, isSaveResponseData = false)
     @PostMapping("/datasource/create")
     public DataResult<DataSourceConnectVo> create(@Validated  @RequestBody DataSourceCreateRequest request) {
         DataSourceCreateParam param = dataSourceWebConverter.createReq2param(request);
@@ -226,6 +230,8 @@ public class DataSourceController {
      * @param request
      * @return
      */
+    @Log(title = "修改数据源", businessType = BusinessType.UPDATE,
+            isSaveRequestData = false, isSaveResponseData = false)
     @RequestMapping(value = "/datasource/update", method = {RequestMethod.POST, RequestMethod.PUT})
     public DataResult<Long> update(@RequestBody DataSourceUpdateRequest request) {
         DataSourceUpdateParam param = dataSourceWebConverter.updateReq2param(request);
@@ -238,6 +244,7 @@ public class DataSourceController {
      * @param request
      * @return
      */
+    @Log(title = "克隆数据源", businessType = BusinessType.INSERT, isSaveResponseData = false)
     @PostMapping("/datasource/clone")
     public DataResult<Long> copy(@RequestBody DataSourceCloneRequest request) {
         return dataSourceService.copyByIdWithPermission(request.getId());
@@ -249,6 +256,7 @@ public class DataSourceController {
      * @param id
      * @return
      */
+    @Log(title = "删除数据源", businessType = BusinessType.DELETE, isSaveResponseData = false)
     @DeleteMapping("/datasource/{id}")
     public ActionResult delete(@PathVariable Long id) {
         return dataSourceService.deleteWithPermission(id);

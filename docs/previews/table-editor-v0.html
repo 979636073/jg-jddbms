@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>表格编辑器交互预览 · v0</title>
+  <style>
+    :root {
+      --blue: #409eff;
+      --blue-strong: #1890ff;
+      --blue-soft: #ecf5ff;
+      --border: #dcdfe6;
+      --text: #303133;
+      --muted: #909399;
+      --background: #f5f7fa;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--background); color: var(--text); font: 13px/1.5 "Microsoft YaHei", Arial, sans-serif; }
+    .shell { max-width: 1280px; margin: 32px auto; padding: 0 24px; }
+    .caption { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: #606266; }
+    .caption strong { font-size: 16px; color: var(--text); }
+    .caption span { background: #fff7e6; border: 1px solid #f5dab0; border-radius: 3px; padding: 2px 7px; color: #8a5a16; }
+    .panel { background: #fff; border: 1px solid #e4e7ed; border-radius: 5px; padding: 0 20px 16px; box-shadow: 0 2px 10px rgba(0,0,0,.035); }
+    .toolbar { min-height: 54px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    button { font: inherit; cursor: pointer; }
+    .tool { border: 0; background: transparent; color: #409eff; padding: 5px 8px; }
+    .tool:hover { background: var(--blue-soft); }
+    .outlined { border: 1px solid #b3d8ff; background: var(--blue-soft); color: #409eff; border-radius: 4px; padding: 5px 11px; }
+    .outlined:hover { background: #d9ecff; }
+    .outlined:disabled { opacity: .5; cursor: not-allowed; }
+    .pending { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; padding: 3px 8px; border-radius: 3px; background: #fdf6ec; color: #a36a14; font-size: 12px; }
+    .pending:before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #e6a23c; }
+    .pending.clean { background: #f5f7fa; color: #909399; }
+    .pending.clean:before { background: #c0c4cc; }
+    .grid-wrap { overflow: auto; border: 1px solid var(--border); }
+    table { width: 100%; min-width: 680px; border-spacing: 0; table-layout: fixed; }
+    th, td { height: 37px; padding: 0 11px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    th:last-child, td:last-child { border-right: 0; }
+    tbody tr:last-child td { border-bottom: 0; }
+    th { background: #f5f7fa; color: #606266; font-weight: 600; }
+    .row-number { width: 56px; color: var(--muted); text-align: center; background: #fafafa; }
+    td.cell { cursor: cell; position: relative; }
+    td.cell:hover { background: #f5faff; }
+    td.cell.selected { background: var(--blue-soft); box-shadow: inset 0 0 0 2px var(--blue-strong); }
+    td.cell.dirty:after { content: ""; position: absolute; top: 0; left: 0; width: 0; height: 0; border-top: 8px solid #e6a23c; border-right: 8px solid transparent; }
+    td.cell input { display: block; width: 100%; height: 30px; border: 0; outline: 0; background: transparent; font: inherit; color: var(--text); }
+    .footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 12px; font-size: 12px; color: #606266; }
+    .hint { color: #909399; }
+    .type-guide { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 13px; padding-top: 12px; border-top: 1px solid #ebeef5; color: #606266; font-size: 12px; }
+    .type-guide b { color: #303133; font-weight: 600; }
+    .special { color: var(--blue-strong); text-decoration: underline; text-underline-offset: 3px; }
+    .dialog-backdrop { position: fixed; inset: 0; display: none; place-items: center; padding: 20px; background: rgba(0, 0, 0, .42); }
+    .dialog-backdrop.open { display: grid; }
+    .dialog { width: min(640px, 100%); padding: 18px; background: #fff; border-radius: 5px; box-shadow: 0 12px 36px rgba(0, 0, 0, .16); }
+    .dialog h2 { margin: 0 0 12px; font-size: 16px; }
+    .dialog textarea { display: block; width: 100%; height: 240px; resize: vertical; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font: inherit; }
+    .dialog textarea:focus { outline: 1px solid var(--blue-strong); }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; }
+    .image-preview { display: grid; place-items: center; min-height: 260px; margin-top: 12px; border: 1px dashed var(--border); background: #fafafa; color: var(--muted); }
+    .image-preview img { max-width: 100%; max-height: 360px; object-fit: contain; }
+    kbd { border: 1px solid #dcdfe6; border-radius: 3px; padding: 1px 4px; background: #fafafa; font: inherit; }
+    @media (max-width: 720px) { .shell { margin: 12px auto; padding: 0 10px; } .panel { padding: 0 10px 12px; } .pending { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="caption"><strong>表格编辑器 · 交互预览</strong><span>仅示例数据，不连接数据库</span></div>
+    <section class="panel" aria-label="表格编辑器预览">
+      <div class="toolbar">
+        <button class="tool" type="button">过滤字段</button>
+        <button class="tool" type="button" id="add">添加</button>
+        <button class="tool" type="button" id="remove">删除</button>
+        <button class="tool" type="button" id="revert">回退</button>
+        <button class="outlined" type="button" id="save">保存</button>
+        <button class="outlined" type="button" id="refresh">刷新</button>
+        <span id="pending" class="pending clean">无待保存变更</span>
+      </div>
+      <div class="grid-wrap"><table aria-label="示例表格数据">
+        <thead><tr><th class="row-number">行号</th><th>ID</th><th>NAME</th><th>AMOUNT</th><th>UPDATED_AT</th><th>DESCRIPTION · CLOB</th><th>PHOTO · BLOB</th></tr></thead>
+        <tbody id="body"></tbody>
+      </table></div>
+      <div class="footer"><span>【结果】示例数据　【查询行数】3 行</span><span class="hint">单击选中 · 直接键入编辑 · <kbd>Enter</kbd> 向下 · <kbd>Tab</kbd> 向右 · <kbd>Esc</kbd> 取消 · <kbd>Ctrl+V</kbd> 区域粘贴；CLOB 与图片用专属入口</span></div>
+      <div class="type-guide" aria-label="特殊类型交互方案">
+        <span><b>日期 / 时间 / 时区</b>　按类型选择、保留精度</span>
+        <span><b>数值 / BIT</b>　校验输入或下拉选择</span>
+        <span><b>CLOB / NCLOB / TEXT / JSON / XML</b>　展开编辑</span>
+        <span><b>BLOB / RAW / BFILE</b>　预览可识别内容、下载原文件</span>
+        <span><b>INTERVAL</b>　专用格式输入</span>
+        <span><b>ROWID 等系统值</b>　只读、可复制</span>
+      </div>
+    </section>
+  </main>
+  <div class="dialog-backdrop" id="clob-dialog" role="dialog" aria-modal="true" aria-label="长文本编辑">
+    <div class="dialog"><h2>DESCRIPTION · 长文本编辑</h2><textarea id="clob-value"></textarea><div class="dialog-actions"><button class="outlined" type="button" id="clob-cancel">取消</button><button class="outlined" type="button" id="clob-apply">应用到单元格</button></div></div>
+  </div>
+  <div class="dialog-backdrop" id="image-dialog" role="dialog" aria-modal="true" aria-label="图片预览与下载">
+    <div class="dialog"><h2>PHOTO · 图片预览与下载</h2><div class="hint">预览页没有数据库图片；可选择本地图片体验此交互。正式版将读取单元格里的图片数据。</div><input id="image-file" type="file" accept="image/*"><div class="image-preview" id="image-preview">选择图片后在此预览</div><div class="dialog-actions"><button class="outlined" type="button" id="image-close">关闭</button><button class="outlined" type="button" id="image-download" disabled>下载图片</button></div></div>
+  </div>
+  <script>
+    const columns = ['ID', 'NAME', 'AMOUNT', 'UPDATED_AT', 'DESCRIPTION', 'PHOTO'];
+    const seed = [
+      ['1', '示例甲', '100', '2026-09-25 09:00:00', '这里是可展开编辑的示例长文本。', '[图片数据]'],
+      ['2', '示例乙', '200', '2026-09-25 10:00:00', '第二行示例说明。', '[图片数据]'],
+      ['3', '示例丙', '300', '2026-09-25 11:00:00', '第三行示例说明。', '[图片数据]']
+    ];
+    let rows = seed.map(row => row.slice());
+    let saved = seed.map(row => row.slice());
+    let selected = { row: 1, column: 1 };
+    let editing = false;
+    let beforeEdit = '';
+    const body = document.getElementById('body');
+    const pending = document.getElementById('pending');
+    let imageUrl = '';
+    let imageFile = null;
+
+    function dirtyRows() {
+      return rows.filter((row, index) => row.some((value, column) => value !== (saved[index] || [])[column])).length;
+    }
+    function render() {
+      body.replaceChildren();
+      rows.forEach((row, rowIndex) => {
+        const tr = document.createElement('tr');
+        const number = document.createElement('td');
+        number.className = 'row-number';
+        number.textContent = rowIndex + 1;
+        tr.append(number);
+        row.forEach((value, columnIndex) => {
+          const cell = document.createElement('td');
+          cell.className = 'cell';
+          cell.dataset.row = rowIndex;
+          cell.dataset.column = columnIndex;
+          cell.textContent = columnIndex === 4 ? '展开长文本' : columnIndex === 5 ? '预览 / 下载' : value || '<null>';
+          if (columnIndex >= 4) cell.classList.add('special');
+          if (selected.row === rowIndex && selected.column === columnIndex) cell.classList.add('selected');
+          if (value !== (saved[rowIndex] || [])[columnIndex]) cell.classList.add('dirty');
+          cell.addEventListener('click', () => { select(rowIndex, columnIndex); if (columnIndex >= 4) startEdit(); });
+          if (columnIndex < 4) cell.addEventListener('dblclick', () => startEdit());
+          tr.append(cell);
+        });
+        body.append(tr);
+      });
+      const count = dirtyRows();
+      pending.textContent = count ? `${count} 行待保存` : '无待保存变更';
+      pending.classList.toggle('clean', !count);
+      document.getElementById('save').disabled = !count;
+      document.getElementById('revert').disabled = !count;
+    }
+    function select(row, column) {
+      if (editing) finishEdit(true);
+      selected = { row, column };
+      render();
+    }
+    function startEdit(initial) {
+      if (editing || !rows[selected.row]) return;
+      if (selected.column === 4) { document.getElementById('clob-value').value = rows[selected.row][4]; document.getElementById('clob-dialog').classList.add('open'); return; }
+      if (selected.column === 5) { document.getElementById('image-dialog').classList.add('open'); return; }
+      editing = true;
+      beforeEdit = rows[selected.row][selected.column];
+      const cell = body.rows[selected.row].cells[selected.column + 1];
+      const input = document.createElement('input');
+      input.type = selected.column === 2 ? 'number' : selected.column === 3 ? 'datetime-local' : 'text';
+      input.value = selected.column === 3 ? beforeEdit.replace(' ', 'T') : initial === undefined ? beforeEdit : initial;
+      cell.replaceChildren(input);
+      input.focus();
+      if (input.type === 'text') input.select();
+      input.addEventListener('blur', () => finishEdit(true));
+      input.addEventListener('keydown', event => {
+        if (['Enter', 'Tab', 'Escape'].includes(event.key)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const value = input.value;
+          if (event.key === 'Escape') finishEdit(false);
+          else {
+            finishEdit(true, value);
+            if (event.key === 'Enter') move(1, 0);
+            if (event.key === 'Tab') move(0, event.shiftKey ? -1 : 1);
+          }
+        }
+      });
+    }
+    function finishEdit(commit, value) {
+      if (!editing) return;
+      const input = body.rows[selected.row]?.cells[selected.column + 1]?.querySelector('input');
+      const nextValue = value === undefined ? input?.value ?? beforeEdit : value;
+      rows[selected.row][selected.column] = commit ? (selected.column === 3 ? nextValue.replace('T', ' ') : nextValue) : beforeEdit;
+      editing = false;
+      render();
+    }
+    function move(rowDelta, columnDelta) {
+      let row = selected.row + rowDelta;
+      let column = selected.column + columnDelta;
+      if (column >= columns.length) { column = 0; row++; }
+      if (column < 0) { column = columns.length - 1; row--; }
+      selected = { row: Math.max(0, Math.min(rows.length - 1, row)), column };
+      render();
+    }
+    document.addEventListener('keydown', event => {
+      if (editing || ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+      if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); startEdit(); }
+      else if (event.key === 'Tab') { event.preventDefault(); move(0, event.shiftKey ? -1 : 1); }
+      else if (event.key === 'ArrowDown') { event.preventDefault(); move(1, 0); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); move(-1, 0); }
+      else if (event.key === 'ArrowRight') { event.preventDefault(); move(0, 1); }
+      else if (event.key === 'ArrowLeft') { event.preventDefault(); move(0, -1); }
+      else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); startEdit(event.key); }
+    });
+    document.addEventListener('paste', event => {
+      if (editing || ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) return;
+      const text = event.clipboardData?.getData('text/plain');
+      if (!text) return;
+      event.preventDefault();
+      text.trimEnd().split(/\r?\n/).forEach((line, rowOffset) => {
+        const target = rows[selected.row + rowOffset];
+        if (!target) return;
+        line.split('\t').forEach((value, columnOffset) => {
+          if (selected.column + columnOffset < 4) target[selected.column + columnOffset] = value;
+        });
+      });
+      render();
+    });
+    document.getElementById('add').onclick = () => { rows.push(columns.map(() => '')); selected = { row: rows.length - 1, column: 0 }; render(); };
+    document.getElementById('remove').onclick = () => { if (rows.length) rows.splice(selected.row, 1); selected.row = Math.max(0, Math.min(selected.row, rows.length - 1)); render(); };
+    document.getElementById('revert').onclick = () => { rows = saved.map(row => row.slice()); selected.row = Math.min(selected.row, rows.length - 1); render(); };
+    document.getElementById('refresh').onclick = () => { rows = saved.map(row => row.slice()); selected.row = Math.min(selected.row, rows.length - 1); render(); };
+    document.getElementById('save').onclick = () => { saved = rows.map(row => row.slice()); render(); alert('预览页已模拟保存；未连接数据库。'); };
+    document.getElementById('clob-cancel').onclick = () => document.getElementById('clob-dialog').classList.remove('open');
+    document.getElementById('clob-apply').onclick = () => { rows[selected.row][4] = document.getElementById('clob-value').value; document.getElementById('clob-dialog').classList.remove('open'); render(); };
+    document.getElementById('image-close').onclick = () => document.getElementById('image-dialog').classList.remove('open');
+    document.getElementById('image-file').onchange = event => {
+      imageFile = event.target.files[0];
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageUrl = imageFile ? URL.createObjectURL(imageFile) : '';
+      document.getElementById('image-preview').replaceChildren();
+      if (imageUrl) { const img = document.createElement('img'); img.src = imageUrl; img.alt = '本地图片预览'; document.getElementById('image-preview').append(img); }
+      else document.getElementById('image-preview').textContent = '选择图片后在此预览';
+      document.getElementById('image-download').disabled = !imageFile;
+    };
+    document.getElementById('image-download').onclick = () => { if (!imageFile) return; const link = document.createElement('a'); link.href = imageUrl; link.download = imageFile.name; link.click(); };
+    render();
+  </script>
+</body>
+</html>

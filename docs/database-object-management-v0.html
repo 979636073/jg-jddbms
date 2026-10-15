@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据库对象管理 v0 · 工作区局部示意</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f6f8fc; color: #25324b; font: 12px/1.5 Arial, sans-serif; }
+    .note { padding: 10px 16px; color: #68728c; border-bottom: 1px solid #e5e9f2; background: #fff; }
+    .workspace { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 8px; height: calc(100vh - 40px); padding: 8px; }
+    aside, main { min-height: 0; border: 1px solid #e5e9f2; background: #fff; }
+    aside { overflow: auto; }
+    .tree-title { padding: 10px 12px; font-size: 13px; font-weight: 600; border-bottom: 1px solid #edf0f5; }
+    .row { display: flex; align-items: center; min-height: 28px; padding: 3px 8px; gap: 6px; white-space: nowrap; }
+    .row.indent-1 { padding-left: 24px; }
+    .row.indent-2 { padding-left: 42px; }
+    .row.indent-3 { padding-left: 60px; }
+    .row.selected { color: #006fff; background: #f0f5ff; }
+    .muted { color: #7b8799; }
+    .count { margin-left: auto; color: #8d98a9; }
+    .plus { margin-left: auto; border: 0; background: transparent; color: #006fff; font-size: 16px; line-height: 16px; }
+    main { display: flex; flex-direction: column; }
+    .tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid #e5e9f2; }
+    .tab { padding: 10px 12px; }
+    .tab.active { color: #006fff; border-bottom: 2px solid #006fff; }
+    .heading { display: flex; align-items: center; gap: 8px; padding: 16px; border-bottom: 1px solid #edf0f5; }
+    .heading strong { font-size: 14px; }
+    .badge { padding: 1px 6px; color: #006fff; border: 1px solid #9dbcf5; border-radius: 3px; background: #f0f5ff; }
+    .actions { display: flex; gap: 8px; margin-left: auto; }
+    button { padding: 5px 10px; border: 1px solid #dcdfe6; border-radius: 3px; background: #fff; color: #25324b; font: inherit; }
+    button.primary { border-color: #006fff; background: #006fff; color: #fff; }
+    .content { padding: 16px; }
+    .content p { margin: 0 0 8px; color: #68728c; }
+    .placeholder { min-height: 180px; padding: 12px; border: 1px solid #edf0f5; color: #9aa4b8; }
+    @media (max-width: 650px) { .workspace { grid-template-columns: 210px minmax(0, 1fr); } .actions { flex-wrap: wrap; justify-content: flex-end; } }
+  </style>
+</head>
+<body>
+  <div class="note">v0 局部示意：保留现有工作区色彩和密度；仅确认对象分组、操作位置，不代表最终数据或完整交互。</div>
+  <div class="workspace">
+    <aside>
+      <div class="tree-title">数据库资源</div>
+      <div class="row">▾ <span>SYSDBA</span><span class="muted">DM</span></div>
+      <div class="row indent-1">▾ <span>模式</span></div>
+      <div class="row indent-2">▾ <span>JQDMO_260926</span></div>
+      <div class="row indent-3">▸ <span>数据表</span></div>
+      <div class="row indent-3">▸ <span>普通视图</span><button class="plus" title="新建普通视图">＋</button></div>
+      <div class="row indent-3">▾ <span>物化视图</span><button class="plus" title="新建物化视图">＋</button></div>
+      <div class="row indent-3 selected">　<span>QA_MV</span></div>
+      <div class="row indent-3">▸ <span>函数</span><button class="plus" title="新建函数">＋</button></div>
+      <div class="row indent-3">▸ <span>存储过程</span><button class="plus" title="新建存储过程">＋</button></div>
+      <div class="row indent-3">▸ <span>触发器</span><button class="plus" title="新建触发器">＋</button></div>
+    </aside>
+    <main>
+      <div class="tabs"><span class="tab active">QA_MV</span><span class="tab">新建查询</span></div>
+      <div class="heading"><strong>QA_MV</strong><span class="badge">物化视图</span><span class="actions"><button class="primary">刷新数据</button><button>查看定义</button><button>删除</button></span></div>
+      <div class="tabs"><span class="tab active">数据</span><span class="tab">列信息</span><span class="tab">定义</span><span class="tab">依赖</span><span class="tab">授权</span></div>
+      <div class="content"><p>普通视图在“定义”页提供保存与编译；物化视图显示定义，并提供刷新数据。</p><div class="placeholder">[现有数据列表 / 编辑器区域保持不变]</div></div>
+    </main>
+  </div>
+</body>
+</html>

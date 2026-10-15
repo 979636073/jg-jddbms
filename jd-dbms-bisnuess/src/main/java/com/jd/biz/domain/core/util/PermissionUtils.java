@@ -19,6 +19,10 @@ public class PermissionUtils {
      */
     public static void checkOperationPermission(Long createUserId) {
         LoginUser loginUser = ContextUtils.getLoginUser();
+        // The platform administrator also has ID 1, which the legacy desktop mode uses.
+        if (loginUser.getAdmin()) {
+            return;
+        }
         // Representative is desktop mode
         if (RoleCodeEnum.DESKTOP.getDefaultUserId().equals(loginUser.getId())) {
             if (RoleCodeEnum.DESKTOP.getDefaultUserId().equals(createUserId)) {
@@ -26,10 +30,6 @@ public class PermissionUtils {
             } else {
                 throw new PermissionDeniedBusinessException();
             }
-        }
-        // Administrators can edit anything
-        if (loginUser.getAdmin()) {
-            return;
         }
         // Not that administrators can only edit their own things
         if (!loginUser.getId().equals(createUserId)) {
@@ -45,6 +45,9 @@ public class PermissionUtils {
      */
     public static boolean checkBaseQueryPermission(Long createUserId) {
         LoginUser loginUser = ContextUtils.getLoginUser();
+        if (loginUser.getAdmin()) {
+            return true;
+        }
         // Representative is desktop mode
         if (RoleCodeEnum.DESKTOP.getDefaultUserId().equals(loginUser.getId())) {
             if (RoleCodeEnum.DESKTOP.getDefaultUserId().equals(createUserId)) {

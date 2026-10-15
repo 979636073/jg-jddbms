@@ -212,7 +212,7 @@ export default {
         tableName: this.searchFrom.tableName,
         refresh: true,
       };
-      await tableServer.getTableDetails(params).then((res) => {
+      await tableServer.getTableSection(params, "columns").then((res) => {
         this.transfer = res.data.columnList;
         this.foreignData = res.data.columnList;
         this.$forceUpdate();
@@ -238,7 +238,7 @@ export default {
         tableName: this.fromData.tableName,
         refresh: true,
       };
-      await tableServer.getTableDetails(params).then((res) => {
+      await tableServer.getTableSection(params, "columns").then((res) => {
         this.$set(this, "referencedData", res.data.columnList);
       });
     },

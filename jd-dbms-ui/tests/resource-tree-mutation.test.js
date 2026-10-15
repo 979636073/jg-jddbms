@@ -59,7 +59,7 @@ const descriptor = compiler.parseComponent(sidebarSource)
 assert.deepStrictEqual(compiler.compile(descriptor.template.content).errors, [])
 const sidebarModule = { exports: {} }
 const connectionServer = {}
-const tableServer = { getTableList: async params => {
+const tableServer = { getTreeTableList: async params => {
   assert.strictEqual(params.isRefreshCache, true, '资源树重新读取表时必须绕过后端缓存')
   return { success: true, data: { data: [] } }
 } }
@@ -98,50 +98,43 @@ assert.strictEqual(schemas.loads, 1, '模式变更应刷新模式节点')
 assert.strictEqual(users.loads, 1, '用户变更应刷新用户节点')
 
 sidebar.methods.loadResourceObjects.call({
+  ...sidebar.methods,
   resourceVersion: () => 1,
+  $nextTick: () => {},
   createObjectNode: () => ({}),
+  getTableListShared: sidebar.methods.getTableListShared,
 }, {
   groupType: 'tables', dataSource: { id: 11 }, extraParams: { dataSourceId: 11, schemaName: 'SYSDBA' },
   refreshOnce: true,
 }, () => {}).then(async () => {
-  tableServer.getTableList = async params => {
-    assert.strictEqual(params.pageNo, 1)
-    return { success: true, data: { data: Array.from({ length: 200 }, (_, i) => ({ name: `T${i}` })), total: 201 } }
+  tableServer.getTreeTableList = async params => {
+    const start = (params.pageNo - 1) * params.pageSize
+    return { success: true, data: { data: Array.from({ length: Math.min(params.pageSize, 405 - start) }, (_, i) => ({ name: `T${start + i}` })), total: 405 } }
   }
   const groupData = {
     key: 'tables', label: '数据表', groupType: 'tables', dataSource: { id: 11 },
     extraParams: { dataSourceId: 11, schemaName: 'SYSDBA' },
   }
   const pageState = {
+    ...sidebar.methods,
     resourceVersion: () => 0,
+    $nextTick: () => {},
     createObjectNode: (group, item) => ({ treeNodeType: 'table', label: item.name }),
-    createLoadMoreTablesNode: sidebar.methods.createLoadMoreTablesNode,
+    getTableListShared: sidebar.methods.getTableListShared,
     $message: { error: message => { throw new Error(message) } },
   }
   let firstPage
   await sidebar.methods.loadResourceObjects.call(pageState, groupData, children => { firstPage = children })
-  assert.strictEqual(firstPage.length, 201, '200 张表后应显示继续加载入口')
-  assert.strictEqual(firstPage[200].treeNodeType, 'loadMoreTables')
-  const groupNode = { key: 'tables', data: groupData }
-  const appended = []
-  const tree = {
-    getNode: () => groupNode,
-    remove: () => {},
-    append: item => appended.push(item),
-  }
-  pageState.$refs = { resourceTree: tree }
-  pageState.$set = (object, key, value) => { object[key] = value }
-  tableServer.getTableList = async params => {
-    assert.strictEqual(params.pageNo, 2)
-    return { success: true, data: { data: [{ name: 'T200' }], total: 201 } }
-  }
-  await sidebar.methods.loadMoreResourceTables.call(pageState, firstPage[200], { parent: groupNode })
-  assert.strictEqual(appended.length, 1)
-  assert.strictEqual(appended[0].label, 'T200')
+  assert.strictEqual(groupData.objectChildren.length, 405, '必须加载全部表目录，不能截断在首 200 张')
+  assert.strictEqual(firstPage.length, 405, '展开数据表应直接展示全部 405 张表')
+  assert.strictEqual(firstPage[100].treeNodeType, 'table')
+  const allTables = groupData.objectChildren
+  assert.strictEqual(allTables.length, 405)
+  assert.strictEqual(allTables[404].label, 'T404')
   const errors = []
   pageState.$message.error = message => errors.push(message)
   groupData.cachedChildren = firstPage
-  tableServer.getTableList = async () => ({ success: false, errorMessage: '权限不足' })
+  tableServer.getTreeTableList = async () => ({ success: false, errorMessage: '权限不足' })
   let retainedChildren
   await sidebar.methods.loadResourceObjects.call(pageState, groupData, children => { retainedChildren = children })
   assert.strictEqual(retainedChildren, firstPage, '刷新失败时应保留已加载对象')

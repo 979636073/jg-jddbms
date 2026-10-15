@@ -146,6 +146,10 @@ assert(/path: '\/relation-graph',[\s\S]*?hidden: true/.test(routerSource), '关�
 
 const navBarFile = path.join(__dirname, '../src/views/main/workspace/NavBar.vue')
 const navBarSource = fs.readFileSync(navBarFile, 'utf8')
+const navListSource = navBarSource.slice(navBarSource.indexOf('navList:'), navBarSource.indexOf('computed:'))
+assert(!navListSource.includes('导入文件') && !navListSource.includes('导出文件'),
+  '连接数据库后顶部也不应出现旧导入导出入口')
+assert(navListSource.includes('数据迁移') && navListSource.includes('表结构对比'), '保留其他顶部工具')
 assert(/\.nav_list \{[\s\S]*?position: absolute;[\s\S]*?left: 50%;[\s\S]*?transform: translateX\(-50%\);/.test(navBarSource), '首页操作区应独立居中')
 
 ;(async () => {

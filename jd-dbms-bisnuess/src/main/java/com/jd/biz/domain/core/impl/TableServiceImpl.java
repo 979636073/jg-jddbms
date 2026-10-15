@@ -44,6 +44,7 @@ import com.jd.biz.domain.api.service.DlTemplateService;
 import com.jd.biz.domain.api.service.PinService;
 import com.jd.biz.domain.api.service.TableService;
 import com.jd.biz.domain.core.cache.CacheManage;
+import com.jd.biz.domain.core.cache.CacheKey;
 import com.jd.biz.domain.core.converter.PinTableConverter;
 import com.jd.biz.domain.core.converter.TableConverter;
 import com.jd.biz.domain.repository.entity.TableCacheDO;
@@ -179,16 +180,73 @@ public class TableServiceImpl implements TableService {
     }
 
     public void buildOraclePrimaryKey(List<TableColumn> columnList, List<TableIndex> list) {
-        if (CollUtil.isNotEmpty(list)) {
-            List<String> collect = list.stream().filter(c -> "Primary".equals(c.getType())).map(TableIndex::getColumn).collect(Collectors.toList());
-            if (CollUtil.isNotEmpty(collect)) {
-                for (TableColumn tableColumn : columnList) {
-                    if (collect.contains(tableColumn.getName())) {
-                        tableColumn.setPrimaryKey(true);
+        for (TableIndex index : list) {
+            if ("Primary".equals(index.getType())) {
+                for (TableIndexColumn keyColumn : index.getColumnList()) {
+                    for (TableColumn column : columnList) {
+                        if (keyColumn.getColumnName().equals(column.getName())) {
+                            column.setPrimaryKey(true);
+                            column.setPrimaryKeyName(index.getName());
+                            column.setPrimaryKeyOrder(keyColumn.getOrdinalPosition() == null ? 1 : keyColumn.getOrdinalPosition());
+                        }
                     }
                 }
             }
         }
+    }
+
+    @Override
+    public DataResult<Table> querySection(TableQueryParam param, String section) {
+        MetaData meta = Chat2DBContext.getMetaData();
+        Connection connection = Chat2DBContext.getConnection();
+        String database = param.getDatabaseName();
+        String schema = param.getSchemaName();
+        String name = param.getTableName();
+        boolean oracle = DBTypeEnum.ORACLE.name().equals(Chat2DBContext.getConnectInfo().getDbType());
+        Table table = new Table();
+        table.setName(name);
+        table.setSchemaName(schema);
+        switch (section) {
+            case "basic":
+                List<Table> tables = meta.tables(connection, database, schema, name);
+                return DataResult.of(tables.isEmpty() ? null : tables.get(0));
+            case "columns":
+                table.setColumnList(meta.columns(connection, database, schema, name));
+                if (oracle) {
+                    buildOraclePrimaryKey(table.getColumnList(), meta.getConstraintsData(connection, database, schema, name));
+                }
+                break;
+            case "indexes":
+            case "constraints":
+                List<TableIndex> indexes = new ArrayList<>(meta.indexes(connection, database, schema, name));
+                if (oracle) indexes.addAll(meta.getConstraintsData(connection, database, schema, name));
+                indexes.removeIf(index -> "Normal".equals(index.getType()));
+                table.setIndexList(indexes);
+                if ("constraints".equals(section)) {
+                    table.setColumnList(meta.columns(connection, database, schema, name));
+                    if (oracle) buildOraclePrimaryKey(table.getColumnList(), indexes);
+                    setPrimaryKey(table);
+                }
+                Set<String> names = new HashSet<>();
+                indexes = indexes.stream().filter(index -> StrUtil.isNotBlank(index.getType()) && names.add(index.getName()))
+                        .collect(Collectors.toList());
+                if ("constraints".equals(section)) {
+                    table.setConstraints(loadConstraints(param, table.getColumnList(), indexes));
+                    table.setColumnList(null);
+                    table.setIndexList(null);
+                } else {
+                    table.setIndexList(indexes.stream().filter(index -> "Primary".equals(index.getType()) || "Unique".equals(index.getType()))
+                            .collect(Collectors.toList()));
+                }
+                break;
+            case "ddl":
+                String dropSql = Chat2DBContext.getSqlBuilder().dropTableSql(schema, name);
+                table.setQuerySql(dropSql + ";\n" + meta.tableDDL(connection, database, schema, name));
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown table section: " + section);
+        }
+        return DataResult.of(table);
     }
 
     @Override
@@ -238,6 +296,26 @@ public class TableServiceImpl implements TableService {
             indexes = new ArrayList<>();
             indexes.addAll(list);
             table.setIndexList(indexes);
+            table.setConstraints(loadConstraints(param, table.getColumnList(), indexes));
+            // ddl 建表语句
+            String dropSql = Chat2DBContext.getSqlBuilder().dropTableSql(param.getSchemaName(), param.getTableName());
+            String ddl = metaSchema.tableDDL(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
+            table.setQuerySql(dropSql + ";\n" +ddl);
+            if (CollUtil.isNotEmpty(table.getIndexList())) {
+                table.setIndexList(table.getIndexList().stream()
+                        .filter(c -> DMIndexTypeEnum.PRIMARY_KEY.getName().equals(c.getType()) ||
+                                DMIndexTypeEnum.UNIQUE.getName().equals(c.getType()))
+                                .collect(Collectors.toList()));
+            }
+            redisCache.setCacheObject(cacheKey, table);
+            return DataResult.of(table);
+        }
+        return DataResult.of(null);
+    }
+
+    private List<TableIndex> loadConstraints(TableQueryParam param, List<TableColumn> columns, List<TableIndex> indexes) {
+            String dbType = Chat2DBContext.getConnectInfo().getDbType();
+            MetaData metaSchema = Chat2DBContext.getMetaData();
             List<TableIndex> constraints = new ArrayList<>();
             List<TableIndex> indices = indexes.stream()
                     .filter(c -> DMIndexTypeEnum.PRIMARY_KEY.getName().equals(c.getType()) ||
@@ -262,10 +340,10 @@ public class TableServiceImpl implements TableService {
                 }
             }
             constraints.addAll(indices);
-            List<String> collect = table.getColumnList().stream().filter(c -> c.getPrimaryKey()).map(TableColumn::getName).collect(Collectors.toList());
+            List<String> collect = columns.stream().filter(c -> c.getPrimaryKey()).map(TableColumn::getName).collect(Collectors.toList());
             if (!DBTypeEnum.ORACLE.name().equals(dbType)) {
                 // 非空约束
-                table.getColumnList().forEach(c -> {
+                columns.forEach(c -> {
                     if (c.getNullable() == 1 && !collect.contains(c.getName())) {
                         TableIndex tableIndex = new TableIndex();
                         tableIndex.setName(c.getName());
@@ -282,21 +360,7 @@ public class TableServiceImpl implements TableService {
             }
             Set<TableIndex> checkSQL = metaSchema.getCheckSQl(Chat2DBContext.getConnection(), param.getSchemaName(), param.getTableName());
             buildCheckIndex(checkSQL, constraints);
-            table.setConstraints(constraints);
-            // ddl 建表语句
-            String dropSql = Chat2DBContext.getSqlBuilder().dropTableSql(param.getSchemaName(), param.getTableName());
-            String ddl = metaSchema.tableDDL(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
-            table.setQuerySql(dropSql + ";\n" +ddl);
-            if (CollUtil.isNotEmpty(table.getIndexList())) {
-                table.setIndexList(table.getIndexList().stream()
-                        .filter(c -> DMIndexTypeEnum.PRIMARY_KEY.getName().equals(c.getType()) ||
-                                DMIndexTypeEnum.UNIQUE.getName().equals(c.getType()))
-                                .collect(Collectors.toList()));
-            }
-            redisCache.setCacheObject(cacheKey, table);
-            return DataResult.of(table);
-        }
-        return DataResult.of(null);
+            return constraints;
     }
 
 
@@ -794,10 +858,25 @@ public class TableServiceImpl implements TableService {
         }
         int pageNo = param.getPageNo() == null || param.getPageNo() < 1 ? 1 : param.getPageNo();
         int pageSize = param.getPageSize() == null || param.getPageSize() < 1 ? 50 : param.getPageSize();
+        String searchKey = param.getSearchKey() == null ? "" : param.getSearchKey().trim().toUpperCase(Locale.ROOT);
+        String databaseName = param.getDatabaseName() == null ? "" : param.getDatabaseName();
+        String pageCacheKey = "TABLE_DETAILS_PAGE:" + param.getDataSourceId() + ":" +
+                Base64.getUrlEncoder().withoutPadding().encodeToString(databaseName.getBytes(StandardCharsets.UTF_8)) + ":" +
+                Base64.getUrlEncoder().withoutPadding().encodeToString(param.getSchemaName().getBytes(StandardCharsets.UTF_8)) +
+                ":" + pageNo + ":" + pageSize + ":" +
+                Base64.getUrlEncoder().withoutPadding().encodeToString(searchKey.getBytes(StandardCharsets.UTF_8));
+        boolean refresh = param.isRefresh() || Boolean.TRUE.equals(param.getIsRefreshCache());
+        if (!refresh) {
+            PageResult<Table> cachedPage = redisCache.getCacheObject(pageCacheKey);
+            if (cachedPage != null) {
+                return cachedPage;
+            }
+        }
         PageResult<Table> databasePage = Chat2DBContext.getMetaData().tableDetailsPage(
                 Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
                 param.getSearchKey(), pageNo, pageSize);
         if (databasePage != null) {
+            redisCache.setCacheObject(pageCacheKey, databasePage, 30, TimeUnit.SECONDS);
             return databasePage;
         }
         List<Table> tables = new ArrayList<>();
@@ -1093,8 +1172,8 @@ public class TableServiceImpl implements TableService {
     queryColumns(TableQueryParam param) {
         String tableColumnKey = getColumnKey(param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        return CacheManage.getList(tableColumnKey, TableColumn.class,
-                (key) -> param.isRefresh(), (key) ->
+        return CacheManage.getColumns(tableColumnKey, TableColumn.class,
+                param.isRefresh(), (key) ->
                         metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName()));
     }
 
@@ -1240,10 +1319,13 @@ public class TableServiceImpl implements TableService {
 
     @Override
     public AssociationTree queryReferencedList(TypeQueryRequest request) {
-        String key = CacheConstants.TABLE_UN_REFERENCED_ + "v3_" + request.getDataSourceId() + request.getSchemaName() + request.getTableName();
-        if (!request.getIsRefreshCache() && redisCache.hasKey(key)) {
-            return redisCache.getCacheObject(key);
-        }
+        String key = CacheKey.getRelationKey(request.getDataSourceId(), request.getDatabaseName(),
+                request.getSchemaName(), request.getTableName(), "foreign-incoming");
+        return CacheManage.getRelations(key, AssociationTree.class, Boolean.TRUE.equals(request.getIsRefreshCache()),
+                ignored -> loadReferencedList(request));
+    }
+
+    private AssociationTree loadReferencedList(TypeQueryRequest request) {
         List<ForeignData> foreignKeys = Chat2DBContext.getMetaData().beiForeGnKey(Chat2DBContext.getConnection(), request.getSchemaName(), request.getTableName());
         if (CollUtil.isEmpty(foreignKeys)) {
             return null;
@@ -1258,8 +1340,6 @@ public class TableServiceImpl implements TableService {
                 .status(foreignKeys.get(0).getStatus())
                 .children(list)
                 .build();
-        redisCache.setCacheObject(key, associationTree);
-        redisCache.expire(key, 1, TimeUnit.DAYS);
         log.info("被引用情况数:" + list.size());
         return associationTree;
     }
@@ -1308,11 +1388,11 @@ public class TableServiceImpl implements TableService {
 
     @Override
     public AssociationTree queryReferenced(TypeQueryRequest request) {
-        String key = CacheConstants.TABLE_REFERENCED_ + "v2_" + request.getDataSourceId() + request.getSchemaName() + request.getTableName();
+        String key = CacheConstants.TABLE_REFERENCED_ + "v3_" + request.getDataSourceId() + request.getSchemaName() + request.getTableName();
         if (!request.getIsRefreshCache() && redisCache.hasKey(key)) {
             return redisCache.getCacheObject(key);
         }
-        List<ForeignData> foreignKeys = Chat2DBContext.getMetaData().getUnForeignKey(Chat2DBContext.getConnection(), request.getTableName(), request.getSchemaName());
+        List<ForeignData> foreignKeys = Chat2DBContext.getMetaData().getUnForeignKey(Chat2DBContext.getConnection(), request.getSchemaName(), request.getTableName());
         if (CollUtil.isEmpty(foreignKeys)) {
             return null;
         }
@@ -1340,11 +1420,6 @@ public class TableServiceImpl implements TableService {
                     .type("TABLE")
                     .build();
             list.add(associationTree);
-            TypeQueryRequest pream = new TypeQueryRequest();
-            pream.setDataSourceId(request.getDataSourceId());
-            pream.setSchemaName(foreignKey.getForeignSchemaName());
-            pream.setTableName(foreignKey.getForeignTableName());
-            queryReferenced(pream);
         }
         AssociationTree associationTree = AssociationTree.builder()
                 .id(System.currentTimeMillis() * 1000 + new Random().nextInt(10000) + "")
@@ -1362,6 +1437,13 @@ public class TableServiceImpl implements TableService {
 
     @Override
     public AssociationTree queryViewReferenced(TypeQueryRequest request) {
+        String key = CacheKey.getRelationKey(request.getDataSourceId(), request.getDatabaseName(),
+                request.getSchemaName(), request.getTableName(), "1".equals(request.getCheck()) ? "view-uses" : "view-used-by");
+        return CacheManage.getRelations(key, AssociationTree.class, Boolean.TRUE.equals(request.getIsRefreshCache()),
+                ignored -> loadViewReferenced(request));
+    }
+
+    private AssociationTree loadViewReferenced(TypeQueryRequest request) {
         Set<ViewReferencedData> referencedData = new HashSet<>();
         if ("1".equals(request.getCheck())) {
             referencedData.addAll(Chat2DBContext.getMetaData().getViewReferenced(Chat2DBContext.getConnection(), request.getSchemaName(), request.getTableName()));

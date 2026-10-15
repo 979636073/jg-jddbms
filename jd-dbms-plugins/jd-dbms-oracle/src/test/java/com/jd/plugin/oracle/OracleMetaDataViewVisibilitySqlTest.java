@@ -17,7 +17,9 @@ public class OracleMetaDataViewVisibilitySqlTest {
     public void shouldClassifyAccessibleMaterializedViewsOnce() throws Exception {
         String query = sql("SELECT_TABLE_VIEW_SQL");
         Assert.assertTrue(query.contains("ALL_MVIEWS"));
-        Assert.assertTrue(query.contains("NOT EXISTS"));
+        Assert.assertTrue(query.contains("object_type = 'VIEW'"));
+        Assert.assertTrue(query.contains("ALL_MVIEWS m left join ALL_OBJECTS"));
+        Assert.assertTrue(query.contains("union all"));
         Assert.assertTrue(query.contains("MATERIALIZED VIEW"));
     }
 

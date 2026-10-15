@@ -159,6 +159,7 @@ export default {
       editPlatform: '',
       platforms: [
         { value: 'WINDOWS:X86_64', label: 'Windows x64' },
+        { value: 'LINUX:X86_64', label: 'Linux x64' },
         { value: 'LINUX:X86', label: 'Linux x86' },
         { value: 'LINUX:ARM64', label: 'Linux ARM64' }
       ],

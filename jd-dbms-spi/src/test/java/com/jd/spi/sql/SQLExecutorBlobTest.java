@@ -21,8 +21,16 @@ import static org.junit.Assert.assertTrue;
 
 public class SQLExecutorBlobTest {
 
+    private Object previousMessageSource;
+
     @Before
-    public void setUpContext() {
+    public void setUpContext() throws Exception {
+        java.lang.reflect.Field messages = com.jd.common.tools.common.util.I18nUtils.class
+                .getDeclaredField("messageSourceStatic");
+        messages.setAccessible(true);
+        previousMessageSource = messages.get(null);
+        messages.set(null, Proxy.newProxyInstance(org.springframework.context.MessageSource.class.getClassLoader(),
+                new Class[]{org.springframework.context.MessageSource.class}, (proxy, method, args) -> args[0]));
         ConnectInfo connectInfo = new ConnectInfo();
         connectInfo.setDbType("oracle");
         connectInfo.setDriverConfig(new DriverConfig());
@@ -30,8 +38,12 @@ public class SQLExecutorBlobTest {
     }
 
     @After
-    public void clearContext() {
+    public void clearContext() throws Exception {
         Chat2DBContext.removeContext();
+        java.lang.reflect.Field messages = com.jd.common.tools.common.util.I18nUtils.class
+                .getDeclaredField("messageSourceStatic");
+        messages.setAccessible(true);
+        messages.set(null, previousMessageSource);
     }
 
     @Test
@@ -89,6 +101,54 @@ public class SQLExecutorBlobTest {
 
         assertTrue(result.getSuccess());
         assertEquals(Arrays.asList("bytes:1:", "bytes:1:null"), bindings);
+    }
+
+    @Test
+    public void listQueryMustNotReadBlobContent() throws Exception {
+        java.sql.Blob blob = (java.sql.Blob) Proxy.newProxyInstance(java.sql.Blob.class.getClassLoader(),
+                new Class[]{java.sql.Blob.class}, (proxy, method, args) -> {
+                    throw new AssertionError("列表不能读取 BLOB: " + method.getName());
+                });
+        java.sql.ResultSetMetaData metadata = (java.sql.ResultSetMetaData) Proxy.newProxyInstance(
+                java.sql.ResultSetMetaData.class.getClassLoader(), new Class[]{java.sql.ResultSetMetaData.class},
+                (proxy, method, args) -> {
+                    if ("getColumnCount".equals(method.getName())) return 2;
+                    if ("getColumnType".equals(method.getName()))
+                        return (int) args[0] == 1 ? java.sql.Types.INTEGER : java.sql.Types.BLOB;
+                    if ("getColumnTypeName".equals(method.getName())) return (int) args[0] == 1 ? "INTEGER" : "BLOB";
+                    if ("getColumnName".equals(method.getName()) || "getColumnLabel".equals(method.getName()))
+                        return (int) args[0] == 1 ? "ID" : "PAYLOAD";
+                    return defaultValue(method.getReturnType());
+                });
+        int[] row = {0};
+        java.sql.ResultSet rs = (java.sql.ResultSet) Proxy.newProxyInstance(java.sql.ResultSet.class.getClassLoader(),
+                new Class[]{java.sql.ResultSet.class}, (proxy, method, args) -> {
+                    if ("getMetaData".equals(method.getName())) return metadata;
+                    if ("next".equals(method.getName())) return ++row[0] <= 3;
+                    if ("getBlob".equals(method.getName())) return row[0] == 2 ? null : blob;
+                    if ("getObject".equals(method.getName()) || "getBytes".equals(method.getName())
+                            || "getBinaryStream".equals(method.getName()))
+                        throw new AssertionError("不能提前读取二进制列");
+                    return defaultValue(method.getReturnType());
+                });
+        java.sql.Statement stmt = (java.sql.Statement) Proxy.newProxyInstance(java.sql.Statement.class.getClassLoader(),
+                new Class[]{java.sql.Statement.class}, (proxy, method, args) -> {
+                    if ("execute".equals(method.getName())) return true;
+                    if ("getResultSet".equals(method.getName())) return rs;
+                    return defaultValue(method.getReturnType());
+                });
+        Connection connection = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                new Class[]{Connection.class}, (proxy, method, args) ->
+                        "createStatement".equals(method.getName()) ? stmt : defaultValue(method.getReturnType()));
+
+        ExecuteResult result = SQLExecutor.getInstance().execute("SELECT ID, PAYLOAD FROM T", connection,
+                true, 0, 10, (resultSet, index, limit) -> {
+                    assertEquals(1, index);
+                    return Integer.toString(row[0]);
+                });
+
+        assertEquals(Arrays.asList(Arrays.asList("1", "A"), Arrays.asList("2", null), Arrays.asList("3", "A")),
+                result.getDataList());
     }
 
     private Connection connection(List<String> preparedSql, List<String> bindings, int... affectedRows) {

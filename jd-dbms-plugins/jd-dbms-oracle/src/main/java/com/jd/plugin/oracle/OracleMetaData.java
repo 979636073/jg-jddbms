@@ -96,7 +96,11 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                         "OR INSTR(UPPER(c.COMMENTS), ?) > 0)");
         try {
             long total;
-            try (PreparedStatement count = connection.prepareStatement("SELECT COUNT(*)" + from)) {
+            String countSql = pattern == null
+                    ? "SELECT COUNT(*) FROM ALL_TABLES t WHERE t.OWNER = ? AND NOT EXISTS " +
+                    "(SELECT 1 FROM ALL_MVIEWS m WHERE m.OWNER = t.OWNER AND m.MVIEW_NAME = t.TABLE_NAME)"
+                    : "SELECT COUNT(*)" + from;
+            try (PreparedStatement count = connection.prepareStatement(countSql)) {
                 bindTablePageFilter(count, schemaName, pattern);
                 try (ResultSet rows = count.executeQuery()) {
                     rows.next();
@@ -316,11 +320,26 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
 
 
-    private static String SELECT_TAB_COLS = "SELECT atc.column_id , atc.column_name as COLUMN_NAME, atc.data_type as DATA_TYPE , atc.data_length as DATA_LENGTH , atc.data_type_mod , atc.nullable ,  atc.data_default as DATA_DEFAULT,  acc.comments ,  atc.DATA_PRECISION ,  atc.DATA_SCALE , atc.CHAR_USED  FROM  all_tab_columns atc, all_col_comments acc WHERE atc.owner = acc.owner AND atc.table_name = acc.table_name AND atc.column_name = acc.column_name AND atc.owner = '%s'  AND atc.table_name = '%s'  order by atc.column_id";
+    private static String SELECT_TAB_COLS = "SELECT atc.column_id, atc.column_name, atc.data_type, atc.data_length, " +
+            "atc.data_type_mod, atc.nullable, atc.data_default, acc.comments, atc.DATA_PRECISION, atc.DATA_SCALE, atc.CHAR_USED, " +
+            "pk.CONSTRAINT_NAME AS PK_NAME, pk.POSITION AS PK_POSITION " +
+            "FROM all_tab_columns atc LEFT JOIN all_col_comments acc " +
+            "ON atc.owner = acc.owner AND atc.table_name = acc.table_name AND atc.column_name = acc.column_name " +
+            "LEFT JOIN (SELECT cc.COLUMN_NAME, cc.CONSTRAINT_NAME, cc.POSITION " +
+            "FROM all_constraints c JOIN all_cons_columns cc " +
+            "ON c.OWNER = cc.OWNER AND c.TABLE_NAME = cc.TABLE_NAME AND c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME " +
+            "WHERE c.OWNER = '%s' AND c.TABLE_NAME = '%s' AND c.CONSTRAINT_TYPE = 'P') pk ON pk.COLUMN_NAME = atc.COLUMN_NAME " +
+            "WHERE atc.OWNER = '%s' AND atc.TABLE_NAME = '%s' ORDER BY atc.COLUMN_ID";
+
+    static String buildColumnsSql(String schemaName, String tableName) {
+        String owner = schemaName.replace("'", "''");
+        String table = tableName.replace("'", "''");
+        return String.format(SELECT_TAB_COLS, owner, table, owner, table);
+    }
 
     @Override
     public List<TableColumn> columns(Connection connection, String databaseName, String schemaName, String tableName) {
-        String sql = String.format(SELECT_TAB_COLS, schemaName, tableName);
+        String sql = buildColumnsSql(schemaName, tableName);
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             List<TableColumn> tableColumns = new ArrayList<>();
             while (resultSet.next()) {
@@ -343,6 +362,9 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                     e.printStackTrace();
                 }
                 tableColumn.setName(resultSet.getString("COLUMN_NAME"));
+                tableColumn.setPrimaryKey(resultSet.getString("PK_NAME") != null);
+                tableColumn.setPrimaryKeyName(resultSet.getString("PK_NAME"));
+                tableColumn.setPrimaryKeyOrder(resultSet.getInt("PK_POSITION"));
                 tableColumn.setColumnType(resultSet.getString("DATA_TYPE"));
                 Integer dataPrecision = resultSet.getInt("DATA_PRECISION");
                 if (resultSet.getString("DATA_PRECISION") != null) {
@@ -402,8 +424,22 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     @Override
     public List<Procedure> procedures(Connection connection, String databaseName, String schemaName) {
-        // Oracle JDBC has no catalog for procedures; passing the XE service name hides them.
-        return super.procedures(connection, null, schemaName);
+        String sql = "SELECT OWNER, OBJECT_NAME FROM ALL_OBJECTS WHERE OBJECT_TYPE = 'PROCEDURE'";
+        if (StringUtils.isNotBlank(schemaName)) {
+            sql += " AND OWNER = '" + schemaName.replace("'", "''") + "'";
+        }
+        sql += " ORDER BY OWNER, OBJECT_NAME";
+        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+            List<Procedure> procedures = new ArrayList<>();
+            while (resultSet.next()) {
+                Procedure procedure = new Procedure();
+                procedure.setDatabaseName(databaseName);
+                procedure.setSchemaName(resultSet.getString("OWNER"));
+                procedure.setProcedureName(resultSet.getString("OBJECT_NAME"));
+                procedures.add(procedure);
+            }
+            return procedures;
+        });
     }
 
     @Override
@@ -427,9 +463,14 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     }
 
-    private static String TRIGGER_SQL_LIST
-            = "SELECT TRIGGER_NAME "
-            + "FROM ALL_TRIGGERS WHERE OWNER = '%s' AND TABLE_NAME = '%s'";
+    static String buildTriggerListSql(String schemaName, String tableName) {
+        String sql = "SELECT TRIGGER_NAME FROM ALL_TRIGGERS WHERE OWNER = '"
+                + schemaName.replace("'", "''") + "'";
+        if (StringUtils.isNotBlank(tableName)) {
+            sql += " AND TABLE_NAME = '" + tableName.replace("'", "''") + "'";
+        }
+        return sql + " ORDER BY TRIGGER_NAME";
+    }
 
 //    private static String SELECT_PK_SQL = "select  acc.CONSTRAINT_NAME from  all_cons_columns acc,  all_constraints ac  where  acc.constraint_name = ac.constraint_name  and acc.owner = ac.owner  and acc.owner = '%s'  and ac.constraint_type = 'P'  and ac.table_name = '%s' ";
 //
@@ -607,11 +648,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             "               COLS.CONSTRAINT_NAME  CONSTRAINT_NAME,\n" +
             "               CONS.R_OWNER AS \"forSchema\",\n" +
             "               CONS_R.TABLE_NAME AS \"table\",\n" +
-            "              \tCASE\n" +
-            "              \tWHEN CONS_R.R_OWNER IS NULL\n" +
-            "              \tTHEN CONS.R_OWNER\n" +
-            "              \tELSE CONS_R.R_OWNER\n" +
-            "                END AS \"schema\",\n" +
+            "               CONS.OWNER AS \"schema\",\n" +
             "               (\n" +
             "                   SELECT COLS_R.COLUMN_NAME\n" +
             "                   FROM SYS.ALL_CONS_COLUMNS COLS_R\n" +
@@ -651,7 +688,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                 foreignData.setForeignTableName(resultSet.getString("table"));
                 foreignData.setTableName(resultSet.getString("forTableName"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
-                foreignData.setStatus(getConStatus(connection, tableName, schemaName, resultSet.getString("CONSTRAINT_NAME")));
+                foreignData.setStatus("ENABLED".equals(resultSet.getString("status")) ? "VALID" : "INVALID");
                 foreignData.setColumn(resultSet.getString("forTableColumn"));
                 foreignData.setForeignColumnName(resultSet.getString("tableColumn"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
@@ -690,11 +727,11 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                 ForeignData foreignData = new ForeignData();
                 foreignData.setSchemaName(resultSet.getString("schema"));
                 foreignData.setForeignSchemaName(resultSet.getString("forSchema"));
-                foreignData.setForeignTableName(resultSet.getString("forTableName"));
-                foreignData.setTableName(resultSet.getString("table"));
+                foreignData.setForeignTableName(resultSet.getString("table"));
+                foreignData.setTableName(resultSet.getString("forTableName"));
                 foreignData.setStatus(resultSet.getString("status"));
-                foreignData.setColumn(resultSet.getString("tableColumn"));
-                foreignData.setForeignColumnName(resultSet.getString("forTableColumn"));
+                foreignData.setColumn(resultSet.getString("forTableColumn"));
+                foreignData.setForeignColumnName(resultSet.getString("tableColumn"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
                 foreignKeys.add(foreignData);
             }
@@ -726,7 +763,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
     @Override
     public List<Trigger> triggers(Connection connection, String databaseName, String schemaName, String tableName) {
         List<Trigger> triggers = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(TRIGGER_SQL_LIST, schemaName, tableName),
+        return SQLExecutor.getInstance().execute(connection, buildTriggerListSql(schemaName, tableName),
                 resultSet -> {
                     while (resultSet.next()) {
                         Trigger trigger = new Trigger();
@@ -1078,16 +1115,16 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
         });
     }
 
-    private static String SELECT_TABLE_VIEW_SQL = "select o.object_name, o.owner, o.status, o.created, o.last_ddl_time, " +
-            "case when o.object_type = 'TABLE' then 'MATERIALIZED VIEW' else o.object_type end as object_type " +
-            "from ALL_OBJECTS o where o.owner = '%s' and (o.object_type in ('VIEW', 'MATERIALIZED VIEW') " +
-            "or (o.object_type = 'TABLE' and exists (select 1 from ALL_MVIEWS m where m.owner = o.owner and m.mview_name = o.object_name) " +
-            "and NOT EXISTS (select 1 from ALL_OBJECTS v where v.owner = o.owner and v.object_name = o.object_name and v.object_type = 'MATERIALIZED VIEW')))";
+    private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type " +
+            "from ALL_OBJECTS where owner = '%s' and object_type = 'VIEW' " +
+            "union all select m.mview_name, m.owner, o.status, o.created, o.last_ddl_time, 'MATERIALIZED VIEW' " +
+            "from ALL_MVIEWS m left join ALL_OBJECTS o on o.owner = m.owner and o.object_name = m.mview_name " +
+            "and o.object_type = 'MATERIALIZED VIEW' where m.owner = '%s' order by object_name";
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {
         List<Table> tableSpaces = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, schemaName), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, schemaName.replace("'", "''"), schemaName.replace("'", "''")), resultSet -> {
             while (resultSet.next()) {
                 Table tableSpace = new Table();
                 TableDetails tableDetails = new TableDetails();

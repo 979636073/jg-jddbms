@@ -126,6 +126,14 @@ public class TableController {
                 queryParam.getPageSize());
     }
 
+    @GetMapping("/tree")
+    public WebPageResult<TableVO> tree(@Valid TableBriefQueryRequest request) {
+        List<Table> tables = Chat2DBContext.getMetaData().tables(Chat2DBContext.getConnection(),
+                request.getDatabaseName(), request.getSchemaName(), null);
+        List<TableVO> objects = rdbWebConverter.tableDto2vo(tables);
+        return WebPageResult.of(objects, (long) objects.size(), 1, objects.size());
+    }
+
     /**
      * 查询当前DB下的表列表
      *
@@ -260,6 +268,31 @@ public class TableController {
      * @param request
      * @return
      */
+    @GetMapping("/columns")
+    public DataResult<Table> columns(@Valid TableDetailQueryRequest request) {
+        return tableService.querySection(rdbWebConverter.tableRequest2param(request), "columns");
+    }
+
+    @GetMapping("/indexes")
+    public DataResult<Table> indexes(@Valid TableDetailQueryRequest request) {
+        return tableService.querySection(rdbWebConverter.tableRequest2param(request), "indexes");
+    }
+
+    @GetMapping("/constraints")
+    public DataResult<Table> constraints(@Valid TableDetailQueryRequest request) {
+        return tableService.querySection(rdbWebConverter.tableRequest2param(request), "constraints");
+    }
+
+    @GetMapping("/basic")
+    public DataResult<Table> basic(@Valid TableDetailQueryRequest request) {
+        return tableService.querySection(rdbWebConverter.tableRequest2param(request), "basic");
+    }
+
+    @GetMapping("/ddl")
+    public DataResult<Table> ddl(@Valid TableDetailQueryRequest request) {
+        return tableService.querySection(rdbWebConverter.tableRequest2param(request), "ddl");
+    }
+
     @GetMapping("/query")
     public DataResult<Table> query(@Valid TableDetailQueryRequest request) {
         long l = System.currentTimeMillis();

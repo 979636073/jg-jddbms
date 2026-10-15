@@ -1,10 +1,10 @@
 FROM public.ecr.aws/docker/library/node:18-bookworm-slim AS builder
 
 WORKDIR /workspace
-COPY jd-dbms-ui/package.json jd-dbms-ui/package-lock.json ./
+COPY jd-dbms-ui/package.json ./
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --no-audit --no-fund --registry="$NPM_REGISTRY"
+    npm install --no-audit --no-fund --registry="$NPM_REGISTRY"
 
 COPY jd-dbms-ui/ .
 RUN npm run build

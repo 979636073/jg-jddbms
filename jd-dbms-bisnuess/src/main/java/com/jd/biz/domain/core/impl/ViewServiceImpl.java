@@ -70,10 +70,9 @@ public class ViewServiceImpl implements ViewService {
 
     @Override
     public ListResult<Table> views(String databaseName, String schemaName, Integer requestType) {
-        List<Table> views = Chat2DBContext.getMetaData().views(Chat2DBContext.getConnection(), databaseName, schemaName);
-        if (ResultType.TWO.getType().equals(requestType)) {
-            views = Chat2DBContext.getMetaData().tableViews(Chat2DBContext.getConnection(), databaseName, schemaName);
-        }
+        List<Table> views = ResultType.TWO.getType().equals(requestType)
+                ? Chat2DBContext.getMetaData().tableViews(Chat2DBContext.getConnection(), databaseName, schemaName)
+                : Chat2DBContext.getMetaData().views(Chat2DBContext.getConnection(), databaseName, schemaName);
         return ListResult.of(views);
     }
 

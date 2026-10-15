@@ -30,7 +30,7 @@ export default {
     // 执行sql
     executeSQL() {
       let { uniqueData } = this.currentConfig
-      let sql = this.$refs.MonacoEditor.getSelectValue() || this.$refs.MonacoEditor.getValue()
+      let sql = this.$refs.MonacoEditor.getValue()
       if (!sql || this.executing) return;
 
       const apiMap = {
@@ -57,8 +57,14 @@ export default {
       sqlServer[api](send)
         .then(res => {
           if (res.success) {
-            this.$message.success('运行成功！')
-            this.$emit('tableRefresh', this.currentConfig.uniqueData.node)
+            this.$message.success('对象已保存')
+            uniqueData.isUpdate = true
+            window.dispatchEvent(new CustomEvent('workspace-resource-mutation', { detail: {
+              dataSourceId: uniqueData.dataSourceId,
+              schemaName: uniqueData.schemaName,
+              databaseName: uniqueData.databaseName,
+              groups: [uniqueData.objectType],
+            } }))
           } else {
             this.$message.error(res.errorMessage || '运行失败')
           }
@@ -88,10 +94,15 @@ export default {
 <template>
   <div class="sql_execute">
     <div class="sql_search_box">
+      <div class="routine-context">
+        <span>{{ { functions: '函数', procedures: '存储过程', triggers: '触发器' }[currentConfig.uniqueData.objectType] }}</span>
+        <strong>{{ currentConfig.title }}</strong>
+        <span>{{ currentConfig.uniqueData.schemaName }}</span>
+      </div>
       <div class="monaco_btn">
         <el-button size="mini" @click="executeSQL" :loading="executing" type="text" class="el-button_before" style="margin-left: 0">
           <img src="@/assets/main/1-con-ico01.png" alt="">
-          运行
+          保存并编译
         </el-button>
         <el-button size="mini" @click="emptySql" type="text" class="el-button_before">
           <img src="@/assets/main/1-con-ico03.png" alt="">
@@ -102,7 +113,7 @@ export default {
           美化
         </el-button>
       </div>
-      <MonacoEditor ref="MonacoEditor" dom="editor" style="width: 100%; height: calc(100% - 48px);" />
+      <MonacoEditor ref="MonacoEditor" dom="editor" style="width: 100%; height: calc(100% - 82px);" />
     </div>
   </div>
 </template>
@@ -118,6 +129,9 @@ export default {
     background: #fff;
     border-radius: 5px;
     flex-shrink: 0;
+    .routine-context { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 20px; border-bottom: 1px solid #e5eaf2; font-size: 12px; color: #68758b; }
+    .routine-context span:first-child { color: #006fff; background: #f0f5ff; padding: 3px 6px; border-radius: 3px; }
+    .routine-context strong { color: #29364d; }
     .monaco_btn {
       display: flex;
       align-items: center;

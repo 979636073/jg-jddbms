@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -191,6 +192,11 @@ public class TableUserServiceImpl implements TableUserService {
             }
             if (e instanceof BusinessException) {
                 throw (BusinessException) e;
+            }
+            String cause = String.valueOf(e.getMessage()).toLowerCase(Locale.ROOT);
+            if (cause.contains("password not accord with complexity rule") || cause.contains("ora-28003")
+                    || cause.contains("密码长度不符合要求") || cause.contains("密码复杂度")) {
+                throw new BusinessException("user.password.policy.failed");
             }
             String message = ExceptionUtils.getMessage(e);
             throw new BusinessException("user.create.failed", new Object[]{message});

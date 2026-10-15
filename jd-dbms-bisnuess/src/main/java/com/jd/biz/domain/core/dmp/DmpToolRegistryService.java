@@ -37,7 +37,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipException;
 
 @Slf4j
 @Service
@@ -347,7 +348,7 @@ public class DmpToolRegistryService {
         if (!compatible.isEmpty()) {
             candidates = compatible;
         }
-        candidates.sort(comparator.reversed());
+        candidates.sort(export ? comparator : comparator.reversed());
         return candidates.get(0);
     }
 
@@ -617,30 +618,42 @@ public class DmpToolRegistryService {
     private void unzip(Path archive, Path destination) throws IOException {
         Files.createDirectories(destination);
         int entries = 0;
-        try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(Files.newInputStream(archive)))) {
-            ZipEntry entry;
+        try (ZipFile zip = openZip(archive)) {
+            java.util.Enumeration<? extends ZipEntry> files = zip.entries();
             byte[] buffer = new byte[8192];
-            while ((entry = zip.getNextEntry()) != null) {
+            while (files.hasMoreElements()) {
+                ZipEntry entry = files.nextElement();
                 if (++entries > MAX_ZIP_ENTRIES) {
                     throw new BusinessException("工具包文件数量超过限制");
                 }
-                Path target = destination.resolve(entry.getName()).normalize();
-                if (!target.startsWith(destination)) {
+                String name = entry.getName().replace('\\', '/');
+                Path target = destination.resolve(name).normalize();
+                if (name.startsWith("/") || name.matches("^[A-Za-z]:.*") || !target.startsWith(destination)) {
                     throw new BusinessException("工具包包含非法路径");
                 }
                 if (entry.isDirectory()) {
                     Files.createDirectories(target);
                 } else {
                     Files.createDirectories(target.getParent());
-                    try (OutputStream output = new BufferedOutputStream(Files.newOutputStream(target))) {
+                    try (InputStream input = zip.getInputStream(entry);
+                         OutputStream output = new BufferedOutputStream(Files.newOutputStream(target))) {
                         int read;
-                        while ((read = zip.read(buffer)) != -1) {
+                        while ((read = input.read(buffer)) != -1) {
                             output.write(buffer, 0, read);
                         }
                     }
                 }
-                zip.closeEntry();
             }
+        }
+    }
+
+    private ZipFile openZip(Path archive) throws IOException {
+        try {
+            return new ZipFile(archive.toFile(), StandardCharsets.UTF_8);
+        } catch (ZipException e) {
+            // Windows ZIP 文件名可能使用 GBK；仅在名称解码失败时回退。
+            if (!String.valueOf(e.getMessage()).contains("bad entry name")) throw e;
+            return new ZipFile(archive.toFile(), Charset.forName("GB18030"));
         }
     }
 

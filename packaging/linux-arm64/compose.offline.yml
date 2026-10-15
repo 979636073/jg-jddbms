@@ -1,0 +1,60 @@
+name: jddbms-arm64
+services:
+  redis:
+    image: jddbms-arm64-base-redis:7.4
+    platform: linux/arm64
+    pull_policy: never
+    container_name: jddbms-arm64-redis
+    command: ["redis-server", "--appendonly", "yes", "--ignore-warnings", "ARM64-COW-BUG"]
+    restart: unless-stopped
+    volumes: ["redis-data:/data"]
+    networks: [arm64-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  backend:
+    image: jddbms-arm64-backend:release-${JDDBMS_RELEASE_VERSION:-20261013-r2}
+    platform: linux/arm64
+    pull_policy: never
+    container_name: jddbms-arm64-backend
+    restart: unless-stopped
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      JDDBMS_META_DB_URL: ${JDDBMS_META_DB_URL:?Set metadata JDBC URL}
+      JDDBMS_META_DB_USERNAME: ${JDDBMS_META_DB_USERNAME:?Set metadata username}
+      JDDBMS_META_DB_PASSWORD: ${JDDBMS_META_DB_PASSWORD:?Set metadata password}
+      JDDBMS_TOKEN_SECRET: ${JDDBMS_TOKEN_SECRET:?Set token secret}
+      JDDBMS_DATASOURCE_ENCRYPTION_KEY: ${JDDBMS_DATASOURCE_ENCRYPTION_KEY:?Preserve existing encryption key}
+      JDDBMS_DATASOURCE_ENCRYPTION_LEGACY_KEYS: ${JDDBMS_DATASOURCE_ENCRYPTION_LEGACY_KEYS:-}
+      JDDBMS_REDIS_HOST: redis
+      JDDBMS_REDIS_PASSWORD: ''
+      JDDBMS_LOG_LEVEL: info
+      SERVER_TOMCAT_THREADS_MAX: '100'
+      SERVER_TOMCAT_THREADS_MIN_SPARE: '10'
+    ports: ["${JDDBMS_ARM64_API_PORT:-38081}:28080"]
+    volumes: ["app-data:/data/jddbms"]
+    networks: [arm64-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+  frontend:
+    image: jddbms-arm64-frontend:release-${JDDBMS_RELEASE_VERSION:-20261013-r2}
+    platform: linux/arm64
+    pull_policy: never
+    container_name: jddbms-arm64-frontend
+    restart: unless-stopped
+    ports: ["${JDDBMS_ARM64_WEB_PORT:-38080}:80"]
+    networks: [arm64-net]
+    depends_on:
+      backend:
+        condition: service_healthy
+networks:
+  arm64-net:
+    name: jddbms-arm64-net
+volumes:
+  redis-data:
+    name: jddbms-arm64-redis-data
+  app-data:
+    name: jddbms-arm64-app-data

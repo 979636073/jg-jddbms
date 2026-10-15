@@ -143,20 +143,6 @@ export default {
           elIcon: "el-icon-document-copy",
           allowedRoles: ['admin', 'dbms_developer', 'dbms_reader'],
         },
-        {
-          name: "导入文件",
-          type: "import",
-          icon: require("@/assets/main/top-ico4.png"),
-          iconHover: require("@/assets/main/top-ico4-hover.png"),
-          hasRole: true,
-        },
-        {
-          name: "导出文件",
-          type: "export",
-          icon: require("@/assets/main/top-ico5.png"),
-          iconHover: require("@/assets/main/top-ico5-hover.png"),
-          hasRole: true,
-        },
       ],
     };
   },
@@ -314,7 +300,7 @@ export default {
       if (openedView) {
         const openOverviewObject = () => {
           const pageId = openedView.params?.id || openedView.path.split("/").pop();
-          if (this.$store.state.workspaceData.dataCurrentData.get(pageId)?.uniqueData === false) {
+          if (!this.$store.state.workspaceData.dataCurrentData.get(pageId)?.uniqueData) {
             this.$emit("openRouteObject", { params: { id: pageId }, query: openedView.query || {} });
           }
         };

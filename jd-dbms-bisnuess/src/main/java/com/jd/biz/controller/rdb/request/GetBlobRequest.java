@@ -24,18 +24,20 @@ public class GetBlobRequest extends DataSourceBaseRequest {
     /**
      * 表名
      */
-    @NotBlank
    private String tableName;
 
     /**
      * 模式名
      */
-    @NotBlank
    private String schemaName;
 
     /**
      * rowId
      */
-    @NotBlank
    private String rowId;
+
+    // 控制台查询没有 ROWID 时，用原查询及结果行、列定位。
+    private String sql;
+    private Integer rowIndex;
+    private Integer columnIndex;
 }

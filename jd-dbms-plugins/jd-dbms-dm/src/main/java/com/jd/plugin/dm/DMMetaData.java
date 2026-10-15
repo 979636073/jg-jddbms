@@ -57,6 +57,34 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
+    public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName) {
+        String sql = "SELECT t.TABLE_NAME, c.COMMENTS FROM ALL_TABLES t " +
+                "LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME " +
+                "AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? " +
+                "AND t.TABLE_NAME NOT LIKE 'MTAB$%' AND t.TABLE_NAME NOT LIKE 'SREF_CON_TAB%' " +
+                "AND t.TABLE_NAME NOT LIKE 'BIN$%'" + (tableName == null ? "" : " AND t.TABLE_NAME = ?") +
+                " ORDER BY t.TABLE_NAME";
+        List<Table> tables = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, schemaName);
+            if (tableName != null) statement.setString(2, tableName);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    Table table = new Table();
+                    table.setName(rows.getString("TABLE_NAME"));
+                    table.setComment(rows.getString("COMMENTS"));
+                    table.setSchemaName(schemaName);
+                    table.setDatabaseName(databaseName);
+                    tables.add(table);
+                }
+            }
+            return tables;
+        } catch (SQLException e) {
+            throw new BusinessException("读取表目录失败: " + e.getMessage());
+        }
+    }
+
+    @Override
     public PageResult<Table> tableDetailsPage(Connection connection, String databaseName, String schemaName,
                                               String searchKey, int pageNo, int pageSize) {
         String filter = StringUtils.isBlank(searchKey) ? "" :
@@ -67,7 +95,10 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
         String pattern = StringUtils.isBlank(searchKey) ? null : searchKey.trim().toUpperCase(Locale.ROOT);
         try {
             long total;
-            try (PreparedStatement count = connection.prepareStatement("SELECT COUNT(*)" + from)) {
+            String countSql = pattern == null
+                    ? "SELECT COUNT(*) FROM ALL_TABLES t WHERE t.OWNER = ?"
+                    : "SELECT COUNT(*)" + from;
+            try (PreparedStatement count = connection.prepareStatement(countSql)) {
                 bindTablePageFilter(count, schemaName, pattern);
                 try (ResultSet rows = count.executeQuery()) {
                     rows.next();
@@ -105,33 +136,6 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                         table.setTableDetails(details);
                         tables.add(table);
                     }
-                }
-            }
-            // NUM_ROWS is null until statistics are gathered. Count only the visible page,
-            // so a schema with thousands of tables does not trigger a schema-wide scan.
-            List<Table> missingCounts = tables.stream()
-                    .filter(table -> table.getTableDetails().getNumRows() == null)
-                    .collect(Collectors.toList());
-            if (!missingCounts.isEmpty()) {
-                String placeholders = missingCounts.stream().map(table -> "?").collect(Collectors.joining(","));
-                String countSql = "SELECT TABLE_NAME, TABLE_ROWCOUNT(OWNER, TABLE_NAME) AS ROW_COUNT " +
-                        "FROM ALL_TABLES WHERE OWNER = ? AND TABLE_NAME IN (" + placeholders + ")";
-                try (PreparedStatement counts = connection.prepareStatement(countSql)) {
-                    counts.setString(1, schemaName);
-                    for (int i = 0; i < missingCounts.size(); i++) {
-                        counts.setString(i + 2, missingCounts.get(i).getName());
-                    }
-                    Map<String, String> countByName = new HashMap<>();
-                    try (ResultSet rows = counts.executeQuery()) {
-                        while (rows.next()) {
-                            countByName.put(rows.getString("TABLE_NAME"), rows.getString("ROW_COUNT"));
-                        }
-                    }
-                    for (Table table : missingCounts) {
-                        table.getTableDetails().setNumRows(countByName.get(table.getName()));
-                    }
-                } catch (SQLException countError) {
-                    log.warn("Unable to read row counts for schema {}", schemaName, countError);
                 }
             }
             return PageResult.of(tables, total, pageNo, pageSize);
@@ -295,10 +299,33 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
         });
     }
 
+    static String buildProcedureListSql(String schemaName) {
+        String sql = "SELECT OWNER, OBJECT_NAME FROM ALL_OBJECTS WHERE OBJECT_TYPE = 'PROCEDURE'";
+        if (StringUtils.isNotBlank(schemaName)) {
+            sql += " AND OWNER = '" + schemaName.replace("'", "''") + "'";
+        }
+        return sql + " ORDER BY OWNER, OBJECT_NAME";
+    }
+
+    @Override
+    public List<Procedure> procedures(Connection connection, String databaseName, String schemaName) {
+        return SQLExecutor.getInstance().execute(connection, buildProcedureListSql(schemaName), resultSet -> {
+            List<Procedure> procedures = new ArrayList<>();
+            while (resultSet.next()) {
+                Procedure procedure = new Procedure();
+                procedure.setDatabaseName(databaseName);
+                procedure.setSchemaName(resultSet.getString("OWNER"));
+                procedure.setProcedureName(resultSet.getString("OBJECT_NAME"));
+                procedures.add(procedure);
+            }
+            return procedures;
+        });
+    }
+
     @Override
     public Procedure procedure(Connection connection, @NotEmpty String databaseName, String schemaName,
                                String procedureName) {
-        String sql = String.format(ROUTINES_SQL, "PROC", schemaName, procedureName);
+        String sql = buildProcedureDetailSql(schemaName, procedureName);
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             StringBuilder sb = new StringBuilder();
             while (resultSet.next()) {
@@ -313,16 +340,28 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
         });
     }
 
+    static String buildProcedureDetailSql(String schemaName, String procedureName) {
+        return String.format(ROUTINES_SQL, "PROCEDURE", schemaName.replace("'", "''"),
+                procedureName.replace("'", "''"));
+    }
+
     private static String TRIGGER_SQL
             = "SELECT OWNER, TRIGGER_NAME, TABLE_OWNER, TABLE_NAME, TRIGGERING_TYPE, TRIGGERING_EVENT, STATUS, TRIGGER_BODY "
             + "FROM ALL_TRIGGERS WHERE OWNER = '%s' AND TRIGGER_NAME = '%s'";
 
-    private static String TRIGGER_SQL_LIST = "SELECT OWNER, TRIGGER_NAME, TABLE_OWNER, TABLE_NAME, TRIGGERING_TYPE, TRIGGERING_EVENT, STATUS, TRIGGER_BODY FROM ALL_TRIGGERS WHERE OWNER = '%s' AND TABLE_NAME = '%s'";
+    static String buildTriggerListSql(String schemaName, String tableName) {
+        String sql = "SELECT OWNER, TRIGGER_NAME, TABLE_OWNER, TABLE_NAME, TRIGGERING_TYPE, TRIGGERING_EVENT, STATUS, TRIGGER_BODY FROM ALL_TRIGGERS WHERE OWNER = '"
+                + schemaName.replace("'", "''") + "'";
+        if (StringUtils.isNotBlank(tableName)) {
+            sql += " AND TABLE_NAME = '" + tableName.replace("'", "''") + "'";
+        }
+        return sql + " ORDER BY TRIGGER_NAME";
+    }
 
     @Override
     public List<Trigger> triggers(Connection connection, String databaseName, String schemaName, String tableName) {
         List<Trigger> triggers = new ArrayList<>();
-        String sql = String.format(TRIGGER_SQL_LIST, schemaName, tableName);
+        String sql = buildTriggerListSql(schemaName, tableName);
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             while (resultSet.next()) {
                 Trigger trigger = new Trigger();
@@ -479,17 +518,27 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                            String triggerName) {
 
         String sql = String.format(TRIGGER_SQL, schemaName, triggerName);
-        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+        Trigger detail = SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             Trigger trigger = new Trigger();
             trigger.setDatabaseName(databaseName);
             trigger.setSchemaName(schemaName);
             trigger.setTriggerName(triggerName);
-            trigger.setTriggerBody(resultSet.getString("TRIGGER_BODY"));
-            trigger.setType(resultSet.getString("TRIGGERING_TYPE"));
-            trigger.setStatus(resultSet.getString("STATUS"));
-            trigger.setEvent(resultSet.getString("TRIGGERING_EVENT"));
+            if (resultSet.next()) {
+                trigger.setType(resultSet.getString("TRIGGERING_TYPE"));
+                trigger.setStatus(resultSet.getString("STATUS"));
+                trigger.setEvent(resultSet.getString("TRIGGERING_EVENT"));
+            }
             return trigger;
         });
+        String ddl = SQLExecutor.getInstance().execute(connection, buildTriggerDdlSql(schemaName, triggerName),
+                resultSet -> resultSet.next() ? resultSet.getString("DDL") : null);
+        detail.setTriggerBody(ddl);
+        return detail;
+    }
+
+    static String buildTriggerDdlSql(String schemaName, String triggerName) {
+        return "SELECT DBMS_METADATA.GET_DDL('TRIGGER', '" + triggerName.replace("'", "''")
+                + "', '" + schemaName.replace("'", "''") + "') AS DDL FROM DUAL";
     }
 
     private static String VIEW_SQL
@@ -884,23 +933,12 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
 
     }
     private static final String REFERENCED_FOREIGN_KEY_SQL =
-            "WITH target_keys AS (" +
-                    "SELECT OWNER, CONSTRAINT_NAME, TABLE_NAME FROM ALL_CONSTRAINTS " +
-                    "WHERE OWNER = '%s' AND TABLE_NAME = '%s' AND CONSTRAINT_TYPE IN ('P', 'U')" +
-                    ") " +
-                    "SELECT fk.CONSTRAINT_NAME AS \"CONSTRAINT_NAME\", " +
-                    "fk.TABLE_NAME AS \"forTableName\", fk.OWNER AS \"forSchema\", " +
-                    "fk_col.COLUMN_NAME AS \"forTableColumn\", pk.TABLE_NAME AS \"table\", " +
-                    "pk_col.COLUMN_NAME AS \"tableColumn\", pk.OWNER AS \"schema\", fk.STATUS AS \"status\" " +
-                    "FROM target_keys pk " +
+            "SELECT fk.OWNER AS F_OWNER, fk.TABLE_NAME AS F_TABLE, fk.CONSTRAINT_NAME AS F_KEY, " +
+                    "fk.STATUS, pk.CONSTRAINT_NAME AS P_KEY FROM ALL_CONSTRAINTS pk " +
                     "JOIN ALL_CONSTRAINTS fk ON fk.R_OWNER = pk.OWNER " +
                     "AND fk.R_CONSTRAINT_NAME = pk.CONSTRAINT_NAME AND fk.CONSTRAINT_TYPE = 'R' " +
-                    "JOIN ALL_CONS_COLUMNS fk_col ON fk_col.OWNER = fk.OWNER " +
-                    "AND fk_col.CONSTRAINT_NAME = fk.CONSTRAINT_NAME AND fk_col.TABLE_NAME = fk.TABLE_NAME " +
-                    "JOIN ALL_CONS_COLUMNS pk_col ON pk_col.OWNER = pk.OWNER " +
-                    "AND pk_col.CONSTRAINT_NAME = pk.CONSTRAINT_NAME AND pk_col.TABLE_NAME = pk.TABLE_NAME " +
-                    "AND pk_col.POSITION = fk_col.POSITION " +
-                    "ORDER BY fk.TABLE_NAME, fk.CONSTRAINT_NAME, fk_col.POSITION";
+                    "WHERE pk.OWNER = '%s' AND pk.TABLE_NAME = '%s' AND pk.CONSTRAINT_TYPE IN ('P', 'U') " +
+                    "ORDER BY fk.TABLE_NAME, fk.CONSTRAINT_NAME";
 
     static String buildReferencedForeignKeySql(String schemaName, String tableName) {
         return String.format(REFERENCED_FOREIGN_KEY_SQL,
@@ -909,22 +947,49 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
 
     @Override
     public List<ForeignData> beiForeGnKey(Connection connection, String schemaName, String tableName) {
-        List<ForeignData> foreignKeys = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, buildReferencedForeignKeySql(schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
+        // Resolve the small constraint set before reading columns, rather than joining four catalog views.
+        String constraintsSql = buildReferencedForeignKeySql(schemaName, tableName);
+        List<String[]> constraints = SQLExecutor.getInstance().execute(connection, constraintsSql, RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
+            List<String[]> result = new ArrayList<>();
             while (resultSet.next()) {
-                ForeignData foreignData = new ForeignData();
-                foreignData.setSchemaName(resultSet.getString("schema"));
-                foreignData.setForeignSchemaName(resultSet.getString("forSchema"));
-                foreignData.setForeignTableName(resultSet.getString("forTableName"));
-                foreignData.setTableName(resultSet.getString("table"));
-                foreignData.setStatus(resultSet.getString("status"));
-                foreignData.setColumn(resultSet.getString("tableColumn"));
-                foreignData.setForeignColumnName(resultSet.getString("forTableColumn"));
-                foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
-                foreignKeys.add(foreignData);
+                result.add(new String[]{resultSet.getString("F_OWNER"), resultSet.getString("F_TABLE"),
+                        resultSet.getString("F_KEY"), resultSet.getString("STATUS"), resultSet.getString("P_KEY")});
             }
-            return foreignKeys;
+            return result;
         });
+        if (constraints.isEmpty()) return new ArrayList<>();
+        Map<String, Set<String>> keysByOwner = new LinkedHashMap<>();
+        for (String[] key : constraints) {
+            keysByOwner.computeIfAbsent(key[0], ignored -> new LinkedHashSet<>()).add(key[2]);
+            keysByOwner.computeIfAbsent(schemaName, ignored -> new LinkedHashSet<>()).add(key[4]);
+        }
+        String filters = keysByOwner.entrySet().stream().map(entry -> "(OWNER = '" + entry.getKey().replace("'", "''") +
+                "' AND CONSTRAINT_NAME IN (" + entry.getValue().stream().map(name -> "'" + name.replace("'", "''") + "'")
+                .collect(Collectors.joining(",")) + "))").collect(Collectors.joining(" OR "));
+        Map<String, Map<Integer, String>> columns = SQLExecutor.getInstance().execute(connection,
+                "SELECT OWNER, TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, POSITION FROM ALL_CONS_COLUMNS WHERE " + filters,
+                RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
+                    Map<String, Map<Integer, String>> result = new HashMap<>();
+                    while (resultSet.next()) result.computeIfAbsent(resultSet.getString("OWNER") + "\u0000" + resultSet.getString("TABLE_NAME") + "\u0000" + resultSet.getString("CONSTRAINT_NAME"),
+                            ignored -> new TreeMap<>()).put(resultSet.getInt("POSITION"), resultSet.getString("COLUMN_NAME"));
+                    return result;
+                });
+        List<ForeignData> foreignKeys = new ArrayList<>();
+        for (String[] key : constraints) {
+            Map<Integer, String> child = columns.get(key[0] + "\u0000" + key[1] + "\u0000" + key[2]);
+            Map<Integer, String> parent = columns.get(schemaName + "\u0000" + tableName + "\u0000" + key[4]);
+            if (child == null || parent == null) continue;
+            for (Map.Entry<Integer, String> column : child.entrySet()) {
+                if (!parent.containsKey(column.getKey())) continue;
+                ForeignData relation = new ForeignData();
+                relation.setSchemaName(schemaName); relation.setTableName(tableName);
+                relation.setForeignSchemaName(key[0]); relation.setForeignTableName(key[1]);
+                relation.setConstraintName(key[2]); relation.setStatus(key[3]);
+                relation.setColumn(parent.get(column.getKey())); relation.setForeignColumnName(column.getValue());
+                foreignKeys.add(relation);
+            }
+        }
+        return foreignKeys;
     }
 
     private static String getConstraintsIndex = "select CONSTRAINT_NAME from ALL_CONS_COLUMNS WHERE OWNER = '%s' AND TABLE_NAME = '%s' AND COLUMN_NAME = '%s';";
@@ -989,7 +1054,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 foreignData.setForeignTableName(resultSet.getString("table"));
                 foreignData.setTableName(resultSet.getString("forTableName"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
-                foreignData.setStatus(getConStatus(connection, tableName, schemaName, resultSet.getString("CONSTRAINT_NAME")));
+                foreignData.setStatus("ENABLED".equals(resultSet.getString("status")) ? "VALID" : "INVALID");
                 foreignData.setColumn(resultSet.getString("forTableColumn"));
                 foreignData.setForeignColumnName(resultSet.getString("tableColumn"));
                 foreignData.setConstraintName(resultSet.getString("CONSTRAINT_NAME"));
@@ -1130,7 +1195,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
         });
     }
 
-    private static String SELECT_TAB_COLS = " SELECT " +
+    private static String SELECT_TAB_COLS = " SELECT /*+ RULE */ " +
             " ATC.OWNER, " +
             " ATC.TABLE_NAME                  , " +
             " ATC.COLUMN_ID                   , " +
@@ -1143,23 +1208,28 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             " ACC.COMMENTS                    , " +
             " ATC.DATA_PRECISION              , " +
             " ATC.DATA_SCALE                  , " +
-            " ATC.CHAR_USED " +
-            " FROM " +
-            " ALL_TAB_COLUMNS ATC, " +
-            " ALL_COL_COMMENTS ACC " +
-            " WHERE " +
-            " ATC.OWNER       = ACC.SCHEMA_NAME " +
-            " AND ATC.TABLE_NAME  = ACC.TABLE_NAME " +
-            " AND ATC.COLUMN_NAME = ACC.COLUMN_NAME " +
-            " AND ACC.SCHEMA_NAME = '%s' " +
-            " AND ACC.TABLE_NAME  = '%s' " +
+            " ATC.CHAR_USED, PK.CONSTRAINT_NAME AS PK_NAME, PK.POSITION AS PK_POSITION " +
+            " FROM ALL_TAB_COLUMNS ATC " +
+            " LEFT JOIN ALL_COL_COMMENTS ACC ON ATC.OWNER = ACC.SCHEMA_NAME " +
+            " AND ATC.TABLE_NAME = ACC.TABLE_NAME AND ATC.COLUMN_NAME = ACC.COLUMN_NAME " +
+            " LEFT JOIN (SELECT CC.COLUMN_NAME, CC.CONSTRAINT_NAME, CC.POSITION " +
+            " FROM ALL_CONSTRAINTS C JOIN ALL_CONS_COLUMNS CC " +
+            " ON C.OWNER = CC.OWNER AND C.TABLE_NAME = CC.TABLE_NAME AND C.CONSTRAINT_NAME = CC.CONSTRAINT_NAME " +
+            " WHERE C.OWNER = '%s' AND C.TABLE_NAME = '%s' AND C.CONSTRAINT_TYPE = 'P') PK " +
+            " ON PK.COLUMN_NAME = ATC.COLUMN_NAME " +
+            " WHERE ATC.OWNER = '%s' AND ATC.TABLE_NAME = '%s' " +
             " ORDER BY ATC.COLUMN_ID ";
+
+    static String buildColumnsSql(String schemaName, String tableName) {
+        String owner = schemaName.replace("'", "''");
+        String table = tableName.replace("'", "''");
+        return String.format(SELECT_TAB_COLS, owner, table, owner, table);
+    }
 
     @Override
     public List<TableColumn> columns(Connection connection, String databaseName, String schemaName, String tableName) {
-        String sql = String.format(SELECT_TAB_COLS, schemaName, tableName);
+        String sql = buildColumnsSql(schemaName, tableName);
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
-            List<String> primaryKeyColumns = null;
             List<String> incrementColumns = null;
             boolean isFirst = true;
             List<TableColumn> tableColumns = new ArrayList<>();
@@ -1209,11 +1279,12 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 }
                 // 查询主键、自增序列
                 if (isFirst) {
-                    primaryKeyColumns = getPrimaryKey(connection, owner, tableName);
                     incrementColumns = getAutoIncrement(connection, owner, tableName);
                     isFirst = false;
                 }
-                tableColumn.setPrimaryKey(primaryKeyColumns.contains(columnName));
+                tableColumn.setPrimaryKey(resultSet.getString("PK_NAME") != null);
+                tableColumn.setPrimaryKeyName(resultSet.getString("PK_NAME"));
+                tableColumn.setPrimaryKeyOrder(resultSet.getInt("PK_POSITION"));
                 // 查询自增序列
                 tableColumn.setAutoIncrement(incrementColumns.contains(columnName));
                 tableColumns.add(tableColumn);
@@ -1236,7 +1307,8 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             "    AND A.ID         =C.ID\n" +
             "    AND C.NAME       = B.TABLE_NAME\n" +
             "    AND B.OWNER      = '%s'\n" +
-            "    AND B.TABLE_NAME = '%s'";
+            "    AND B.TABLE_NAME = '%s'\n" +
+            "    AND C.SCHID = (SELECT ID FROM SYSOBJECTS WHERE TYPE$ = 'SCH' AND NAME = '%s')";
 
     private static final String SELECT_TABLE_DDL =
             "SELECT DBMS_METADATA.GET_DDL('TABLE', '%s', '%s') AS DDL FROM DUAL";
@@ -1246,7 +1318,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
 
     static String buildAutoIncrementSql(String owner, String tableName) {
         return String.format(SELECT_TAB_AUTO_INCREMENT,
-                owner.replace("'", "''"), tableName.replace("'", "''"));
+                owner.replace("'", "''"), tableName.replace("'", "''"), owner.replace("'", "''"));
     }
 
     static String buildTableDdlSql(String owner, String tableName) {
@@ -1297,31 +1369,6 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
                 return Lists.newArrayList();
             }
         }
-    }
-
-    private static String SELECT_TAB_PRIMARY_KEY = "SELECT\n" +
-            "        COLS.TABLE_NAME,\n" +
-            "        COLS.COLUMN_NAME\n" +
-            "FROM\n" +
-            "        ALL_CONS_COLUMNS COLS\n" +
-            "JOIN ALL_CONSTRAINTS CONS\n" +
-            "ON\n" +
-            "        COLS.CONSTRAINT_NAME = CONS.CONSTRAINT_NAME\n" +
-            "WHERE\n" +
-            "        CONS.CONSTRAINT_TYPE = 'P'\n" +
-            "    AND COLS.OWNER           = '%s'\n" +
-            "    AND COLS.TABLE_NAME      = '%s'";
-
-    private List<String> getPrimaryKey(Connection connection, String owner, String tableName) {
-        String sql = String.format(SELECT_TAB_PRIMARY_KEY, owner, tableName);
-        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
-            List<String> primaryKeyColumns = Lists.newArrayList();
-            while (resultSet.next()) {
-                final String colName = resultSet.getString("COLUMN_NAME");
-                primaryKeyColumns.add(colName);
-            }
-            return primaryKeyColumns;
-        });
     }
 
 
@@ -1394,12 +1441,18 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     }
 
 
-    private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type from sys.all_objects o where o.object_type in ('VIEW', 'MATERIALIZED VIEW') and o.owner = '%s'";
+    private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type " +
+            "from sys.all_objects where object_type = 'VIEW' and owner = '%s' " +
+            "union all select m.mview_name, s.name, o.status, o.created, o.last_ddl_time, 'MATERIALIZED VIEW' " +
+            "from ALL_MVIEWS m join sys.sysobjects s on s.id = m.schid and s.type$ = 'SCH' " +
+            "left join sys.all_objects o on o.owner = s.name " +
+            "and o.object_name = m.mview_name and o.object_type = 'MATERIALIZED VIEW' where s.name = '%s' " +
+            "order by object_name";
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {
         List<Table> tableSpaces = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, schemaName), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, sqlLiteral(schemaName), sqlLiteral(schemaName)), resultSet -> {
             while (resultSet.next()) {
                 Table tableSpace = new Table();
                 TableDetails tableDetails = new TableDetails();

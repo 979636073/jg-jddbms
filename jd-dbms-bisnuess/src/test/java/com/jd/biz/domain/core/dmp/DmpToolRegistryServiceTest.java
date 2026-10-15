@@ -31,6 +31,24 @@ public class DmpToolRegistryServiceTest {
     public TemporaryFolder tempFolder = new TemporaryFolder();
 
     @Test
+    public void shouldAcceptChineseZipNamesInUtf8AndWindowsGbk() throws Exception {
+        for (String encoding : new String[]{"UTF-8", "GBK"}) {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (ZipOutputStream zip = new ZipOutputStream(bytes, java.nio.charset.Charset.forName(encoding))) {
+                for (String name : new String[]{"客户端/bin/dexp", "客户端/bin/dimp"}) {
+                    zip.putNextEntry(new ZipEntry(name)); zip.write(new byte[]{1, 2, 3}); zip.closeEntry();
+                }
+            }
+            DmpToolRegistryService service = serviceWithRoot("chinese-" + encoding);
+            DmpToolPackage result = service.upload(multipartFile("达梦客户端.zip", bytes.toByteArray()),
+                    "8.1.3", null, null, "LINUX:ARM64");
+            assertEquals("DM", result.getDatabaseType());
+            assertTrue(Files.isRegularFile(Paths.get(result.getExportExecutable())));
+            assertEquals(1, service.list().size());
+        }
+    }
+
+    @Test
     public void shouldCompareMultiPartVersionsNumerically() {
         assertTrue(DmpToolRegistryService.compareVersions("19.10", "19.3") > 0);
         assertTrue(DmpToolRegistryService.compareVersions("8.1.3.100", "8.1.2.70") > 0);
@@ -87,6 +105,56 @@ public class DmpToolRegistryServiceTest {
         assertFalse(service.list().get(0).getEnabled());
         service.delete(toolPackage.getId());
         assertTrue(service.list().isEmpty());
+    }
+
+    @Test
+    public void shouldRejectChineseArchiveTraversalForBothEncodings() throws Exception {
+        for (String encoding : new String[]{"UTF-8", "GBK"}) {
+            for (String name : new String[]{"../越界.txt", "客户端/../../越界.txt", "客户端\\..\\..\\越界.txt", "C:/越界.txt", "/越界.txt"}) {
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                try (ZipOutputStream zip = new ZipOutputStream(bytes, java.nio.charset.Charset.forName(encoding))) {
+                    zip.putNextEntry(new ZipEntry(name)); zip.write(1); zip.closeEntry();
+                }
+                DmpToolRegistryService service = serviceWithRoot("paths-" + java.util.UUID.randomUUID());
+                try {
+                    service.upload(multipartFile("客户端.zip", bytes.toByteArray()), "8.1.3", null, null, "LINUX:ARM64");
+                    fail("Archive path must not escape its package directory: " + name);
+                } catch (com.jd.common.tools.base.excption.BusinessException expected) {
+                    assertTrue(expected.getMessage().contains("路径"));
+                }
+                assertTrue(service.list().isEmpty());
+            }
+        }
+    }
+
+    @Test
+    public void shouldAllowValidUploadAfterCorruptArchiveFails() throws Exception {
+        DmpToolRegistryService service = serviceWithRoot("failed-upload-retry");
+        try {
+            service.upload(multipartFile("broken.zip", new byte[]{1, 2, 3}), "19.3", null, null, "WINDOWS:X86_64");
+            fail("Corrupt archive must be rejected");
+        } catch (com.jd.common.tools.base.excption.BusinessException expected) {
+            assertTrue(expected.getMessage().contains("客户端工具包处理失败"));
+        }
+        assertTrue(service.list().isEmpty());
+        service.upload(multipartFile("valid.zip", oracleLegacyZip()), "19.3", null, null, "WINDOWS:X86_64");
+        assertEquals(1, service.list().size());
+    }
+
+    @Test
+    public void shouldSelectOldestExportToolAndNewestImportTool() throws Exception {
+        DmpToolRegistryService service = serviceWithRoot("version-selection-tools");
+        DmpToolPackage oldest = service.upload(multipartFile("old.zip", oracleLegacyZipForHost(false)),
+                "11.2", null, null, "WINDOWS:X86_64");
+        DmpToolPackage newest = service.upload(multipartFile("new.zip", oracleLegacyZipForHost(true)),
+                "19.3", null, null, "WINDOWS:X86_64");
+
+        assertEquals(oldest.getId(), service.select(null, "ORACLE",
+                DmpToolRegistryService.ORACLE_LEGACY, true, null).getId());
+        assertEquals(newest.getId(), service.select(null, "ORACLE",
+                DmpToolRegistryService.ORACLE_LEGACY, false, null).getId());
+        assertEquals(newest.getId(), service.select(newest.getId(), "ORACLE",
+                DmpToolRegistryService.ORACLE_LEGACY, true, null).getId());
     }
 
     @Test
@@ -199,6 +267,29 @@ public class DmpToolRegistryServiceTest {
                 zip.write(executable);
                 zip.closeEntry();
             }
+        }
+        return bytes.toByteArray();
+    }
+
+    private byte[] oracleLegacyZipForHost(boolean marker) throws Exception {
+        boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        boolean arm64 = System.getProperty("os.arch", "").toLowerCase().matches(".*(aarch64|arm64).*");
+        byte[] executable = new byte[512];
+        if (windows) {
+            executable[0] = 'M'; executable[1] = 'Z';
+            ByteBuffer.wrap(executable, 60, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(128);
+            executable[128] = 'P'; executable[129] = 'E';
+            ByteBuffer.wrap(executable, 132, 2).order(ByteOrder.LITTLE_ENDIAN).putShort((short) (arm64 ? 0xaa64 : 0x8664));
+        } else {
+            executable[0] = 0x7f; executable[1] = 'E'; executable[2] = 'L'; executable[3] = 'F'; executable[5] = 1;
+            ByteBuffer.wrap(executable, 18, 2).order(ByteOrder.LITTLE_ENDIAN).putShort((short) (arm64 ? 183 : 62));
+        }
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+            for (String name : new String[]{windows ? "bin/exp.exe" : "bin/exp", windows ? "bin/imp.exe" : "bin/imp"}) {
+                zip.putNextEntry(new ZipEntry(name)); zip.write(executable); zip.closeEntry();
+            }
+            if (marker) { zip.putNextEntry(new ZipEntry("marker.txt")); zip.write(new byte[]{1}); zip.closeEntry(); }
         }
         return bytes.toByteArray();
     }

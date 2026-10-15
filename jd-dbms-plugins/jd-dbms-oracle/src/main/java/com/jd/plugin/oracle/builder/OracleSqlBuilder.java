@@ -168,12 +168,12 @@ public class OracleSqlBuilder extends DefaultSqlBuilder {
     @Override
     public String createProcedureTemplate(String databaseName, String schemaName, String procedureName) {
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("CREATE OR REPLACE PROCEDURE " + format(schemaName != null ? schemaName : databaseName) + spot + procedureName + " IS tmpVar NUMBER ")
+        stringBuilder.append("CREATE OR REPLACE PROCEDURE " + format(schemaName != null ? schemaName : databaseName) + spot + procedureName + " IS tmpVar NUMBER; ")
                 .append(" BEGIN \n")
                 .append(" tmpVar := 0;\n")
                 .append(" EXCEPTION \n")
                 .append(" WHEN NO_DATA_FOUND THEN \n")
-                .append(" NULL \n")
+                .append(" NULL; \n")
                 .append(" WHEN OTHERS THEN \n")
                 .append(" RAISE; \n")
                 .append(" END " + procedureName + ";");
@@ -218,19 +218,11 @@ public class OracleSqlBuilder extends DefaultSqlBuilder {
                                          boolean before, boolean after) {
         StringBuilder stringBuilder = new StringBuilder();
 
-        stringBuilder.append("CREATE OR REPLACE TRIGGER " + triggerName)
+        stringBuilder.append("CREATE OR REPLACE TRIGGER " + format(schemaName != null ? schemaName : databaseName) + spot + format(triggerName))
                 .append(before ? " BEFORE" : after ? " AFTER" : "")
-                .append("  INSERT " +
-                        ("OR UPDATE  ") +
-                        ("OR DELETE "))
-                .append(
-                        " ON " +
-                                format(schemaName != null ? schemaName : databaseName) +
-                                spot + tableName + "\n")
-                .append("DECLARE \n")
-                .append("tmpVar NUMBER; \n")
-                .append(" BEGIN \n")
-                .append(" END " + triggerName + ";");
+                .append(" INSERT OR UPDATE OR DELETE ON ")
+                .append(format(schemaName != null ? schemaName : databaseName)).append(spot).append(format(tableName))
+                .append("\nBEGIN NULL; END;");
         return stringBuilder.toString();
     }
 

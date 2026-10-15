@@ -228,12 +228,12 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
     @Override
     public String createProcedureTemplate(String databaseName, String schemaName, String procedureName) {
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("CREATE OR REPLACE PROCEDURE " + format(schemaName != null ? schemaName : databaseName) + spot + procedureName + " IS tmpVar NUMBER ")
+        stringBuilder.append("CREATE OR REPLACE PROCEDURE " + format(schemaName != null ? schemaName : databaseName) + spot + procedureName + " IS tmpVar NUMBER; ")
                 .append(" BEGIN \n")
                 .append(" tmpVar := 0;\n")
                 .append(" EXCEPTION \n")
                 .append(" WHEN NO_DATA_FOUND THEN \n")
-                .append(" NULL \n")
+                .append(" NULL; \n")
                 .append(" WHEN OTHERS THEN \n")
                 .append(" RAISE; \n")
                 .append(" END " + procedureName + ";");
@@ -278,13 +278,13 @@ public class DMSqlBuilder extends DefaultSqlBuilder {
                                          boolean before, boolean after) {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append("CREATE OR REPLACE TRIGGER ")
-                .append(triggerName)
+                .append(format(schemaName != null ? schemaName : databaseName)).append(spot).append(format(triggerName))
                 .append(before ? " BEFORE" : after ? " AFTER" : "")
-                .append("\n INSERT OR UPDATE OR DELETE")
-                .append("\n ON \n")
+                .append(" INSERT OR UPDATE OR DELETE")
+                .append(" ON ")
                 .append(format(schemaName != null ? schemaName : databaseName))
-                .append(spot).append(tableName)
-                .append("\n BEGIN PRINT '一段描述'; END;");
+                .append(spot).append(format(tableName))
+                .append("\nBEGIN NULL; END;");
         return stringBuilder.toString();
     }
 

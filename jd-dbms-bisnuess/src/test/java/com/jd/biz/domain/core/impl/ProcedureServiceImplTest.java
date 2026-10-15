@@ -42,6 +42,15 @@ public class ProcedureServiceImplTest {
         assertEquals(sql, service.buildCreateOrReplaceSql(sql));
     }
 
+    @Test
+    public void shouldReplaceExistingProcedureWhenDefinitionStartsWithCreate() {
+        ProcedureServiceImpl service = new ProcedureServiceImpl();
+        String sql = "CREATE PROCEDURE P_TEST AS BEGIN NULL; END;";
+
+        assertEquals("CREATE OR REPLACE PROCEDURE P_TEST AS BEGIN NULL; END;",
+                service.buildCreateOrReplaceSql(sql));
+    }
+
     private void putContext(Connection connection) {
         ConnectInfo connectInfo = new ConnectInfo();
         connectInfo.setDbType("DM");

@@ -116,13 +116,13 @@ export default {
       databaseName: "",
       filterName: "",
       type: "tables",
+      activeViewKind: "normal",
       schema: "",
       activeClass: -1,
       options: [],
       databaseTree: [],
       databaseMaps: new Map(),
       resourceFilter: "",
-      resourceFilterTimer: null,
       resourceTreeLoading: false,
       resourceChangeQueue: {},
       resourceChangeVersions: {},
@@ -143,6 +143,7 @@ export default {
       schemaDialogNodeKey: "",
       tableDialogVisibl: false,
       viewDialogVisible: false,
+      viewDialogGroupKey: "",
       userDialogVisible: false,
       ctrlKey: false,
       seleCtrlKet: [],
@@ -239,9 +240,9 @@ export default {
     },
     contextMenuVisible(value) {
       if (value) {
-        document.body.addEventListener("click", this.closeMenu);
+        document.addEventListener("pointerdown", this.closeMenu, true);
       } else {
-        document.body.removeEventListener("click", this.closeMenu);
+        document.removeEventListener("pointerdown", this.closeMenu, true);
       }
     },
   },
@@ -262,12 +263,12 @@ export default {
   },
   //解绑事件
   beforeDestroy() {
+    document.removeEventListener("pointerdown", this.closeMenu, true);
     this.$EventBus.$off("refreshRightTable");
     this.$EventBus.$off("refreshDataSourceTree", this.initializeResourceTree);
     this.$EventBus.$off("dataSourceConnected", this.handleDataSourceConnected);
     clearTimeout(this.tableSearchTimer);
     clearTimeout(this.resourceChangeTimer);
-    clearTimeout(this.resourceFilterTimer);
   },
   methods: {
     async loadRouteObject(route) {
@@ -276,10 +277,40 @@ export default {
       await this.resourceTreeReady;
       const dataSource = this.databaseTree.find(item => String(item.dataSource.id) === String(query.dataSourceId))?.dataSource;
       if (!dataSource || !this.isDataSourceConnected(dataSource.id)) return;
+      if (["function", "procedure", "trigger"].includes(query.objectType)) {
+        await this.loadRoutineInRoute(query, params.id, dataSource);
+        return;
+      }
       const types = { table: "tables", view: "views", user: "users", tableSpace: "tableSpace" };
       await this.handelClickItem({ name: query.tableName, tableDetails: { type: query.viewType, path: query.path } }, 0, {}, {
         pageId: params.id, dataSource, databaseName: query.databaseName || "", schema: query.schemaName || query.databaseName || "", type: types[query.objectType] || "tables",
       });
+    },
+    async loadRoutineInRoute(query, pageId, dataSource) {
+      const api = {
+        function: [sqlServer.getFunctionDetail, "functionBody", "functionName", "functions"],
+        procedure: [sqlServer.getProcedureDetail, "procedureBody", "procedureName", "procedures"],
+        trigger: [sqlServer.getTriggerDetail, "triggerBody", "triggerName", "triggers"],
+      }[query.objectType];
+      const context = this.createExtraParams(dataSource, query);
+      try {
+        const res = await api[0]({ ...context, [api[2]]: query.tableName });
+        if (!res.success || !res.data?.[api[1]]) throw new Error(res.errorMessage || "读取对象定义失败");
+        this.$store.dispatch("workspaceData/setDataCurrentData", {
+          pageId,
+          title: query.tableName,
+          type: "createSql",
+          uniqueData: {
+            ...context,
+            [api[2]]: query.tableName,
+            objectType: api[3],
+            ddl: res.data[api[1]],
+            isUpdate: true,
+          },
+        });
+      } catch (error) {
+        this.$message.error(error.message || "读取对象定义失败");
+      }
     },
     async initializeResourceTree() {
       this.resourceTreeLoading = true;
@@ -379,7 +410,8 @@ export default {
       ].join("-");
       return [
         ["tables", "数据表"],
-        ["views", "视图"],
+        ["views", "普通视图"],
+        ["materializedViews", "物化视图"],
         ["functions", "函数"],
         ["procedures", "存储过程"],
         ["triggers", "触发器"],
@@ -392,6 +424,16 @@ export default {
         dataSource,
         extraParams,
       }));
+    },
+    createSchemaOverviewNode(dataSource, context = {}) {
+      return {
+        key: `${dataSource.id}-${context.databaseName || ""}-${context.schemaName || ""}-overview`,
+        label: "模式总览",
+        treeNodeType: "schemaOverview",
+        leaf: true,
+        dataSource,
+        extraParams: this.createExtraParams(dataSource, context),
+      };
     },
     createAdministrationGroups(dataSource) {
       return [
@@ -435,12 +477,18 @@ export default {
         if (data.dataSource.supportSchema) {
           await this.loadResourceSchemas(data, resolve);
         } else {
-          resolve(this.createObjectGroups(data.dataSource, data.extraParams));
+          resolve([
+            ...this.createObjectGroups(data.dataSource, data.extraParams),
+            this.createSchemaOverviewNode(data.dataSource, data.extraParams),
+          ]);
         }
         return;
       }
       if (data.treeNodeType === "schema") {
-        resolve(this.createObjectGroups(data.dataSource, data.extraParams));
+        resolve([
+          ...this.createObjectGroups(data.dataSource, data.extraParams),
+          this.createSchemaOverviewNode(data.dataSource, data.extraParams),
+        ]);
         return;
       }
       if (data.treeNodeType === "objectGroup") {
@@ -476,9 +524,8 @@ export default {
           };
         });
         data.containerChildren = children;
-        const query = this.resourceFilter || "";
-        const offset = query ? 0 : (data.containerOffset || 0);
-        resolve(this.containerPageChildren(data, query, offset));
+        resolve(children);
+        this.$nextTick(() => this.applyResourceFilter(this.resourceFilter, false));
       } catch (e) {
         resolve([]);
         this.$message.error(`${data.label}加载失败`);
@@ -508,13 +555,37 @@ export default {
             schemaName: item.name,
           }),
         }));
-        const query = this.resourceFilter || "";
-        const offset = query ? 0 : (data.containerOffset || 0);
-        resolve(this.containerPageChildren(data, query, offset));
+        resolve(data.containerChildren);
+        this.$nextTick(() => this.applyResourceFilter(this.resourceFilter, false));
       } catch (e) {
         resolve([]);
         this.$message.error("模式加载失败");
       }
+    },
+    getTableListShared(params) {
+      const pending = this._tableListRequests || (this._tableListRequests = new Map());
+      const key = JSON.stringify([
+        params.dataSourceId, params.databaseName || "", params.schemaName || "",
+        params.pageNo, params.pageSize, params.requestType, params.searchKey || "",
+        Boolean(params.refresh || params.isRefreshCache),
+      ]);
+      if (!pending.has(key)) {
+        const request = tableServer.getTableList(params).finally(() => pending.delete(key));
+        pending.set(key, request);
+      }
+      return pending.get(key);
+    },
+    getViewListShared(params) {
+      const pending = this._viewListRequests || (this._viewListRequests = new Map());
+      const key = JSON.stringify([
+        params.dataSourceId, params.databaseName || "", params.schemaName || "",
+        params.requestType, Boolean(params.refresh || params.isRefreshCache),
+      ]);
+      if (!pending.has(key)) {
+        const request = viewServer.getViewList(params).finally(() => pending.delete(key));
+        pending.set(key, request);
+      }
+      return pending.get(key);
     },
     async loadResourceObjects(data, resolve) {
       const version = this.resourceVersion(data.dataSource.id, data.groupType);
@@ -526,145 +597,45 @@ export default {
           refresh,
           // The table list reads this flag when deciding whether to bypass its Redis cache.
           ...(data.groupType === "tables" ? { isRefreshCache: refresh } : {}),
-          requestType: ["tables", "views", "tableSpace"].includes(data.groupType) ? 2 : 1,
+          requestType: ["views", "materializedViews", "tableSpace"].includes(data.groupType) ? 2 : 1,
         pageNo: 1,
-        pageSize: data.groupType === "tables" ? 200 : 1000,
+        pageSize: 1000,
       };
       try {
-        let res;
-        if (data.groupType === "tables") res = await tableServer.getTableList(params);
-        else if (data.groupType === "views") res = await viewServer.getViewList(params);
-        else if (data.groupType === "functions") res = await sqlServer.getFunctionList(params);
-        else if (data.groupType === "procedures") res = await sqlServer.getProcedureList(params);
-        else if (data.groupType === "triggers") res = await sqlServer.getTriggerList(params);
-        else if (data.groupType === "users") res = await userServer.getUserList(params);
-        else if (data.groupType === "tableSpace") res = await tableSpaceServer.getTableSpaceList(params);
-        if (res?.success === false) {
-          data.refreshOnce = true;
-          resolve(data.cachedChildren || []);
-          this.$message.error(res.errorMessage || `${data.label}加载失败，请重试`);
-          return;
-        }
-        const items = Array.isArray(res?.data?.data) ? res.data.data : [];
+        const api = {
+          tables: tableServer.getTreeTableList, views: this.getViewListShared.bind(this),
+          materializedViews: this.getViewListShared.bind(this), functions: sqlServer.getFunctionList,
+          procedures: sqlServer.getProcedureList, triggers: sqlServer.getTriggerList,
+          users: userServer.getUserList, tableSpace: tableSpaceServer.getTableSpaceList,
+        }[data.groupType];
+        const items = (await this.loadAllResourcePages(api, params)).filter(item =>
+          !["views", "materializedViews"].includes(data.groupType)
+          || this.isMaterializedView(item) === (data.groupType === "materializedViews"));
         const children = items.map((item, index) => this.createObjectNode(data, item, index));
-        const total = Number(res?.data?.total);
-        if (["users", "views"].includes(data.groupType)) {
-          data.objectChildren = children;
-          data.cachedChildren = null;
-          resolve(this.objectGroupPageChildren(data, this.resourceFilter, 0));
-          return;
-        }
-        if (data.groupType === "tables" && Number.isFinite(total) && items.length < total) {
-          children.push(this.createLoadMoreTablesNode(data, items.length, total));
-        }
+        data.objectChildren = children;
         data.cachedChildren = null;
         resolve(children);
+        this.$nextTick(() => this.applyResourceFilter(this.resourceFilter, false));
       } catch (e) {
         data.refreshOnce = true;
         resolve(data.cachedChildren || []);
         this.$message.error(e?.message || `${data.label}加载失败，请重试`);
       }
     },
-    createLoadMoreTablesNode(group, loadedCount, total) {
-      return {
-        key: `${group.key}-load-more-${loadedCount}`,
-        label: `加载更多表（已加载 ${loadedCount} / ${total}）`,
-        treeNodeType: "loadMoreTables",
-        leaf: true,
-        groupType: "tables",
-        dataSource: group.dataSource,
-        extraParams: group.extraParams,
-        loadedCount,
-        total,
-      };
-    },
-    containerPageChildren(data, query, offset) {
-      const keyword = String(query || "").trim().toLowerCase();
-      const all = data.containerChildren || [];
-      const matches = keyword
-        ? all.filter(item => String(item.label || "").toLowerCase().includes(keyword))
-        : all;
-      const pageSize = 100;
-      const start = Math.max(0, Math.min(offset, Math.max(0, Math.ceil(matches.length / pageSize) - 1) * pageSize));
-      const result = matches.slice(start, start + pageSize);
-      const label = data.treeNodeType === "databaseCollection" ? "数据库" : "模式";
-      if (start > 0) {
-        result.unshift({ key: `${data.key}-page-prev`, label: `上一批${label}`, treeNodeType: "containerPage",
-          leaf: true, offset: start - pageSize });
-      }
-      if (start + pageSize < matches.length) {
-        result.push({ key: `${data.key}-page-next`,
-          label: `下一批${label}（${start + pageSize} / ${matches.length}）`,
-          treeNodeType: "containerPage", leaf: true, offset: start + pageSize });
-      }
-      data.containerOffset = start;
-      data.containerQuery = keyword;
-      return result;
-    },
-    showContainerPage(data, query, offset) {
-      const tree = this.$refs.resourceTree;
-      const parent = tree?.getNode(data.key);
-      if (!parent?.loaded) return;
-      const children = this.containerPageChildren(data, query, offset);
-      [...parent.childNodes].forEach(child => tree.remove(child.data));
-      children.forEach(child => tree.append(child, data));
-      this.$nextTick(() => tree.filter(this.resourceFilter));
-    },
-    objectGroupPageChildren(data, query, offset) {
-      const keyword = String(query || "").trim().toLowerCase();
-      const matches = keyword
-        ? (data.objectChildren || []).filter(item => item.label.toLowerCase().includes(keyword))
-        : (data.objectChildren || []);
-      const pageSize = 100;
-      const start = Math.max(0, Math.min(offset, Math.max(0, Math.ceil(matches.length / pageSize) - 1) * pageSize));
-      const children = matches.slice(start, start + pageSize);
-      const label = data.groupType === "views" ? "视图" : "用户";
-      if (start > 0) children.unshift({ key: `${data.key}-object-prev`, label: `上一批${label}`, treeNodeType: "objectGroupPage", leaf: true, offset: start - pageSize });
-      if (start + pageSize < matches.length) children.push({ key: `${data.key}-object-next`, label: `下一批${label}（${start + pageSize} / ${matches.length}）`, treeNodeType: "objectGroupPage", leaf: true, offset: start + pageSize });
-      return children;
-    },
-    showObjectGroupPage(data, query, offset) {
-      const tree = this.$refs.resourceTree;
-      const parent = tree?.getNode(data.key);
-      if (!parent?.loaded) return;
-      const children = this.objectGroupPageChildren(data, query, offset);
-      [...parent.childNodes].forEach(child => tree.remove(child.data));
-      children.forEach(child => tree.append(child, data));
-      this.$nextTick(() => tree.filter(this.resourceFilter));
-    },
-    async loadMoreResourceTables(data, node) {
-      if (data.loading || !node?.parent) return;
-      const group = node.parent;
-      const tree = this.$refs.resourceTree;
-      const oldLabel = data.label;
-      this.$set(data, "loading", true);
-      this.$set(data, "label", "正在加载更多表…");
-      try {
-        const res = await tableServer.getTableList({
-          ...group.data.extraParams,
-          requestType: 2,
-          pageNo: Math.floor(data.loadedCount / 200) + 1,
-          pageSize: 200,
-          isRefreshCache: false,
-        });
-        if (res?.success === false) throw new Error(res.errorMessage || "加载更多表失败");
-        const items = Array.isArray(res?.data?.data) ? res.data.data : [];
-        if (!items.length) throw new Error("没有读取到下一页表，请刷新后重试");
-        if (tree.getNode(group.key) !== group) return;
-        tree.remove(data);
-        items.forEach((item, index) => tree.append(
-          this.createObjectNode(group.data, item, data.loadedCount + index), group.data,
-        ));
-        const loadedCount = data.loadedCount + items.length;
-        const total = Number(res?.data?.total);
-        if (Number.isFinite(total) && loadedCount < total) {
-          tree.append(this.createLoadMoreTablesNode(group.data, loadedCount, total), group.data);
+    async loadAllResourcePages(api, params) {
+      const items = [];
+      let pageNo = 1;
+      for (;;) {
+        const res = await api({ ...params, pageNo });
+        if (res?.success === false || !Array.isArray(res?.data?.data)) {
+          throw new Error(res?.errorMessage || "对象列表加载失败，请刷新重试");
         }
-      } catch (error) {
-        this.$message.error(error?.message || "加载更多表失败，请重试");
-      } finally {
-        this.$set(data, "loading", false);
-        this.$set(data, "label", oldLabel);
+        const page = res.data.data;
+        const total = Number(res.data.total);
+        if (!page.length && items.length < total) throw new Error("对象列表尚未加载完整，请刷新重试");
+        items.push(...page);
+        if (!Number.isFinite(total) || items.length >= total) return items;
+        pageNo++;
       }
     },
     expandResourceNode(node) {
@@ -678,6 +649,7 @@ export default {
       const typeMap = {
         tables: "table",
         views: "view",
+        materializedViews: "view",
         functions: "function",
         procedures: "processdure",
         triggers: "trigger",
@@ -698,19 +670,19 @@ export default {
         procedureName: item.procedureName,
         triggerName: item.triggerName,
         userName: item.userName || item.name,
-        viewType: item.tableDetails?.type,
+        viewType: item.tableDetails?.type || item.viewType || item.type,
       };
       return {
         key: `${group.key}-${name}`,
         label: name,
         treeNodeType: typeMap[group.groupType],
-        groupType: group.groupType,
+        groupType: group.groupType === "materializedViews" ? "views" : group.groupType,
         groupKey: group.key,
         leaf: true,
         pinned: item.pinned,
         comment: item.comment,
         tableDetails: item.tableDetails || {},
-        viewType: item.tableDetails?.type,
+        viewType: item.tableDetails?.type || item.viewType || item.type,
         dataSource: group.dataSource,
         extraParams,
       };
@@ -743,18 +715,6 @@ export default {
       document.title = "数据库管理软件";
     },
     async handleResourceNodeClick(data, node) {
-      if (data.treeNodeType === "objectGroupPage") {
-        this.showObjectGroupPage(node.parent.data, this.resourceFilter, data.offset);
-        return;
-      }
-      if (data.treeNodeType === "containerPage") {
-        this.showContainerPage(node.parent.data, this.resourceFilter, data.offset);
-        return;
-      }
-      if (data.treeNodeType === "loadMoreTables") {
-        await this.loadMoreResourceTables(data, node);
-        return;
-      }
       const dataSource = data.dataSource;
       if (data.treeNodeType === "datasource" && !this.isDataSourceConnected(dataSource.id)) {
         this.openDataSourceManager(dataSource, "connect");
@@ -774,9 +734,15 @@ export default {
         this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
         return;
       }
+      if (data.treeNodeType === "schemaOverview") {
+        this.$emit("showSchemaOverview", data.extraParams);
+        return;
+      }
       if (data.treeNodeType === "objectGroup") {
+        if (data.groupType === "tables") return;
         this.detailDataSource = [];
-        this.type = data.groupType;
+        this.type = data.groupType === "materializedViews" ? "views" : data.groupType;
+        this.activeViewKind = data.groupType === "materializedViews" ? "materialized" : "normal";
         this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
         this.$emit("isType", this.type, this.schema, this.activeClass);
         if (["tables", "views", "users", "tableSpace"].includes(this.type)) {
@@ -810,38 +776,31 @@ export default {
       }
     },
     handleResourceFilter(value) {
-      clearTimeout(this.resourceFilterTimer);
-      this.resourceFilterTimer = setTimeout(() => this.applyResourceFilter(value), 120);
+      this.applyResourceFilter(value);
     },
-    applyResourceFilter(value) {
+    applyResourceFilter(value, expandMatches = true) {
       const tree = this.$refs.resourceTree;
       if (!tree) return;
-      const containers = [];
-      const objectGroups = [];
+      tree.filter(value);
+      const keyword = String(value || "").trim().toLowerCase();
+      if (!keyword || !expandMatches) return;
       const visit = node => {
         if (!node) return;
-        if (node.data?.containerChildren) containers.push(node.data);
-        if (node.data?.objectChildren) objectGroups.push(node.data);
+        if (node.loaded && node.visible && node.childNodes?.some(child => child.visible)) {
+          node.expanded = true;
+        }
         (node.childNodes || []).forEach(visit);
       };
       this.databaseTree.forEach(root => visit(tree.getNode(root.key)));
-      const keyword = String(value || "").trim().toLowerCase();
-      containers.forEach(data => {
-        if (!keyword || data.containerChildren.some(child => child.label.toLowerCase().includes(keyword))) {
-          this.showContainerPage(data, keyword, 0);
-        }
-      });
-      objectGroups.forEach(data => {
-        if (!keyword || data.objectChildren.some(child => child.label.toLowerCase().includes(keyword))) {
-          this.showObjectGroupPage(data, keyword, 0);
-        }
-      });
-      this.$nextTick(() => tree.filter(value));
     },
-    resourceFilterNode(value, data) {
-      if (!value) return true;
-      if (["containerPage", "objectGroupPage"].includes(data.treeNodeType)) return true;
-      return String(data.label || "").toLowerCase().includes(value.toLowerCase());
+    resourceFilterNode(value, data, node) {
+      const keyword = String(value || "").trim().toLowerCase();
+      if (!keyword) return true;
+      while (node?.data) {
+        if (String(node.data.label || "").toLowerCase().includes(keyword)) return true;
+        node = node.parent;
+      }
+      return String(data.label || "").toLowerCase().includes(keyword);
     },
     refreshResourceNode(node) {
       if (!node) return;
@@ -898,7 +857,8 @@ export default {
             this.invalidateResourceNode(node);
             return;
           }
-          if (data.treeNodeType === 'objectGroup' && groups.has(data.groupType)) {
+          if (data.treeNodeType === 'objectGroup' && (groups.has(data.groupType)
+              || (data.groupType === 'materializedViews' && groups.has('views')))) {
             const isGlobal = ['users', 'tableSpace'].includes(data.groupType);
             if ((isGlobal || !change.schemaName || change.schemaName === data.extraParams?.schemaName)
                 && (!change.databaseName || change.databaseName === data.extraParams?.databaseName)) {
@@ -930,8 +890,8 @@ export default {
     },
     isAllLoadedTreeTablesSelected(data, node) {
       const loaded = this.loadedTreeTableNames(node);
-      const selected = this.selectedTreeTableNames(data.key);
-      return loaded.length > 0 && loaded.every((name) => selected.includes(name));
+      const selected = new Set(this.selectedTreeTableNames(data.key));
+      return loaded.length > 0 && loaded.every((name) => selected.has(name));
     },
     toggleAllLoadedTreeTables(data, node) {
       const loaded = this.loadedTreeTableNames(node);
@@ -1039,9 +999,15 @@ export default {
     },
     async addObjectFromTree(data) {
       this.activateDataSourceContext(data.dataSource, data.extraParams || {});
-      this.type = data.groupType;
+      this.type = data.groupType === "materializedViews" ? "views" : data.groupType;
+      this.activeViewKind = data.groupType === "materializedViews" ? "materialized" : "normal";
       this.schema = data.extraParams.schemaName || data.extraParams.databaseName || "";
       await this.$nextTick();
+      if (["functions", "procedures", "triggers"].includes(data.groupType)) {
+        this.$refs.createOption.init(data);
+        return;
+      }
+      if (this.type === "views") this.viewDialogGroupKey = data.key;
       this.addSideBar();
     },
     addSchemaFromTree(data, node) {
@@ -1109,6 +1075,7 @@ export default {
         schemaCollection: "el-icon-folder",
         database: "el-icon-coin",
         schema: "el-icon-folder-opened",
+        schemaOverview: "el-icon-data-analysis",
         objectGroup: "el-icon-folder",
         table: "el-icon-tickets",
         view: "el-icon-view",
@@ -1117,11 +1084,21 @@ export default {
         trigger: "el-icon-bell",
         user: "el-icon-user",
         tableSpace: "el-icon-box",
-        loadMoreTables: "el-icon-more",
       };
       return icons[data.treeNodeType] || "el-icon-document";
     },
     handleResourceContextMenu(event, data, node) {
+      if (["view", "function", "processdure", "trigger"].includes(data.treeNodeType)) {
+        event.preventDefault();
+        this.activateDataSourceContext(data.dataSource, data.extraParams || {});
+        this.contextMenuKind = "object";
+        this.context_current_item = data;
+        this.context_current_node = node;
+        this.contextMenu_left = Math.max(8, Math.min(event.clientX, window.innerWidth - 228));
+        this.contextMenu_top = Math.max(8, Math.min(event.clientY, window.innerHeight - 180));
+        this.contextMenuVisible = true;
+        return;
+      }
       if (data.treeNodeType === "schema") {
         event.preventDefault();
         this.contextMenuKind = "schema";
@@ -1149,7 +1126,7 @@ export default {
     executeResourceContextAction(action) {
       this.contextMenuVisible = false;
       const data = this.context_current_item;
-      if (action === "open") this.handleResourceNodeClick(data);
+      if (action === "open") this.handleResourceNodeClick(data, this.context_current_node);
       else if (action === "newWindow") this.newTableLable();
       else if (action === "ddl") this.viewDDL(data);
       else if (action === "template") this.routerSql();
@@ -1158,6 +1135,20 @@ export default {
       else if (action === "copyTableWithData") this.openCopyTableDialog(true);
       else if (action === "import" || action === "export") this.openTableTransfer(action);
       else if (action === "delete") this.deleteTable(data, this.context_current_node);
+      else if (action === "refreshMaterialized") this.refreshMaterializedFromTree(data);
+    },
+    async refreshMaterializedFromTree(data) {
+      try {
+        const res = await viewServer.refreshMaterialized({
+          ...data.extraParams,
+          tableName: data.label,
+          viewType: "MATERIALIZED VIEW",
+        });
+        if (!res.success) throw new Error(res.errorMessage || "刷新失败");
+        this.$message.success("物化视图已刷新");
+      } catch (error) {
+        this.$message.error(error.message || "物化视图刷新失败");
+      }
     },
     openTableTransfer(operation) {
       this.tableTransferOperation = operation;
@@ -1595,6 +1586,10 @@ export default {
       if (node == "tableRefresh") {
         return this.getTableDataList(this.schema, true);
       }
+      if (node.data?.treeNodeType === "objectGroup") {
+        this.refreshResourceNode(node);
+        return;
+      }
       this.refresh = true;
       if (!node.expanded) {
         this.$refs.tree.$set(node, "expanded", true);
@@ -1645,109 +1640,39 @@ export default {
             tableName: nodeData.extraParams?.tableName,
             ...params,
           };
-          sqlServer[nodeDeleteFunction[nodeData.treeNodeType]](send).then(
-            (res) => {
-              if (res.success) {
-                node.parent.loaded = false;
-                node.parent.loadData();
-                this.$message.success("删除成功");
-              } else {
-                this.$message.error("删除失败");
-              }
+          if (nodeData.treeNodeType === "view") {
+            send.name = nodeData.label;
+            send.viewType = nodeData.viewType || send.viewType;
+          }
+          const res = await sqlServer[nodeDeleteFunction[nodeData.treeNodeType]](send);
+          if (res.success && res.data?.success !== false) {
+            if (node?.parent) {
+              node.parent.loaded = false;
+              node.parent.loadData();
             }
-          );
+            this.$message.success("删除成功");
+          } else {
+            this.$message.error(res.errorMessage || res.data?.message || "删除失败");
+          }
         })
-        .catch(() => {
-          this.$message({
-            type: "info",
-            message: "已取消删除",
-          });
+        .catch((error) => {
+          if (error === "cancel" || error === "close") {
+            this.$message({ type: "info", message: "已取消删除" });
+          } else {
+            this.$message.error(error?.message || "删除失败");
+          }
         });
     },
-    // 查看函数
-    openFunction(treeNodeData) {
-      this.$store.dispatch("createConsole", {
-        name: treeNodeData.label,
-        operationType: "function",
-        dataSourceId: treeNodeData.extraParams.dataSourceId,
-        dataSourceName: treeNodeData.extraParams.dataSourceName,
-        databaseType: treeNodeData.extraParams.databaseType,
-        databaseName: treeNodeData.extraParams?.databaseName,
-        schemaName: treeNodeData.extraParams?.schemaName,
-        loadSQL: () => {
-          return new Promise((resolve) => {
-            sqlServer
-              .getFunctionDetail({
-                dataSourceId: treeNodeData.extraParams.dataSourceId,
-                databaseType: treeNodeData.extraParams.databaseType,
-                databaseName: treeNodeData.extraParams.databaseName,
-                schemaName: treeNodeData.extraParams?.schemaName,
-                functionName: treeNodeData.extraParams.functionName,
-              })
-              .then((res) => {
-                // 更新ddl
-                resolve(res.data.functionBody);
-              });
-          });
-        },
+    openRoutine(treeNodeData, objectType) {
+      this.$EventBus.$emit("openLookPage", {
+        ...treeNodeData.extraParams,
+        tableName: treeNodeData.label,
+        objectType,
       });
     },
-    // 查看存储过程
-    openProcedure(treeNodeData) {
-      this.$store.dispatch("createConsole", {
-        name: treeNodeData.label,
-        operationType: "procedure",
-        dataSourceId: treeNodeData.extraParams.dataSourceId,
-        dataSourceName: treeNodeData.extraParams.dataSourceName,
-        databaseType: treeNodeData.extraParams.databaseType,
-        databaseName: treeNodeData.extraParams?.databaseName,
-        schemaName: treeNodeData.extraParams?.schemaName,
-        loadSQL: () => {
-          return new Promise((resolve) => {
-            sqlServer
-              .getProcedureDetail({
-                dataSourceId: treeNodeData.extraParams.dataSourceId,
-                databaseType: treeNodeData.extraParams.databaseType,
-                databaseName: treeNodeData.extraParams.databaseName,
-                schemaName: treeNodeData.extraParams?.schemaName,
-                procedureName: treeNodeData.extraParams?.procedureName,
-              })
-              .then((res) => {
-                // 更新ddl
-                resolve(res.data.procedureBody);
-              });
-          });
-        },
-      });
-    },
-    // 查看触发器
-    openTrigger(treeNodeData) {
-      this.$store.dispatch("createConsole", {
-        name: treeNodeData.label,
-        operationType: "trigger",
-        dataSourceId: treeNodeData.extraParams.dataSourceId,
-        dataSourceName: treeNodeData.extraParams.dataSourceName,
-        databaseType: treeNodeData.extraParams.databaseType,
-        databaseName: treeNodeData.extraParams?.databaseName,
-        schemaName: treeNodeData.extraParams?.schemaName,
-        loadSQL: () => {
-          return new Promise((resolve) => {
-            sqlServer
-              .getTriggerDetail({
-                dataSourceId: treeNodeData.extraParams.dataSourceId,
-                databaseType: treeNodeData.extraParams.databaseType,
-                databaseName: treeNodeData.extraParams.databaseName,
-                schemaName: treeNodeData.extraParams?.schemaName,
-                triggerName: treeNodeData.extraParams?.triggerName,
-              })
-              .then((res) => {
-                // 更新ddl
-                resolve(res.data.triggerBody);
-              });
-          });
-        },
-      });
-    },
+    openFunction(treeNodeData) { this.openRoutine(treeNodeData, "function"); },
+    openProcedure(treeNodeData) { this.openRoutine(treeNodeData, "procedure"); },
+    openTrigger(treeNodeData) { this.openRoutine(treeNodeData, "trigger"); },
     // 复制名称
     CopyName(nodeData) {
       copyText(nodeData.label);
@@ -1806,9 +1731,9 @@ export default {
           if (isRefreshCache) {
             params.isRefreshCache = isRefreshCache;
           }
-          res = await tableServer.getTableList(params);
+          res = await this.getTableListShared(params);
         } else if (this.type == "views") {
-          res = await viewServer.getViewList(params);
+          res = await this.getViewListShared(params);
         } else if (this.type == "users") {
           params.databaseName = this.dataInfo.dataSource.alias;
           res = await userServer.getUserList(params);
@@ -1821,6 +1746,9 @@ export default {
           return;
         }
         let data = res.data.data || [];
+        if (this.type === "views") {
+          data = data.filter(item => this.isMaterializedView(item) === (this.activeViewKind === "materialized"));
+        }
         // 先让 loading 遮罩完成一次绘制，再处理大列表，避免页面出现“卡死”假象。
         await this.$nextTick();
         // 侧边栏只需要名称和少量状态字段，避免把接口返回的完整元数据
@@ -1843,6 +1771,7 @@ export default {
           detailDataSource.push({
             name: item.name,
             schema: details.schema,
+            valid: details.valid,
             tableSpace: details.tableSpace,
             userId: details.userId,
             accountStatus: details.accountStatus,
@@ -2203,6 +2132,11 @@ export default {
     viewCloseFn(val) {
       this.viewDialogVisible = val;
     },
+    viewCreated() {
+      const group = this.$refs.resourceTree?.getNode(this.viewDialogGroupKey);
+      if (group) this.refreshResourceNode(group);
+      this.getTableDataList(this.schema);
+    },
     userHandleCloseFn(val) {
       this.userDialogVisible = val;
     },
@@ -2218,8 +2152,8 @@ export default {
     openTableInWindow(items, index, event, objectType = "table") {
       if (!items?.name) return;
       const config = this.$store.state.workspaceData.dataCurrentData.get(this.pageId);
-      const currentName = config ? config.uniqueData?.tableName : this.$route.query.tableName;
-      const currentSchema = config ? config.uniqueData?.schemaName : this.$route.query.schemaName;
+      const currentName = config?.uniqueData?.tableName;
+      const currentSchema = config?.uniqueData?.schemaName;
       const hasSelectedTable = Boolean(currentName) && (!currentSchema || currentSchema === this.schema);
       const query = {
         dataSourceId: this.dataInfo.dataSource.id,
@@ -2234,9 +2168,8 @@ export default {
         this.$router.replace({
           path: this.$route.path,
           query,
-        }).catch(() => {});
-        this.handelClickItem(items, index, event);
-        return;
+        }).then(() => this.$store.dispatch("jdTagsView/updateVisitedView", this.$route)).catch(() => {});
+        return this.handelClickItem(items, index, event);
       }
       this.$EventBus.$emit("openLookPage", query);
     },
@@ -2300,7 +2233,7 @@ export default {
         if (objectGroup == "tables") {
           type = "editTable";
         } else if (objectGroup == "views") {
-          type = materializedView ? "editTableData" : "editView";
+          type = "editView";
         } else if (objectGroup == "users") {
           type = "editUser";
         } else if (objectGroup == "tableSpace") {
@@ -2348,7 +2281,7 @@ export default {
                   databaseType: dataSource.type,
                   schemaName: schema,
                   tableName: items.name,
-                  viewType: items.tableDetails?.type,
+                  viewType: items.tableDetails?.type || items.viewType,
                   isLoading: true,
                   dataType: objectGroup,
                 },
@@ -2364,7 +2297,7 @@ export default {
                   dataSourceId: dataSource.id,
                   schemaName: schema,
                   tableName: items.name,
-                  viewType: items.tableDetails?.type,
+                  viewType: items.tableDetails?.type || items.viewType,
                   sqlInfo: null,
                 },
               });
@@ -2515,7 +2448,8 @@ export default {
         };
       }
     },
-    closeMenu() {
+    closeMenu(event) {
+      if (event?.target?.closest?.(".resource-context-menu")) return;
       this.contextMenuVisible = false;
     },
     copyTable(ref) {
@@ -2697,10 +2631,12 @@ export default {
         placeholder="搜索过滤库/表/用户..."
         @input="handleResourceFilter"
       />
-      <el-scrollbar ref="resourceTreeScrollbar" class="resource-tree-scrollbar" v-loading="resourceTreeLoading">
-        <el-tree
+      <div class="resource-tree-scrollbar" v-loading="resourceTreeLoading">
+        <vue-easy-tree
           ref="resourceTree"
           class="resource-tree"
+          height="100%"
+          :item-size="28"
           :data="databaseTree"
           :props="defaultProps"
           :load="loadResourceNode"
@@ -2715,6 +2651,8 @@ export default {
           <span slot-scope="{ node, data }" class="resource-node"
             :class="{ 'resource-node-datasource': data.treeNodeType === 'datasource' }">
             <span class="resource-node-main">
+              <span v-if="data.treeNodeType === 'schemaOverview' || (data.treeNodeType === 'objectGroup' && node.isLeaf)"
+                class="resource-overview-indent" aria-hidden="true"></span>
               <el-checkbox
                 v-if="data.treeNodeType === 'table'"
                 class="resource-table-checkbox"
@@ -2778,7 +2716,7 @@ export default {
                   <i class="el-icon-delete"></i>
                 </button>
                 <button
-                  v-if="['tables', 'views', 'users', 'tableSpace'].includes(data.groupType)"
+                  v-if="['tables', 'views', 'materializedViews', 'functions', 'procedures', 'triggers', 'users', 'tableSpace'].includes(data.groupType)"
                   title="新增"
                   @click.stop="addObjectFromTree(data)"
                 >
@@ -2813,13 +2751,13 @@ export default {
               </button>
             </span>
           </span>
-        </el-tree>
+        </vue-easy-tree>
         <div v-if="!resourceTreeLoading && !databaseTree.length" class="resource-empty">
           <i class="el-icon-connection"></i>
           <span>暂无数据源</span>
           <el-button type="text" @click="openDataSourceManager()">新增连接</el-button>
         </div>
-      </el-scrollbar>
+      </div>
     </div>
 
     <div v-if="false" class="database_form">
@@ -3183,6 +3121,18 @@ export default {
       <button role="menuitem" @click="openSchemaDmpTransfer('import')"><i class="el-icon-upload2"></i><span>导入 DMP</span></button>
       <button role="menuitem" @click="openSchemaDmpTransfer('export')"><i class="el-icon-download"></i><span>导出 DMP</span></button>
     </div>
+    <div class="resource-context-menu" v-show="contextMenuVisible && contextMenuKind === 'object'"
+      :style="{ left: contextMenu_left + 'px', top: contextMenu_top + 'px' }" role="menu" @click.stop>
+      <div class="context-menu-title" :title="context_current_item.label">
+        <i :class="resourceNodeIcon(context_current_item)"></i><span>{{ context_current_item.label }}</span>
+      </div>
+      <button role="menuitem" @click="executeResourceContextAction('open')"><i class="el-icon-edit-outline"></i><span>打开并编辑</span></button>
+      <button v-if="context_current_item.treeNodeType === 'view' && isMaterializedView(context_current_item)"
+        role="menuitem" @click="executeResourceContextAction('refreshMaterialized')"><i class="el-icon-refresh"></i><span>刷新物化视图</span></button>
+      <button role="menuitem" @click="executeResourceContextAction('copyName')"><i class="el-icon-document-copy"></i><span>复制名称</span></button>
+      <div class="context-menu-divider"></div>
+      <button class="danger" role="menuitem" @click="executeResourceContextAction('delete')"><i class="el-icon-delete"></i><span>删除对象</span></button>
+    </div>
     <el-dialog
       :title="copyTableWithData ? '复制表及数据' : '复制表结构'"
       :visible.sync="copyTableDialogVisible"
@@ -3252,7 +3202,9 @@ export default {
     <addView
       :viewDialogVisible="viewDialogVisible"
       @viewCloseFn="viewCloseFn"
-      :dataBaseInfo="dataBaseInfo"
+      @created="viewCreated"
+      :viewKind="activeViewKind"
+      :dataBaseInfo="dataInfo.dataSource || dataBaseInfo"
       :schema="schema"
       :getTableDataList="getTableDataList"
     ></addView>
@@ -3493,6 +3445,11 @@ export default {
 .resource-tree-scrollbar {
   flex: 1;
   min-height: 0;
+  position: relative;
+}
+.resource-tree {
+  position: absolute;
+  inset: 0;
 }
 .resource-node {
   position: relative;
@@ -3613,6 +3570,10 @@ export default {
   margin-bottom: 6px;
   font-size: 24px;
 }
+.resource-overview-indent {
+  width: 24px;
+  flex: 0 0 24px;
+}
 ::v-deep .resource-search .el-input__inner {
   height: 28px;
   border-color: #dfe4ec;
@@ -3628,7 +3589,6 @@ export default {
 }
 ::v-deep .resource-tree .el-tree-node__content {
   height: 28px;
-  min-width: max-content;
   padding-right: 4px;
 }
 ::v-deep .resource-tree .el-tree-node__content:hover {

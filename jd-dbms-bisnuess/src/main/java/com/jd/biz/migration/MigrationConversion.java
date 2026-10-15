@@ -20,6 +20,11 @@ final class MigrationConversion {
         if (column.defaultValue != null && !column.defaultValue.trim().equalsIgnoreCase("NULL") && !column.defaultValue.trim().isEmpty()) throw new BusinessException("转换字段存在默认值，请专项转换默认值，不能静默丢弃");
         Column destination = new Column();
         String type = field.targetType.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", " ");
+        if ("DM".equals(source) && "TEXT".equalsIgnoreCase(column.sourceType)
+                && (type.equals("CLOB") || type.equals("NCLOB"))) {
+            if (field.sourceAttribute != null && !field.sourceAttribute.trim().isEmpty()) throw new BusinessException("大字段类型选择不支持对象属性投影");
+            column.kind = type; column.targetType = type; return;
+        }
         Matcher number = Pattern.compile("NUMBER\\((\\d+),(-?\\d+)\\)").matcher(type);
         Matcher text = Pattern.compile("(VARCHAR|NVARCHAR)\\((\\d+)\\)").matcher(type);
         Matcher binary = Pattern.compile("RAW\\((\\d+)\\)").matcher(type);

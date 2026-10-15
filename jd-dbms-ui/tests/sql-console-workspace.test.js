@@ -14,6 +14,8 @@ function load(relative, mocks) {
 const scriptContext = {}
 vm.runInNewContext(fs.readFileSync(path.join(root, 'utils/sqlScript.js'), 'utf8').replace(/export /g, ''), scriptContext)
 const { splitSqlStatements, sqlAtCursor } = scriptContext
+const resultContext = {}
+vm.runInNewContext(fs.readFileSync(path.join(root, 'utils/sqlResult.js'), 'utf8').replace(/export /g, ''), resultContext)
 const script = "SELECT 'a;b' FROM dual;\nDECLARE n NUMBER := 1; BEGIN IF n=1 THEN NULL; END IF; END;\n/\nSELECT 2 FROM dual;"
 assert.strictEqual(splitSqlStatements(script).length, 3)
 assert.strictEqual(sqlAtCursor(script, 4), "SELECT 'a;b' FROM dual")
@@ -27,7 +29,7 @@ async function main() {
   const results = [{ success: true, sqlType: 'SELECT', originalSql: 'SELECT 1 FROM dual', sessionId: 'query', sign: false },
     { success: true, originalSql: 'INSERT INTO T VALUES(1)', sessionId: 'transaction', sign: true }]
   const component = load('views/main/workspace/components/reanderSqlExecute/index.vue', {
-    renderSearchResult: {}, MonacoEditor: {}, draggable: {}, tableServer: {}, historyServer: {}, connectionServer: {},
+    SqlResultTable: {}, prepareSqlResult: resultContext.prepareSqlResult, MonacoEditor: {}, draggable: {}, tableServer: {}, historyServer: {}, connectionServer: {},
     sqlServer: { executeSql: async params => { requests.push(params); if (requestFailure) throw new Error('Network Error'); return { success: true, data: results } } },
     localStorage: { getItem: () => '[]', setItem() {} }, window: { crypto: { randomUUID: () => 'execution-id' } },
     document: { addEventListener(event, handler, capture) { keyHandler = handler; keyCapture = capture },
@@ -55,6 +57,7 @@ async function main() {
   await new Promise(resolve => setImmediate(resolve))
   assert.strictEqual(requests[0].sql, 'SELECT 1 FROM dual')
   assert.strictEqual(requests[0].databaseName, 'orcl')
+  assert.strictEqual(requests[0].skipCount, false, '控制台必须默认精确计数')
   assert.strictEqual(state.sessionId, 'transaction', '批量结果必须取实际最后的会话')
   assert.strictEqual(state.disableCommit, true)
   assert.strictEqual(results[0].params.sql, results[0].originalSql, '分页不能重放整个批次')
@@ -70,6 +73,14 @@ async function main() {
   component.methods.updateResult.call(state, paged)
   assert.strictEqual(state.currentConfig.sqlData[0].pageNo, 2)
   assert.strictEqual(state.currentConfig.sqlData[1], results[1], '翻页必须保留其他结果')
+  state.searchSql = 'ID > 3'
+  state.closeDialog = () => {}
+  state.$message = { error: message => { throw new Error(message) } }
+  await state.saveFilterData()
+  assert.strictEqual(requests[2].skipCount, false, '过滤后的结果也要精确计数')
+  assert.strictEqual(requests[2].sessionId, 'query')
+  assert.strictEqual(requests[2].databaseName, 'orcl')
+  assert.strictEqual(state.currentConfig.sqlData[1], results[1], '过滤一个结果集不能丢掉批次中的其他结果')
   requestFailure = true
   state.sqlLoading = true
   component.methods.requestSqlExecution.call(state, requests[1])

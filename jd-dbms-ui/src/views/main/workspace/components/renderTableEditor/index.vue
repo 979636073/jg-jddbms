@@ -20,7 +20,7 @@ export default {
   props: {
     queryResultData: {
       type: Object,
-      default: () => {}
+      default: () => ({})
     }
   },
   name: "createOrUpdateTable",
@@ -40,7 +40,7 @@ export default {
   },
   data() {
     return {
-      flag: false,
+      loadedSections: {},
       currentConfig: null,
       activeName: "sixth",
       oldTableDetails: null,
@@ -79,9 +79,7 @@ export default {
     changeFlag: {
       handler() {
         this.configChange();
-        this.initData().then(() => {
-          this.getDatabaseFieldTypeList();
-        });
+        this.initData();
       },
       deep: true,
       immediate: true
@@ -115,61 +113,40 @@ export default {
       return this.$store.state.workspace.currentConnectionDetails;
     }
   },
-  mounted() {
-    this.flag = false;
-  },
   methods: {
     backToOverview() {
       this.$emit("restoreOverview", this.currentConfig?.uniqueData || {});
     },
     initData() {
-      return new Promise(resolve => {
-        this.currentConfig = this.queryResultData;
-        if (this.currentConfig?.basicForm) {
-          this.basicForm = this.currentConfig?.basicForm;
-          this.columnList = this.currentConfig?.columnList;
-          this.indexList = this.currentConfig?.indexList;
-          this.oldTableDetails = this.currentConfig?.oldTableDetails;
-          this.activeName = this.currentConfig?.activeName;
-        } else {
-          if (this.currentConfig?.title !== "新建表") {
-            if (this.activeName == "ninth") {
-              this.queryReferencedList(false);
-            } else if (this.activeName == "eigth") {
-              this.queryGrantList();
-            } else if (this.activeName == "fifth") {
-              this.queryTriggerList();
-            }
-            // else if ( this.activeName == "second" || this.activeName == "third" || this.activeName == "forth" || this.activeName == "first" ||this.activeName == "seventh") {
-            //   this.getTableDetails();
-            // }
-            // 默认停留在“数据”页签时无需立即查询完整表元数据，切换到
-            // 列信息、索引、约束等页签后由 handleClick 按需加载。
-            if (this.activeName !== "sixth" && this.activeName !== "ninth" && this.activeName !== "eigth" && this.activeName !== "fifth") {
-              this.getTableDetails();
-            }
-          } else {
-            this.basicForm = {
-              name: "",
-              comment: "",
-              charset: "",
-              engine: "",
-              incrementValue: ""
-            };
-            this.columnList = [];
-            this.indexList = [];
-            this.oldTableDetails = null;
-          }
-        }
-        resolve();
-      });
+      this.currentConfig = this.queryResultData;
+      if (!this.currentConfig?.uniqueData?.dataSourceId) return Promise.resolve();
+      const config = this.currentConfig;
+      this.basicForm = config.basicForm || { name: config.uniqueData.tableName || "", comment: "", charset: "", engine: "", incrementValue: "" };
+      this.columnList = config.columnList || [];
+      this.indexList = config.indexList || [];
+      this.constraints = config.constraints || [];
+      this.triggerList = config.triggerList || [];
+      this.grantList = config.grantList || [];
+      this.querySql = config.querySql || "";
+      this.oldTableDetails = config.oldTableDetails || null;
+      this.loadedSections = config.loadedSections || {};
+      this.activeName = config.activeName || "sixth";
+      this.databaseSupportField = config.databaseSupportField || { columnTypes: [], charsets: [], collations: [], indexTypes: [], defaultValues: [] };
+      if (config.title === "新建表") return this.getDatabaseFieldTypeList();
+      return this.handleClick();
     },
     getDatabaseFieldTypeList() {
       let send = {
-        dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
-        databaseName: this.currentConfig?.uniqueData.databaseName
+        dataSourceId: this.currentConfig?.uniqueData?.dataSourceId,
+        databaseName: this.currentConfig?.uniqueData?.databaseName
       };
-      tableServer.getDatabaseFieldTypeList(send).then(({ data }) => {
+      if (!send.dataSourceId) return;
+      if (this.currentConfig.databaseSupportField) return Promise.resolve();
+      if (this._fieldTypeRequest && this._fieldTypeConfig === this.currentConfig) return this._fieldTypeRequest;
+      const config = this.currentConfig;
+      this._fieldTypeConfig = config;
+      this._fieldTypeRequest = tableServer.getDatabaseFieldTypeList(send).then(({ data }) => {
+        if (this.currentConfig !== config) return;
         const columnTypes =
           data?.columnTypes?.map(i => {
             return {
@@ -221,7 +198,13 @@ export default {
           indexTypes,
           defaultValues
         };
+        this.currentConfig.databaseSupportField = this.databaseSupportField;
+      }).catch(() => {
+        this.$message.error("加载字段类型失败，请稍后重试");
+      }).finally(() => {
+        if (this._fieldTypeConfig === config) this._fieldTypeRequest = null;
       });
+      return this._fieldTypeRequest;
     },
     configChange() {
       if (this.currentConfig) {
@@ -238,9 +221,30 @@ export default {
           JSON.stringify(this.oldTableDetails)
         );
         this.currentConfig.activeName = this.activeName;
+        this.currentConfig.loadedSections = { ...this.loadedSections };
+        this.currentConfig.constraints = this.constraints;
+        this.currentConfig.triggerList = this.triggerList;
+        this.currentConfig.grantList = this.grantList;
+        this.currentConfig.querySql = this.querySql;
       }
     },
     getTableDetails(value) {
+      return this.loadTableSection(this.activeName, value === true);
+    },
+    loadColumns() {
+      return this.loadTableSection("second");
+    },
+    loadTableSection(tab, refresh = false) {
+      const section = { second: "columns", third: "indexes", forth: "constraints", first: "basic", seventh: "ddl" }[tab];
+      if (!section || !this.currentConfig?.uniqueData?.tableName) return Promise.resolve(true);
+      if (!refresh && this.loadedSections[tab]) {
+        if (tab === "seventh") this.$nextTick(() => this.$refs.MonacoEditor?.setValue(this.querySql));
+        return Promise.resolve(true);
+      }
+      const config = this.currentConfig;
+      const key = [config.id, config.uniqueData.dataSourceId, config.uniqueData.schemaName, config.uniqueData.tableName, section].join(":");
+      if (!this._sectionRequests) this._sectionRequests = new Map();
+      if (this._sectionRequests.has(key)) return this._sectionRequests.get(key);
       this.isLoading = true;
       const params = {
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
@@ -248,66 +252,86 @@ export default {
         tableName: this.currentConfig?.uniqueData.tableName,
         schemaName: this.currentConfig?.uniqueData.schemaName,
         refresh: true,
-        isRefreshCache: value === true ? true : false
+        isRefreshCache: refresh
       };
-      tableServer.getTableDetails(params).then(res => {
+      const request = tableServer.getTableSection(params, section).then(res => {
+        if (this.currentConfig !== config || config.uniqueData.tableName !== params.tableName ||
+          config.uniqueData.schemaName !== params.schemaName || config.uniqueData.dataSourceId !== params.dataSourceId) return false;
         if (!res || !res.success || !res.data) {
           this.$message.error(res?.errorMessage || "加载表结构失败");
-          return;
+          return false;
         }
-        this.$refs.MonacoEditor?.setValue(res.data.querySql);
-        this.formatSql();
-        this.oldTableDetails = JSON.parse(JSON.stringify(res.data));
-        res.data?.columnList?.forEach(item => {
-          if (!item.key) item.key = uuidv4();
-          item.oldName = item.name;
-        });
-
-        res.data?.indexList?.forEach(item => {
-          if (!item.key) item.key = uuidv4();
-          item.oldName = item.name;
-        });
-
-        this.columnList = res.data?.columnList || [];
-        this.indexList = res.data?.indexList || [];
-        this.constraints = res.data?.constraints || [];
-        for (const resKey in this.basicForm) {
-          this.basicForm[resKey] = res.data[resKey];
+        const field = { second: "columnList", third: "indexList", forth: "constraints", seventh: "querySql" }[tab];
+        const baseline = tab === "first" ? Object.fromEntries(Object.keys(this.basicForm).map(name => [name, res.data[name]])) : { [field]: res.data[field] };
+        this.oldTableDetails = { ...this.oldTableDetails, name: config.uniqueData.tableName, schemaName: config.uniqueData.schemaName, ...JSON.parse(JSON.stringify(baseline)) };
+        if (tab === "first") {
+          for (const name in this.basicForm) this.basicForm[name] = res.data[name];
+        } else {
+          this[field] = res.data[field] || (tab === "seventh" ? "" : []);
+          if (tab === "second" || tab === "third") this[field].forEach(item => {
+            if (!item.key) item.key = uuidv4();
+            item.oldName = item.name;
+          });
+          if (tab === "seventh") this.$nextTick(() => {
+            this.$refs.MonacoEditor?.setValue(this.querySql);
+            this.formatSql();
+          });
         }
+        this.$set(this.loadedSections, tab, true);
+        if (refresh && tab === "forth") {
+          for (const relatedTab of ["second", "third", "seventh"]) this.$delete(this.loadedSections, relatedTab);
+        }
+        return true;
       }).catch(() => {
         this.$message.error("加载表结构失败，请稍后重试");
+        return false;
       }).finally(() => {
-        this.isLoading = false;
+        this._sectionRequests.delete(key);
+        this.isLoading = this._sectionRequests.size > 0;
       });
+      this._sectionRequests.set(key, request);
+      return request;
     },
-    queryTriggerList() {
+    queryTriggerList(refresh = false) {
+      if (!refresh && this.loadedSections.fifth) return Promise.resolve();
+      const config = this.currentConfig;
       const params = {
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
-        databaseName: this.currentConfig?.uniqueData.dataSourceName,
+        databaseName: this.currentConfig?.uniqueData.databaseName,
         schemaName: this.currentConfig?.uniqueData.schemaName,
         databaseType: this.currentConfig?.uniqueData.databaseType,
         tableName: this.currentConfig?.uniqueData.tableName,
-        refresh: false,
+        refresh,
         pageNo: 1,
         pageSize: 1000
       };
-      sqlServer.getTriggerList(params).then(res => {
+      return sqlServer.getTriggerList(params).then(res => {
+        if (this.currentConfig !== config || !res.success) return;
         if (res.data.data.length > 0) {
           this.triggerList = res.data.data;
         } else {
           this.triggerList = [];
         }
+        this.$set(this.loadedSections, "fifth", true);
+      }).catch(() => {
+        this.$message.error("加载触发器失败，请稍后重试");
       });
     },
     queryGrantList() {
+      if (this.loadedSections.eigth) return Promise.resolve();
+      const config = this.currentConfig;
       const params = {
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
-        databaseName: this.currentConfig?.uniqueData.dataSourceName,
+        databaseName: this.currentConfig?.uniqueData.databaseName,
         schemaName: this.currentConfig?.uniqueData.schemaName,
         tableName: this.currentConfig?.uniqueData.tableName
       };
-      tableServer.getGrantList(params).then(res => {
+      return tableServer.getGrantList(params).then(res => {
+        if (this.currentConfig !== config || !res.success) return;
         this.grantList = res.data;
+        this.$set(this.loadedSections, "eigth", true);
+      }).catch(() => {
+        this.$message.error("加载授权失败，请稍后重试");
       });
     },
 
@@ -316,22 +340,24 @@ export default {
       const type = relationType || this.relationType;
       const relationKey = [
         this.currentConfig?.uniqueData.dataSourceId,
+        this.currentConfig?.uniqueData.databaseName,
         this.currentConfig?.uniqueData.schemaName,
         this.currentConfig?.uniqueData.tableName,
         type,
-      ].join(":");
-      if (!ref && (this.relationLoadingKey === relationKey || this.relationLoadedKey === relationKey)) {
+      ];
+      const key = JSON.stringify(relationKey);
+      if (!ref && (this.relationLoadingKey === key || this.relationLoadedKey === key)) {
         return;
       }
       const requestId = ++this.relationRequestId;
       if (this.relationCancelSource) this.relationCancelSource.cancel("关联关系查询已取消");
       this.relationCancelSource = axios.CancelToken.source();
-      this.relationLoadingKey = relationKey;
+      this.relationLoadingKey = key;
       this.isLoading = true;
       const params = {
         isRefreshCache: ref ? true : false,
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
-        databaseName: this.currentConfig?.uniqueData.dataSourceName,
+        databaseName: this.currentConfig?.uniqueData.databaseName,
         schemaName: this.currentConfig?.uniqueData.schemaName,
         tableName: this.currentConfig?.uniqueData.tableName
       };
@@ -342,7 +368,7 @@ export default {
       const query = type === "view"
         ? tableServer.viewDependent({ ...params, check: "1" }, requestConfig)
         : tableServer.getQueryRefer(params, requestConfig);
-      query
+      return query
         .then(res => {
           if (requestId !== this.relationRequestId) return;
           if (res.success && res.data) {
@@ -350,7 +376,7 @@ export default {
           } else {
             this.ReferencedList = [];
           }
-          this.relationLoadedKey = relationKey;
+          if (res.success) this.relationLoadedKey = key;
         })
         .catch(error => {
           if (axios.isCancel(error)) return;
@@ -364,7 +390,7 @@ export default {
         });
     },
     refreshFn() {
-      this.queryTriggerList();
+      this.queryTriggerList(true);
     },
     refreshForKe() {
       this.queryReferencedList(true);
@@ -389,28 +415,20 @@ export default {
     handleClick() {
       if (this.activeName !== "ninth") this.cancelRelationQuery(false);
       if (this.activeName == "ninth") {
-        this.queryReferencedList(false);
+        return this.queryReferencedList(false);
       } else if (this.activeName == "eigth") {
-        this.queryGrantList();
+        return this.queryGrantList();
       } else if (this.activeName == "fifth") {
-        this.queryTriggerList();
-      } else if (
-        this.activeName == "second" ||
-        this.activeName == "third" ||
-        this.activeName == "forth" ||
-        this.activeName == "first" ||
-        this.activeName == "seventh"
-      ) {
-        if (!this.flag) {
-          this.getTableDetails();
-          this.flag = true;
-        }
-      } else if (this.activeName == "sixth") {
-        this.$refs.renderSearchResult.advancedQuery();
-        this.$refs.renderSearchResult.isColor = false;
+        return this.queryTriggerList();
       }
+      if (this.activeName === "second" || this.activeName === "third") this.getDatabaseFieldTypeList();
+      return this.loadTableSection(this.activeName);
     },
-    submit() {
+    async submit() {
+      if (this.currentConfig?.uniqueData?.tableName) {
+        const results = await Promise.all(["second", "third", "first"].map(tab => this.loadTableSection(tab)));
+        if (results.some(result => !result)) return;
+      }
       const newTable = {
         ...this.oldTableDetails,
         ...this.basicForm,
@@ -462,7 +480,7 @@ export default {
       }
       tableServer.getModifyTableSql(params).then(res => {
         if (res.success) {
-          if (res.data[0].sql == ";") {
+          if (!res.data[0]?.sql?.trim() || res.data[0].sql.trim() === ";") {
             this.$message.warning("未发生修改，无需保存!");
           } else {
             this.$refs.sqlPreview.init(res.data[0]?.sql);
@@ -493,6 +511,7 @@ export default {
         } else {
           this.$message.error("系统发生异常!");
         }
+        if (!res.success || !res.data.success) return;
         this.$refs.sqlPreview.dialogClose();
         this.currentConfig.title = this.basicForm.name;
         this.currentConfig.uniqueData.tableName = this.basicForm.name;
@@ -501,6 +520,8 @@ export default {
           return item;
         });
         this.$store.commit("SET_WORKSPACETABLIST", _workspaceTabList);
+        this.loadedSections = {};
+        this.currentConfig.loadedSections = {};
         this.getTableDetails(true);
         if(this.activeName == 'first'){
            this.$emit("tableRefresh", 'tableRefresh');
@@ -546,7 +567,7 @@ export default {
       <el-tab-pane label="数据" name="sixth">
         <renderSearchResult :queryResultData="queryResultData" ref="renderSearchResult"></renderSearchResult>
       </el-tab-pane>
-      <el-tab-pane label="列信息" name="second">
+      <el-tab-pane label="列信息" name="second" lazy>
         <ColumnList
           @setColumnList="setColumnList"
           :databaseSupportField="databaseSupportField"
@@ -558,17 +579,18 @@ export default {
           ref="columList"
         />
       </el-tab-pane>
-      <el-tab-pane label="索引信息" name="third">
+      <el-tab-pane label="索引信息" name="third" lazy>
         <IndexList
           :currentConfig="currentConfig"
           :databaseSupportField="databaseSupportField"
           :columnList="columnList"
+          :loadColumns="loadColumns"
           :tableData="indexList"
           :isLoading="isLoading"
           :getTableDetails="getTableDetails"
         />
       </el-tab-pane>
-      <el-tab-pane label="约束" name="forth">
+      <el-tab-pane label="约束" name="forth" lazy>
         <constraintList
           :tableData="constraints"
           :currentConfig="currentConfig"
@@ -576,7 +598,7 @@ export default {
           :getTableDetails="getTableDetails"
         />
       </el-tab-pane>
-      <el-tab-pane label="建表语句" name="seventh">
+      <el-tab-pane label="建表语句" name="seventh" lazy>
         <el-button
           type="primary"
           style="margin-bottom:15px"
@@ -589,20 +611,20 @@ export default {
           style="width: 100%; height: calc(100% - 47px)"
         />
       </el-tab-pane>
-      <el-tab-pane label="基本信息" name="first">
+      <el-tab-pane label="基本信息" name="first" lazy>
         <BaseInfo ref="baseInfo" :currentConfig="currentConfig" :basic-form="basicForm" />
       </el-tab-pane>
-      <el-tab-pane label="触发器" name="fifth">
+      <el-tab-pane label="触发器" name="fifth" lazy>
         <TriggerList
           :tableData="triggerList"
           :currentConfig="currentConfig"
           @refreshFn="refreshFn"
         />
       </el-tab-pane>
-      <el-tab-pane label="授权" name="eigth">
+      <el-tab-pane label="授权" name="eigth" lazy>
         <GrantList :tableData="grantList" />
       </el-tab-pane>
-      <el-tab-pane label="关联关系" name="ninth">
+      <el-tab-pane label="关联关系" name="ninth" lazy>
         <UsedByList
           :tableData="ReferencedList"
           :isLoading="isLoading"

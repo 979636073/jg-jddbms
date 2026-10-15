@@ -73,6 +73,30 @@ public class DlTemplateBlobTest {
     }
 
     @Test
+    public void readsBlobFromConsoleQueryWithoutRowId() throws Exception {
+        AtomicReference<String> sql = new AtomicReference<>();
+        useConnection(new byte[]{1, 2, 3}, sql, new AtomicReference<>());
+        GetBlobRequest request = new GetBlobRequest();
+        request.setBlobColumn("PAYLOAD_ALIAS");
+        request.setSql("SELECT PAYLOAD AS PAYLOAD_ALIAS FROM T ORDER BY ID");
+        request.setRowIndex(2);
+        request.setColumnIndex(1);
+
+        assertEquals("AQID", new DlTemplateServiceImpl().getBlobData(request));
+        assertEquals(request.getSql(), sql.get());
+    }
+
+    @Test(expected = BusinessException.class)
+    public void rejectsNonQueryBlobLocator() throws Exception {
+        useConnection(null, new AtomicReference<>(), new AtomicReference<>());
+        GetBlobRequest request = new GetBlobRequest();
+        request.setSql("DELETE FROM T");
+        request.setRowIndex(0);
+        request.setColumnIndex(1);
+        new DlTemplateServiceImpl().getBlobData(request);
+    }
+
+    @Test
     public void detectsArchiveExtensionFromEntries() throws IOException {
         DlTemplateServiceImpl service = new DlTemplateServiceImpl();
         assertEquals(".jar", service.parseFileType(archive("META-INF/MANIFEST.MF")));

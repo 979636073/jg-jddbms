@@ -151,12 +151,12 @@ public class DefaultMetaService implements MetaData {
         return null;
     }
 
-    private String VIEW_REFERENCED_SQL = "SELECT A.OWNER as OWNER,A.NAME as NAME,A.TYPE as TYPE,A.REFERENCED_NAME as REFERENCED_NAME,A.REFERENCED_TYPE as REFERENCED_TYPE,A.REFERENCED_OWNER as REFERENCED_OWNER, O.STATUS as STATUS FROM ALL_DEPENDENCIES A INNER JOIN SYS.ALL_OBJECTS O ON O.OBJECT_NAME = A.NAME  WHERE A.OWNER = '%s' AND A.NAME = '%s'";
+    private String VIEW_REFERENCED_SQL = "SELECT A.OWNER as OWNER,A.NAME as NAME,A.TYPE as TYPE,A.REFERENCED_NAME as REFERENCED_NAME,A.REFERENCED_TYPE as REFERENCED_TYPE,A.REFERENCED_OWNER as REFERENCED_OWNER, O.STATUS as STATUS FROM ALL_DEPENDENCIES A INNER JOIN SYS.ALL_OBJECTS O ON O.OWNER = A.OWNER AND O.OBJECT_NAME = A.NAME AND O.OBJECT_TYPE = A.TYPE WHERE A.OWNER = '%s' AND A.NAME = '%s'";
 
     @Override
     public List<ViewReferencedData> getViewReferenced(Connection connection, String schemaName, String tableName) {
         List<ViewReferencedData> list = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_REFERENCED_SQL, schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_REFERENCED_SQL, schemaName.replace("'", "''"), tableName.replace("'", "''")), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
             while (resultSet.next()) {
                 ViewReferencedData viewReferencedData = new ViewReferencedData();
                 viewReferencedData.setSchemaName(resultSet.getString("OWNER"));
@@ -172,12 +172,12 @@ public class DefaultMetaService implements MetaData {
         });
     }
 
-    private String VIEW_UPON_REFERENCED_SQL = "SELECT A.OWNER as OWNER,A.NAME as NAME,A.TYPE as TYPE,A.REFERENCED_NAME as REFERENCED_NAME,A.REFERENCED_TYPE as REFERENCED_TYPE,A.REFERENCED_OWNER as REFERENCED_OWNER, O.STATUS as STATUS FROM ALL_DEPENDENCIES A INNER JOIN SYS.ALL_OBJECTS O ON O.OBJECT_NAME = A.NAME  WHERE A.REFERENCED_OWNER = '%s' AND A.REFERENCED_NAME = '%s'";
+    private String VIEW_UPON_REFERENCED_SQL = "SELECT A.OWNER as OWNER,A.NAME as NAME,A.TYPE as TYPE,A.REFERENCED_NAME as REFERENCED_NAME,A.REFERENCED_TYPE as REFERENCED_TYPE,A.REFERENCED_OWNER as REFERENCED_OWNER, O.STATUS as STATUS FROM ALL_DEPENDENCIES A INNER JOIN SYS.ALL_OBJECTS O ON O.OWNER = A.OWNER AND O.OBJECT_NAME = A.NAME AND O.OBJECT_TYPE = A.TYPE WHERE A.REFERENCED_OWNER = '%s' AND A.REFERENCED_NAME = '%s'";
 
     @Override
     public List<ViewReferencedData> getViewUponReferenced(Connection connection, String schemaName, String tableName) {
         List<ViewReferencedData> list = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_UPON_REFERENCED_SQL, schemaName, tableName), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(VIEW_UPON_REFERENCED_SQL, schemaName.replace("'", "''"), tableName.replace("'", "''")), RELATION_QUERY_TIMEOUT_SECONDS, resultSet -> {
             while (resultSet.next()) {
                 ViewReferencedData viewReferencedData = new ViewReferencedData();
                 viewReferencedData.setSchemaName(resultSet.getString("OWNER"));

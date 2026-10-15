@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-29",
+  "scope": ["structured AND source filters", "per-object scope and conflict overrides", "task-wide row pacing", "configuration dialog viewport repair"],
+  "commercialAcceptanceComplete": false,
+  "productionContainersUpdated": false,
+  "remoteRepositoryUpdated": false,
+  "dmpDevelopmentPaused": true,
+  "tests": {
+    "hostMigration": {"tests": 50, "failures": 0, "errors": 0, "skipped": 0},
+    "backendReactor": {"tests": 199, "failures": 0, "errors": 0, "skipped": 11, "note": "Nine opt-in migration tests independently enabled and passed; two existing privilege tests not enabled."},
+    "frontendScripts": 16,
+    "frontendProductionBuild": "PASS, 62 existing Monaco CSS/size warnings",
+    "backendPackage": "PASS",
+    "arm64Migration": {"tests": 50, "failures": 0, "errors": 0, "skipped": 0, "exitCode": 0, "seconds": 173.629, "runtime": "Linux aarch64 Zulu Java 8u504", "cpus": 2, "containerMiB": 512, "jvmXmxMiB": 256, "emulatedNotPhysicalArm": true},
+    "liveDirections": ["DM-DM", "DM-ORACLE", "ORACLE-DM", "ORACLE-ORACLE"],
+    "liveCases": ["global STOP overridden per table by APPEND/CLEAR/REBUILD", "numeric, text LIKE, microsecond civil time and IS NOT NULL bound filters", "filtered source baseline and full-content hash", "independent high-risk confirmation", "existing-target preservation on APPEND", "outside-filter target row blocks PK recovery", "existing LOB/constraints/ownership/restart regressions"],
+    "oracleComplexObjects": "NOT TESTED: QA lacks CREATE SEQUENCE/VIEW/SYNONYM/PROCEDURE/TRIGGER; no grants performed"
+  },
+  "browser": {
+    "mode": "Production dist served at isolated local fixture server, no real database proxy or migration execution",
+    "viewports": ["1440x900", "1280x720"],
+    "cases": ["create/edit filter and per-object strategy", "save mapping and draft", "reload preserves KEY_ID, DATA/CLEAR, ID EQ 1, rowsPerSecond 25", "1280 dialog save button within viewport and clickable", "no page horizontal overflow"],
+    "saveButton1280": {"top": 652.578125, "bottom": 684.578125, "viewportHeight": 720},
+    "errorNote": "Session had 21 historical request/promise errors after accidental navigation to out-of-scope workspace whose endpoints fixtures reject; final migration-only replay added no new errors. Do not describe the cumulative buffer as empty.",
+    "screenshots": ["续开发验收-筛选策略-1280.png (before repair)", "续开发验收-筛选策略-1280-修复后.png", "续开发验收-草稿重载-配置-1280.png", "续开发验收-草稿重载-配置-1440.png"]
+  },
+  "buildSha256": {
+    "jd-dbms-admin/target/jd-dbms-admin.jar": "4D668A7F2FB80A0D0B744828FCB16753F5C1BFD5005B78E117DB749E3798ADDC",
+    "jd-dbms-ui/dist/index.html": "3506413D6483857EE6DB504A9EEE717F18CFF116C0E51B7460F5AA4B6307FD1D",
+    "jd-dbms-ui/dist/static/js/chunk-3f622f64.185e339b.js": "8683C5828281ABC9533D6BE65C2E5448EE708C83920552E1838D9C353C43E56F"
+  },
+  "performanceNotSla": {
+    "rows": 10001, "blobBytes": 8388608, "clobCharacters": 1200000,
+    "hostCopySeconds": 1.2554467, "hostTotalSeconds": 3.0920675,
+    "armCopySeconds": 14.253988494, "armTotalSeconds": 37.661586789,
+    "armSumOfHeapPoolPeaksNotRss": 35970928
+  },
+  "remainingImplementation": ["configurable concurrency", "continue independent failed objects and arbitrary per-object rerun", "tablespace and custom type conversion"],
+  "remainingAcceptance": ["Oracle complex object QA permissions", "production JWT/network HTTP and real container/network/space faults", "agreed versions, charsets, scale and long-running performance", "product dependency and driver distribution licenses"]
+}

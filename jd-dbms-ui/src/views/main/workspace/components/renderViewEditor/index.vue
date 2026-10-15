@@ -39,6 +39,9 @@ export default {
       activeName: "first",
       activeTab: "third",
       sql: "",
+      saving: false,
+      refreshing: false,
+      compiling: false,
       // 基本信息
       basicForm: {
         dataSourceId: "",
@@ -74,6 +77,9 @@ export default {
     },
     currentDataSource() {
       return this.$store.state.workspace.currentConnectionDetails;
+    },
+    materializedView() {
+      return String(this.queryResultData?.uniqueData?.viewType || "").toUpperCase() === "MATERIALIZED VIEW";
     }
   },
   watch: {
@@ -281,8 +287,13 @@ export default {
         }
       });
     },
-    submit() {
-      let viewSql = this.$refs.MonacoEditor.getValue();
+    async submit() {
+      if (this.materializedView || this.saving) return;
+      const viewSql = this.$refs.MonacoEditor.getValue().trim();
+      if (!/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\b/i.test(viewSql)) {
+        this.$message.error("请填写 CREATE VIEW 语句");
+        return;
+      }
       let send = {
         dataSourceId: this.currentConfig?.uniqueData.dataSourceId,
         databaseName: this.currentConfig?.uniqueData.databaseName,
@@ -291,14 +302,55 @@ export default {
         viewSql: viewSql,
         columnList: this.columnList
       };
-      viewServer.viewExecute(send).then(res => {
-        if (res.success) {
-          this.$message.success("保存成功！");
-          this.$emit("tableRefresh", this.currentConfig.uniqueData.node.parent);
-        } else {
-          this.$message.error(res.errorMessage);
-        }
-      });
+      this.saving = true;
+      try {
+        const res = await viewServer.viewExecute(send);
+        if (!res.success || !res.data?.[0]?.success) throw new Error(res.data?.[0]?.message || res.errorMessage || "保存失败");
+        this.$message.success("视图已保存");
+        await this.initData(true);
+        this.$emit("tableRefresh", this.currentConfig.uniqueData.node?.parent);
+      } catch (error) {
+        this.$message.error(error.message || "保存视图失败");
+      } finally {
+        this.saving = false;
+      }
+    },
+    async compileView() {
+      if (this.compiling || this.materializedView) return;
+      this.compiling = true;
+      try {
+        const res = await viewServer.viewAllExecute({
+          dataSourceId: this.basicForm.dataSourceId,
+          schemaName: this.basicForm.schemaName,
+          tableName: this.basicForm.tableName,
+        });
+        if (!res.success || !res.data?.[0]?.success) throw new Error(res.data?.[0]?.message || res.errorMessage || "编译失败");
+        this.$message.success("视图编译成功");
+      } catch (error) {
+        this.$message.error(error.message || "视图编译失败");
+      } finally {
+        this.compiling = false;
+      }
+    },
+    async refreshMaterializedView() {
+      if (!this.materializedView || this.refreshing) return;
+      this.refreshing = true;
+      try {
+        const res = await viewServer.refreshMaterialized({
+          dataSourceId: this.basicForm.dataSourceId,
+          schemaName: this.basicForm.schemaName,
+          tableName: this.basicForm.tableName,
+          viewType: "MATERIALIZED VIEW",
+        });
+        if (!res.success) throw new Error(res.errorMessage || "刷新失败");
+        this.$message.success("物化视图已刷新");
+        await this.initData(true);
+        this.$refs.renderSearchResult.refresh();
+      } catch (error) {
+        this.$message.error(error.message || "物化视图刷新失败");
+      } finally {
+        this.refreshing = false;
+      }
     },
     handleClick(tab, event) {
       console.log(tab, event);
@@ -374,9 +426,15 @@ export default {
 
 <template>
   <div class="view_editor">
+    <div class="view-editor-header">
+      <span class="view-editor-kind">{{ materializedView ? '物化视图' : '普通视图' }}</span>
+      <span class="view-editor-name">{{ basicForm && basicForm.tableName }}</span>
+      <el-button v-if="materializedView" type="primary" size="mini" :loading="refreshing" @click="refreshMaterializedView">刷新数据</el-button>
+      <el-button v-else size="mini" :loading="compiling" @click="compileView">编译</el-button>
+    </div>
     <el-tabs v-model="activeTab">
       <el-tab-pane label="数据" name="third">
-        <renderSearchResult :queryResultData="queryResultData" :typeView="typeView"></renderSearchResult>
+        <renderSearchResult ref="renderSearchResult" :queryResultData="queryResultData" :typeView="typeView"></renderSearchResult>
       </el-tab-pane>
       <el-tab-pane label="列信息" name="second">
         <ColumnViewList
@@ -386,12 +444,15 @@ export default {
         />
       </el-tab-pane>
       <el-tab-pane label="基本信息" name="info">
-        <el-button type="primary" @click="saveView" size="small">保存</el-button>
+        <el-button v-if="!materializedView" type="primary" @click="saveView" size="small">保存名称</el-button>
+        <div v-else class="view-editor-note">物化视图的名称和定义请在脚本中查看；更新数据请点击上方“刷新数据”。</div>
         <div style="font-size:14px;margin:10px">视图名称</div>
-        <el-input v-model="viewName" size="small" maxlength="50" show-word-limit></el-input>
+        <el-input v-model="viewName" :disabled="materializedView" size="small" maxlength="50" show-word-limit></el-input>
       </el-tab-pane>
-      <el-tab-pane label="Script" name="first">
+      <el-tab-pane label="脚本" name="first">
         <el-button type="primary" size="mini" style="margin-bottom:10px" @click="importScript">导出</el-button>
+        <el-button v-if="!materializedView" type="primary" size="mini" style="margin-bottom:10px" :loading="saving" @click="submit">保存定义</el-button>
+        <span v-else class="view-editor-note">物化视图脚本仅供查看</span>
         <MonacoEditor
           ref="MonacoEditor"
           dom="editor"
@@ -418,6 +479,11 @@ export default {
   padding: 10px 10px 0;
   border-radius: 5px;
   position: relative;
+  .view-editor-header { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 4px 8px; border-bottom: 1px solid #e5eaf2; font-size: 12px; }
+  .view-editor-header .el-button { margin-left: auto; }
+  .view-editor-kind { color: #006fff; background: #f0f5ff; border-radius: 3px; padding: 3px 6px; }
+  .view-editor-name { color: #29364d; font-weight: 600; }
+  .view-editor-note { color: #68758b; font-size: 12px; margin-left: 8px; }
   .btn_box {
     display: flex;
     justify-content: end;
@@ -447,7 +513,7 @@ export default {
   }
 }
 .el-tabs {
-  height: calc(100%);
+  height: calc(100% - 34px);
   ::v-deep .el-tabs__content {
     height: calc(100% - 55px);
     .el-tab-pane {

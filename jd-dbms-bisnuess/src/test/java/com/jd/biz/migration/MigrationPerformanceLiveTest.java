@@ -2,6 +2,9 @@ package com.jd.biz.migration;
 
 import com.alibaba.fastjson2.JSON;
 import com.jd.biz.domain.api.model.DataSource;
+import com.jd.common.tools.base.wrapper.result.PageResult;
+import com.jd.spi.model.Table;
+import com.jd.spi.sql.Chat2DBContext;
 import org.junit.Test;
 import java.io.InputStream;
 import java.io.StringReader;
@@ -15,10 +18,41 @@ import static com.jd.biz.migration.MigrationDialect.*;
 
 /** Opt-in bounded baseline, not a claim about unspecified commercial maximum scale or SLA. */
 public class MigrationPerformanceLiveTest {
+    @Test public void pagedTableMetadataFromLargeLocalSchema() throws Exception {
+        org.junit.Assume.assumeTrue("1".equals(System.getenv("JDDBMS_MIGRATION_LIVE")));
+        Path root = Paths.get(System.getProperty("user.dir"));
+        if (root.getFileName().toString().equals("jd-dbms-bisnuess")) System.setProperty("user.dir", root.getParent().toString());
+        DataSource info = new DataSource(); info.setType("DM"); info.setDriverConfig(new MigrationLiveTest().driver("DM"));
+        info.setUrl(MigrationLiveTest.hostUrl(System.getenv("JDDBMS_META_DB_URL")));
+        info.setUserName(System.getenv("JDDBMS_META_DB_USERNAME")); info.setPassword(System.getenv("JDDBMS_META_DB_PASSWORD"));
+        try (Connection connection = new MigrationConnections().open(info)) {
+            PageResult<Table> first = Chat2DBContext.getMetaData("DM").tableDetailsPage(connection, "", "SYSDBA", "", 1, 200);
+            org.junit.Assume.assumeTrue("Local SYSDBA schema has fewer than 400 tables", first.getTotal() >= 400);
+            long[] millis = new long[6];
+            for (int i = 0; i < millis.length; i++) {
+                long start = System.nanoTime();
+                PageResult<Table> page = Chat2DBContext.getMetaData("DM").tableDetailsPage(connection, "", "SYSDBA", "", 1 + i % 2, 200);
+                millis[i] = (System.nanoTime() - start) / 1_000_000;
+                assertEquals(200, page.getData().size()); assertEquals(first.getTotal(), page.getTotal());
+            }
+            Arrays.sort(millis);
+            Map<String, Object> metrics = new LinkedHashMap<>();
+            metrics.put("schema", "SYSDBA"); metrics.put("tables", first.getTotal()); metrics.put("pageSize", 200);
+            metrics.put("p50Ms", millis[2]); metrics.put("p95Ms", millis[5]); metrics.put("samplesMs", millis);
+            System.out.println("TABLE METADATA PAGE BASELINE " + JSON.toJSONString(metrics));
+        }
+    }
+
     @Test public void tenThousandRowsAndEightMiBLob() throws Exception {
-        DataSource info = new MigrationLiveTest().environment("DM"); MigrationConnections connections = new MigrationConnections();
+        org.junit.Assume.assumeTrue("1".equals(System.getenv("JDDBMS_MIGRATION_LIVE")));
+        Path root = Paths.get(System.getProperty("user.dir"));
+        if (root.getFileName().toString().equals("jd-dbms-bisnuess")) System.setProperty("user.dir", root.getParent().toString());
+        DataSource info = new DataSource(); info.setType("DM"); info.setDriverConfig(new MigrationLiveTest().driver("DM"));
+        info.setUrl(MigrationLiveTest.hostUrl(System.getenv("JDDBMS_META_DB_URL")));
+        info.setUserName(System.getenv("JDDBMS_META_DB_USERNAME")); info.setPassword(System.getenv("JDDBMS_META_DB_PASSWORD"));
+        MigrationConnections connections = new MigrationConnections();
         String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
-        Config config = new Config(); config.name = "有界性能基线"; config.sourceId = config.targetId = info.getId(); config.sourceSchema = config.targetSchema = info.getUserName();
+        Config config = new Config(); config.name = "有界性能基线"; config.sourceId = config.targetId = 1L; config.sourceSchema = config.targetSchema = "JQDMO_260926";
         Mapping mapping = new Mapping(); mapping.source = "JD_QA_P0929_S" + token; mapping.target = "JD_QA_P0929_T" + token; config.tables.add(mapping);
         boolean sourceCreated = false, targetCreated = false;
         try (Connection source = connections.open(info); Connection target = connections.open(info)) {

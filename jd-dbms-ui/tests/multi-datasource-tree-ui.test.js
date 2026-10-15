@@ -86,7 +86,7 @@ assert(navList.includes('route: "/data-migration/index"'), '顶部导航应提�
 assert(navList.includes('route: "/table-compare/index"'), '顶部导航应提供表结构对比入口')
 assert(navBarSource.includes('target="_blank"'), '顶部功能入口应在同一浏览器打开新标签页')
 assert(!navBarSource.includes('window.open('), '顶部功能入口不应弹出独立浏览器窗口')
-const routerSource = fs.readFileSync(path.join(__dirname, '../src/router/index.js'), 'utf8')
+const routerSource = fs.readFileSync(path.join(__dirname, '../src/router/index.js'), 'utf8').replace(/\r\n/g, '\n')
 for (const path of ['/data-migration', '/table-compare']) {
   assert(routerSource.includes(`path: '${path}',\n    component: Layout,\n    hidden: true,`), `${path} 不应再显示在后台管理菜单`)
 }

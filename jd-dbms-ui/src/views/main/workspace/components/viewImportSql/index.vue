@@ -46,6 +46,7 @@
      <addView
       :viewDialogVisible="viewDialogVisible"
       @viewCloseFn="handleClose"
+      @created="getTableDataList && getTableDataList(schema)"
       :dataBaseInfo="dataBaseInfo"
       :getTableDataList="getTableDataList"
       :uploadFormInfo="uploadFormInfo"

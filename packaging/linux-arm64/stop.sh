@@ -6,7 +6,7 @@ if [[ -f config/local.env ]]; then
   # shellcheck disable=SC1091
   source config/local.env
 fi
-NGINX_BIN="${JDDBMS_NGINX_BIN:-$(command -v nginx || true)}"
+NGINX_BIN="$ROOT/nginx/nginx"
 if [[ -f "$ROOT/jd-dbms-admin.jar" ]]; then
   JAR_FILE="$ROOT/jd-dbms-admin.jar"
 else
@@ -14,7 +14,7 @@ else
 fi
 
 if [[ -f run/nginx.pid ]]; then
-  if [[ -n "$NGINX_BIN" ]]; then
+  if [[ -x "$NGINX_BIN" ]]; then
     "$NGINX_BIN" -p "$ROOT/" -c nginx/nginx.conf -s quit || true
   fi
   echo '已请求停止本包 Nginx。'

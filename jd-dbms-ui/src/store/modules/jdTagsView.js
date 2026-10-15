@@ -120,8 +120,8 @@ const mutations = {
   },
   CHANGE_VIEWS_TITLE: (state, obj) => {
     let { id, title } = obj
-    const item = state.titleMap.find(view => view.id == id)
-    if (item) item.title = title
+    const items = state.titleMap.filter(view => view.id == id)
+    if (items.length) items.forEach(item => { item.title = title })
     else state.titleMap.push({ id, title })
   },
 }

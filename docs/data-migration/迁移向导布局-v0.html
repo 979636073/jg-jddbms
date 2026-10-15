@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据迁移 · 布局样稿 v0</title>
+  <link rel="stylesheet" href="../../jd-dbms-ui/node_modules/element-ui/lib/theme-chalk/index.css">
+  <style>
+    :root { --primary: #006fff; --primary-hover: #2052dd; --background: #f1f3f9; --surface: #fff; --text: #303133; --muted: #68728c; --border: #dfe6f0; --danger: #d94242; --radius: 4px; --gap: 16px; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body { color: var(--text); background: var(--background); font: 12px/1.6 "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif; }
+    [v-cloak] { display: none; }
+    #app { height: 100%; display: flex; flex-direction: column; gap: 12px; padding: var(--gap); }
+    h1, h2 { font-size: 16px; font-weight: 600; margin: 0; }
+    h3 { font-size: 12px; font-weight: 600; margin: 0 0 12px; }
+    p { margin: 4px 0 0; text-wrap: pretty; }
+    .muted { color: var(--muted); }
+    .danger { color: var(--danger); }
+    .page-heading, .section-heading, .toolbar, .wizard-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-shrink: 0; }
+    .page-heading > div:first-child { min-width: 0; }
+    .prototype-mark { border: 1px solid var(--border); padding: 4px 8px; border-radius: var(--radius); color: var(--muted); background: var(--surface); white-space: nowrap; }
+    .panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .step-panel { padding: 12px 16px; flex-shrink: 0; }
+    .editor-panel { padding: 16px; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; gap: 8px; }
+    .section-heading .muted { margin-left: 12px; font-weight: 400; font-size: 12px; }
+    .section-heading > span { color: var(--muted); }
+    .toolbar { justify-content: flex-start; flex-wrap: wrap; }
+    .toolbar .el-select { width: 170px; }
+    .toolbar > .el-input { width: 200px; }
+    .toolbar .el-button + .el-button { margin-left: 0; }
+    .selection-count { margin-left: auto; white-space: nowrap; }
+    .table-region { flex: 1; min-height: 0; overflow: hidden; }
+    .pagination { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .el-table th { background: var(--background); color: var(--muted); font-weight: 500; }
+    .el-table .cell { line-height: 20px; }
+    .el-table td { padding: 8px 0; }
+    .el-table p { margin: 0; }
+    .el-table .el-button { padding: 0; }
+    .el-table, .el-input__inner, .el-button, .el-form-item__label, .el-step__title, .el-tabs__item, .el-checkbox__label, .el-alert__title { font-size: 12px; }
+    .el-form--label-top .el-form-item__label { color: var(--text); line-height: 20px; padding-bottom: 4px; }
+    .el-form-item.el-form-item--small { margin-bottom: 0; }
+    .el-form-item__content { line-height: 32px; }
+    .el-select, .el-input-number { width: 100%; }
+    .el-button--primary { background: var(--primary); border-color: var(--primary); }
+    .el-button--primary:hover, .el-button--primary:focus { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .el-button--text, .el-tabs__item.is-active { color: var(--primary); }
+    .el-tabs__active-bar { background: var(--primary); }
+    .el-tabs__nav-wrap::after { height: 1px; background: var(--border); }
+    .el-tabs__item { height: 36px; line-height: 36px; }
+    .el-step__title { line-height: 24px; }
+    .el-step__icon { width: 22px; height: 22px; }
+    .el-step.is-horizontal .el-step__line { top: 10px; }
+    .mapping-tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .mapping-tabs > .el-tabs__header { margin: 0 0 8px; flex-shrink: 0; }
+    .mapping-tabs > .el-tabs__content { flex: 1; min-height: 0; }
+    .mapping-tabs .el-tab-pane { height: 100%; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .default-rules { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; flex-shrink: 0; }
+    .mapping-note { color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .safety-note { border-top: 1px solid var(--border); padding-top: 8px; color: var(--muted); flex-shrink: 0; }
+    .settings-scroll { min-height: 0; overflow-y: auto; flex: 1; padding-right: 8px; }
+    .setting-group { border-bottom: 1px solid var(--border); padding: 0 0 16px; margin-bottom: 16px; }
+    .setting-group:last-child { border-bottom: 0; margin-bottom: 0; }
+    .setting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .setting-grid p { color: var(--muted); line-height: 20px; margin-top: 4px; }
+    .wizard-footer { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 12px 16px; }
+    .wizard-footer > span { color: var(--muted); }
+    .prototype-dialog { margin: 4vh auto !important; }
+    .prototype-dialog .el-dialog__body { max-height: calc(92vh - 120px); overflow-y: auto; padding: 16px; }
+    .prototype-dialog .el-dialog__title { font-size: 16px; }
+    .prototype-dialog .el-dialog__footer { padding: 12px 16px 16px; }
+    .detail-placeholder { border: 1px dashed var(--border); padding: 16px; margin-top: 16px; color: var(--muted); }
+    .el-button:focus-visible, .el-input__inner:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    @media (max-width: 980px) { #app { gap: 8px; padding: 12px; } .editor-panel { padding: 12px; } .wizard-footer > span { display: none; } .prototype-mark { display: none; } .selection-count { margin-left: 0; } }
+    @media (max-width: 680px) { .default-rules, .setting-grid { grid-template-columns: 1fr; } .default-rules { max-height: 150px; overflow-y: auto; } .section-heading > span, .pagination > span { display: none; } .toolbar .el-select, .toolbar > .el-input { width: 145px; } }
+  </style>
+</head>
+<body>
+  <main id="app" v-cloak>
+    <header class="page-heading">
+      <div><h1>数据迁移</h1><p class="muted">右侧向导布局样稿 · 现有应用导航保持不变</p></div>
+      <span class="prototype-mark">v0 · 示例对象 · 不连接数据库</span>
+    </header>
+    <section class="panel step-panel" aria-label="迁移步骤">
+      <el-steps :active="step" finish-status="success" align-center><el-step v-for="name in steps" :key="name" :title="name"></el-step></el-steps>
+    </section>
+    <section class="panel editor-panel" v-if="step === 1">
+      <div class="section-heading"><h2>选择对象 <span class="muted">已选 {{ selectedObjects.length }} / 100 个</span></h2><span>源：QA_UI_ONE · 示例模式</span></div>
+      <div class="toolbar">
+        <el-select v-model="sourceSchema" size="small" aria-label="源模式"><el-option value="QA_UI_ONE" label="QA_UI_ONE"></el-option></el-select>
+        <el-input v-model="search" size="small" clearable placeholder="搜索示例对象名称" @input="page = 1" aria-label="搜索对象"></el-input>
+        <el-button size="small" :disabled="!available.length" @click="selectAll">全选筛选结果</el-button>
+        <el-button size="small" :disabled="!pageObjects.some(item => item.supported)" @click="selectPage">选择本页</el-button>
+        <el-button size="small" :disabled="!selectedObjects.length" @click="selectedIds = []">清空选择</el-button>
+        <span class="muted selection-count">筛选可迁移 {{ available.length }} 个 · 全选包含所有分页</span>
+      </div>
+      <div class="table-region">
+        <el-table :data="pageObjects" height="100%" size="small" empty-text="无匹配对象，请调整搜索条件">
+          <el-table-column width="48"><template slot-scope="s"><el-checkbox :value="selectedIds.includes(s.row.name)" :disabled="!s.row.supported" :aria-label="'选择 ' + s.row.name" @change="toggle(s.row, $event)"></el-checkbox></template></el-table-column>
+          <el-table-column label="对象名称" prop="name" min-width="240"></el-table-column>
+          <el-table-column label="类型" prop="type" width="160"></el-table-column>
+          <el-table-column label="说明" min-width="280"><template slot-scope="s"><span :class="s.row.supported ? 'muted' : 'danger'">{{ !s.row.supported ? '当前不可迁移，不纳入全选' : s.row.type === 'TABLE' ? '普通表，预检查确认支持范围' : '需人工审阅目标 DDL 与依赖' }}</span></template></el-table-column>
+        </el-table>
+      </div>
+      <div class="pagination"><span class="muted">切换模式、搜索和翻页均保留选择；表格在组件内部滚动。</span><el-pagination :current-page.sync="page" :page-size="50" :total="filtered.length" layout="total, prev, pager, next"></el-pagination></div>
+    </section>
+    <section class="panel editor-panel" v-else>
+      <div class="section-heading"><h2>映射策略</h2><span>已选 {{ selectedObjects.length }} 个示例对象 · DM → Oracle</span></div>
+      <el-tabs v-model="tab" class="mapping-tabs">
+        <el-tab-pane label="对象映射" name="objects">
+          <el-form label-position="top" size="small" class="default-rules">
+            <el-form-item label="默认目标模式"><el-select v-model="targetSchema"><el-option value="QA_UI_TWO" label="QA_UI_TWO"></el-option><el-option value="QA_UI_ARCHIVE" label="QA_UI_ARCHIVE"></el-option></el-select></el-form-item>
+            <el-form-item label="默认迁移范围"><el-select v-model="scope" @change="conflict = 'STOP'"><el-option value="ALL" label="结构 + 数据"></el-option><el-option value="STRUCTURE" label="仅结构"></el-option><el-option value="DATA" label="仅数据 · 预建兼容表"></el-option></el-select></el-form-item>
+            <el-form-item label="同名对象 / 数据处理"><el-select v-model="conflict"><el-option value="STOP" :label="scope === 'DATA' ? '空目标写入 · 推荐' : '同名阻断 · 推荐'"></el-option><el-option v-if="scope !== 'DATA'" value="SKIP" label="同名跳过"></el-option><el-option v-if="scope === 'DATA'" value="APPEND" label="追加 · 高风险"></el-option><el-option v-if="scope === 'DATA'" value="CLEAR" label="清空后写入 · 高风险"></el-option><el-option v-if="scope !== 'DATA'" value="REBUILD" label="删除重建 · 高风险"></el-option></el-select></el-form-item>
+          </el-form>
+          <div class="mapping-note"><span>未设置单对象策略时继承默认规则；字段、筛选及 DDL 在“对象配置”中编辑。</span><span>批次、并发等参数在“执行设置”</span></div>
+          <div class="table-region">
+            <el-table :data="selectedObjects" height="100%" size="small" empty-text="尚未选择对象，请返回上一步选择">
+              <el-table-column label="源对象" min-width="210"><template slot-scope="s"><span>QA_UI_ONE.{{ s.row.name }}</span><p class="muted">{{ s.row.type }}</p></template></el-table-column>
+              <el-table-column label="目标模式" min-width="170"><template slot-scope="s"><el-select v-model="s.row.targetSchema" clearable size="small" :placeholder="targetSchema"><el-option value="QA_UI_TWO" label="QA_UI_TWO"></el-option><el-option value="QA_UI_ARCHIVE" label="QA_UI_ARCHIVE"></el-option></el-select></template></el-table-column>
+              <el-table-column label="目标对象" min-width="190"><template slot-scope="s"><el-input v-model="s.row.target" size="small" maxlength="128" :aria-label="s.row.name + ' 的目标名称'"></el-input></template></el-table-column>
+              <el-table-column label="实际策略" min-width="140"><template slot-scope="s"><span>{{ s.row.type !== 'TABLE' ? '仅结构' : scopeLabel }}</span><p :class="risky ? 'danger' : 'muted'">{{ conflictLabel }}</p></template></el-table-column>
+              <el-table-column label="配置" width="140" fixed="right"><template slot-scope="s"><el-button type="text" @click="detail = s.row">对象配置</el-button><p v-if="s.row.type !== 'TABLE'" class="danger">目标 DDL 待确认</p><p v-else class="muted">字段 / 策略 / 筛选</p></template></el-table-column>
+              <el-table-column label="操作" width="60" fixed="right"><template slot-scope="s"><el-button type="text" @click="toggle(s.row, false)">移除</el-button></template></el-table-column>
+            </el-table>
+          </div>
+          <div class="safety-note" :class="{ danger: risky }">{{ risky ? '高风险：追加、清空和删除重建须逐表审阅、备份并确认；DDL 不承诺事务回滚。' : '默认不改既有数据；高风险策略须逐表审阅和备份后确认。非表对象须人工确认目标定义。' }}</div>
+        </el-tab-pane>
+        <el-tab-pane label="执行设置" name="execution">
+          <div class="settings-scroll">
+            <el-form label-position="top" size="small">
+              <section class="setting-group"><h3>复制与事务</h3><div class="setting-grid">
+                <el-form-item label="读取批次（行）"><el-input-number v-model="fetchSize" :min="1" :max="1000" :step="50" controls-position="right"></el-input-number><p>普通数据按批读取；LOB 实际逐行读取。</p></el-form-item>
+                <el-form-item label="事务提交批次（行）"><el-input-number v-model="commitSize" :min="1" :max="1000" :step="100" controls-position="right"></el-input-number><p>决定事务提交粒度，范围 1～1000 行。</p></el-form-item>
+              </div></section>
+              <section class="setting-group"><h3>并发与限速</h3><div class="setting-grid">
+                <el-form-item label="表级并发（1～4）"><el-input-number v-model="parallelism" :min="1" :max="4" :precision="0" controls-position="right"></el-input-number><p>依赖按序执行；LOB 表始终单独串行。</p></el-form-item>
+                <el-form-item label="复制行速率（行/秒）"><el-input-number v-model="rowsPerSecond" :min="0" :max="100000" :precision="0" controls-position="right"></el-input-number><p>0 表示不限速。所有线程共享限速，提交批次不超过一秒速率；不限制 LOB 字节。</p></el-form-item>
+              </div></section>
+              <section class="setting-group"><h3>目标存储与异常处理</h3><div class="setting-grid">
+                <el-form-item label="默认目标表空间"><el-select v-model="tablespace" clearable placeholder="目标用户默认表空间"><el-option value="QA_UI_DATA" label="QA_UI_DATA · 示例"></el-option></el-select><p>不移动既有表、不创建表空间、不修改配额；可在对象配置中覆盖。</p></el-form-item>
+                <el-form-item label="执行遇错策略"><el-select v-model="errorPolicy"><el-option value="STOP" label="遇错停止 · 默认"></el-option><el-option value="CONTINUE_INDEPENDENT" label="继续独立对象 · 单独验收"></el-option></el-select><p>仅确认的 SQL 错误可继续；断连、超时或提交结果不确定仍停止，不忽略坏行。</p></el-form-item>
+              </div></section>
+            </el-form>
+          </div>
+          <div class="safety-note">设置属于同一份草稿，切换页签不会清空，也不触发数据库查询。此样稿不保存到服务端。</div>
+        </el-tab-pane>
+      </el-tabs>
+    </section>
+    <footer class="wizard-footer">
+      <el-button size="small" :disabled="step === 1" @click="step = 1">上一步</el-button>
+      <span>仅演示布局与本地交互；不保存任务、不执行迁移</span>
+      <div><el-button size="small" @click="previewNotice('保存草稿将在正式实现中保留现有服务端保存能力')">保存草稿</el-button><el-button size="small" type="primary" :disabled="!selectedObjects.length" @click="step === 1 ? step = 2 : previewNotice('下一步连接现有预检查，本样稿不访问数据库')">下一步</el-button></div>
+    </footer>
+    <el-dialog :title="'对象配置 · ' + (detail ? detail.name : '')" :visible="!!detail" @close="detail = null" width="80%" custom-class="prototype-dialog">
+      <template v-if="detail"><p class="muted">QA_UI_ONE.{{ detail.name }} → {{ detail.targetSchema || targetSchema }}.{{ detail.target }}</p><div class="detail-placeholder">[保留现有单对象策略、字段映射、类型转换、筛选、表空间、DDL 与依赖配置组件]<p>本次仅重排主页面；此窗口不删除现有业务能力。正文内部滚动，底部操作独立保留。</p></div></template>
+      <span slot="footer"><el-button size="small" @click="detail = null">关闭样稿预览</el-button></span>
+    </el-dialog>
+  </main>
+  <script src="../../jd-dbms-ui/node_modules/vue/dist/vue.js"></script>
+  <script src="../../jd-dbms-ui/node_modules/element-ui/lib/index.js"></script>
+  <script>
+    // Explicit UI fixtures only. This prototype performs no network requests or database writes.
+    const sampleObjects = [
+      { name: 'SAMPLE_VIEW', type: 'VIEW', supported: true },
+      { name: 'SAMPLE_SEQUENCE', type: 'SEQUENCE', supported: true },
+      { name: 'SAMPLE_MVIEW', type: 'MATERIALIZED VIEW', supported: false },
+      ...Array.from({ length: 68 }, (_, i) => ({ name: 'SAMPLE_TABLE_' + String(i + 1).padStart(3, '0'), type: 'TABLE', supported: true }))
+    ].map(item => ({ ...item, target: item.name, targetSchema: '' }));
+    new Vue({
+      el: '#app',
+      data: { step: 2, tab: 'objects', steps: ['连接配置', '选择对象', '映射策略', '预检查', '审阅执行', '结果验收'], objects: sampleObjects,
+        selectedIds: sampleObjects.filter(item => item.supported).slice(0, 12).map(item => item.name), sourceSchema: 'QA_UI_ONE', search: '', page: 1,
+        targetSchema: 'QA_UI_TWO', scope: 'ALL', conflict: 'STOP', fetchSize: 100, commitSize: 500, rowsPerSecond: 0, parallelism: 1, tablespace: '', errorPolicy: 'STOP', detail: null },
+      computed: {
+        filtered() { return this.objects.filter(item => item.name.toLowerCase().includes(this.search.trim().toLowerCase())); },
+        available() { return this.filtered.filter(item => item.supported); },
+        pageObjects() { return this.filtered.slice((this.page - 1) * 50, this.page * 50); },
+        selectedObjects() { return this.objects.filter(item => this.selectedIds.includes(item.name)); },
+        risky() { return ['APPEND', 'CLEAR', 'REBUILD'].includes(this.conflict); },
+        scopeLabel() { return { ALL: '结构 + 数据', STRUCTURE: '仅结构', DATA: '仅数据' }[this.scope]; },
+        conflictLabel() { return { STOP: this.scope === 'DATA' ? '空目标写入' : '同名阻断', SKIP: '同名跳过', APPEND: '追加 · 高风险', CLEAR: '清空后写入 · 高风险', REBUILD: '删除重建 · 高风险' }[this.conflict]; }
+      },
+      methods: {
+        toggle(item, checked) { if (!item.supported) return; this.selectedIds = checked ? [...new Set(this.selectedIds.concat(item.name))] : this.selectedIds.filter(name => name !== item.name); },
+        selectAll() { this.selectedIds = [...new Set(this.selectedIds.concat(this.available.map(item => item.name)))]; },
+        selectPage() { this.togglePage(true); },
+        togglePage(checked) { this.pageObjects.filter(item => item.supported).forEach(item => this.toggle(item, checked)); },
+        previewNotice(message) { this.$message.info('样稿提示：' + message); }
+      }
+    });
+  </script>
+</body>
+</html>

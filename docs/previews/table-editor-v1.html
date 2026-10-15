@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据库表数据编辑区 · v1 预览</title>
+  <style>
+    :root {
+      --primary: #1d4bbe;
+      --primary-soft: #edf3ff;
+      --line: #dfe4ee;
+      --line-soft: #ebeff5;
+      --ink: #263246;
+      --muted: #68728c;
+      --surface: #fff;
+      --surface-alt: #f7f9fd;
+      --warning: #ad721b;
+      --warning-soft: #fff7e8;
+      --radius: 4px;
+      --space: 8px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f1f3f9; color: var(--ink); font: 13px/1.45 "Microsoft YaHei", "PingFang SC", sans-serif; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    .preview-note { max-width: 1400px; height: 40px; margin: 0 auto; padding: 11px 18px; color: var(--muted); font-size: 12px; }
+    .editor { display: flex; flex-direction: column; max-width: 1400px; height: calc(100vh - 40px); min-height: 480px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); }
+    .object-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+    .object-path { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+    .object-icon { display: grid; place-items: center; width: 21px; height: 21px; border-radius: 3px; background: var(--primary-soft); color: var(--primary); font-weight: 700; }
+    .object-name { font-size: 14px; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .demo-badge { flex: none; padding: 2px 7px; border: 1px solid #e5d4af; border-radius: 3px; background: var(--warning-soft); color: var(--warning); font-size: 11px; }
+    .tabs { display: flex; align-items: end; gap: 2px; height: 39px; padding: 0 13px; border-bottom: 1px solid var(--line); background: var(--surface-alt); }
+    .tab { display: flex; align-items: center; height: 33px; padding: 0 16px; color: var(--muted); }
+    .tab.active { margin-bottom: -1px; border: 1px solid var(--line); border-bottom: 1px solid #fff; border-radius: var(--radius) var(--radius) 0 0; background: #fff; color: var(--primary); font-weight: 600; }
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 47px; padding: 7px 12px; border-bottom: 1px solid var(--line-soft); }
+    .btn { height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; color: var(--ink); }
+    .btn:hover:not(:disabled) { border-color: #a9bde8; background: var(--primary-soft); }
+    .btn.primary { border-color: var(--primary); background: var(--primary); color: #fff; }
+    .btn.primary:hover:not(:disabled) { background: #153da2; }
+    .btn.text { border-color: transparent; color: var(--primary); }
+    .btn.text:hover:not(:disabled) { border-color: var(--line); }
+    .divider { width: 1px; height: 18px; margin: 0 4px; background: var(--line); }
+    .spacer { flex: 1; }
+    .pending { padding: 3px 8px; border-radius: 3px; background: var(--warning-soft); color: var(--warning); font-size: 12px; }
+    .pending.empty { background: var(--surface-alt); color: var(--muted); }
+    .query-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; min-height: 47px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+    .query-label { width: 58px; color: var(--muted); font: 11px Consolas, monospace; font-weight: 700; }
+    .query-bar input { flex: 1; min-width: 180px; height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: var(--radius); outline: 0; }
+    .query-bar input:focus { border-color: var(--primary); }
+    .query-bar select { height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; color: var(--muted); }
+    .query-help { color: var(--muted); font-size: 11px; }
+    .work-area { display: grid; grid-template-columns: minmax(0, 1fr) 300px; flex: 1; min-height: 0; }
+    .grid-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .grid-heading { display: flex; justify-content: space-between; align-items: center; min-height: 34px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
+    .grid-scroll { flex: 1; min-height: 0; overflow: auto; }
+    table { width: 100%; min-width: 1030px; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+    th, td { height: 34px; padding: 0 9px; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    th { position: sticky; top: 0; z-index: 1; height: 43px; background: #f7f9fc; color: var(--ink); font-weight: 600; }
+    .kind { display: block; color: #929bb0; font: 10px/1.3 Consolas, monospace; font-weight: 400; }
+    .gutter { width: 52px; color: var(--muted); text-align: center; background: #fbfcfe; }
+    td[data-column] { position: relative; cursor: cell; }
+    td[data-column]:hover { background: #f6f9ff; }
+    td.selected { position: relative; background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--primary); }
+    td.changed { background: #fffcf5; }
+    td.changed:before { content: ""; position: absolute; left: 0; top: 0; border-top: 7px solid #d59a39; border-right: 7px solid transparent; }
+    td.selected.changed { background: var(--primary-soft); }
+    td input { width: 100%; height: 28px; border: 0; outline: none; background: transparent; color: var(--ink); }
+    .null { color: #a4abba; font-style: italic; }
+    .value-link { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+    .inspector { display: flex; flex-direction: column; min-width: 0; border-left: 1px solid var(--line); background: #fcfdff; }
+    .inspector-title { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 12px; border-bottom: 1px solid var(--line); font-weight: 600; }
+    .inspector-body { padding: 14px 12px; }
+    .inspector-label { display: block; margin: 0 0 5px; color: var(--muted); font-size: 11px; }
+    .field-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 15px; }
+    .field-meta strong { font: 600 13px Consolas, monospace; }
+    .type-chip { padding: 2px 5px; border: 1px solid var(--line); border-radius: 3px; background: #fff; color: var(--muted); font: 10px Consolas, monospace; }
+    .inspector textarea, .inspector input, .inspector select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; color: var(--ink); outline: 0; }
+    .inspector textarea { min-height: 150px; resize: vertical; }
+    .inspector textarea:focus, .inspector input:focus, .inspector select:focus { border-color: var(--primary); }
+    .inspector-actions { display: flex; gap: 7px; margin-top: 9px; }
+    .inspector-note { margin-top: 12px; color: var(--muted); font-size: 11px; line-height: 1.6; text-wrap: pretty; }
+    .file-box { padding: 22px 12px; border: 1px dashed var(--line); background: #fff; text-align: center; color: var(--muted); }
+    .file-box strong { display: block; margin-top: 5px; color: var(--ink); font-weight: 500; }
+    .changes { display: none; max-height: 180px; overflow: auto; border-top: 1px solid var(--line); background: #fafcff; }
+    .changes.open { display: block; }
+    .changes-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); font-weight: 600; }
+    .changes pre { margin: 0; padding: 12px; color: #43536c; font: 12px/1.6 Consolas, monospace; white-space: pre-wrap; }
+    .statusbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 36px; padding: 6px 12px; border-top: 1px solid var(--line); background: var(--surface-alt); color: var(--muted); font-size: 11px; }
+    .statusbar strong { color: var(--ink); }
+    @media (max-width: 900px) { .editor { height: auto; min-height: 480px; } .work-area { grid-template-columns: 1fr; } .grid-scroll { max-height: 360px; } .inspector { border-left: 0; border-top: 1px solid var(--line); } .inspector-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; } .inspector-body > .inspector-label, .inspector-body > #field-editor, .inspector-body > .file-box { grid-column: 1 / -1; } }
+  </style>
+</head>
+<body>
+  <p class="preview-note">仅展示工作区中间的“表数据编辑区” · 示例数据，不连接数据库</p>
+  <main class="editor" aria-label="数据库表数据编辑区预览">
+    <div class="object-line"><div class="object-path"><span class="object-icon">▦</span><span class="muted">达梦 / SYSDBA / 表</span><span class="muted">›</span><span class="object-name">DEMO_ORDERS</span><span class="demo-badge">交互预览</span></div><span class="muted">数据对象 · 可编辑</span></div>
+    <div class="tabs"><span class="tab active">数据</span><span class="tab">结构</span><span class="tab">索引</span><span class="tab">关联关系</span><span class="tab">DDL</span></div>
+    <div class="toolbar">
+      <button class="btn" id="add" type="button">＋ 添加行</button><button class="btn" id="remove" type="button">删除行</button><button class="btn" id="revert" type="button">撤销变更</button>
+      <span class="divider"></span><button class="btn text" id="refresh" type="button">刷新</button><span class="spacer"></span>
+      <span class="pending empty" id="pending">无待保存变更</span><button class="btn" id="preview" type="button">预览变更</button><button class="btn primary" id="save" type="button">保存变更</button>
+    </div>
+    <div class="query-bar"><span class="query-label">WHERE</span><input id="filter" placeholder="输入条件筛选当前示例数据，如 名称 / 状态"><select id="sort" aria-label="排序"><option value="">默认排序</option><option value="asc">ID 升序</option><option value="desc">ID 降序</option></select><button class="btn" id="apply-filter" type="button">应用</button><span class="query-help">正式页面由数据库执行筛选；此页仅演示界面</span></div>
+    <div class="work-area">
+      <section class="grid-area" aria-label="数据网格"><div class="grid-heading"><span>结果集　<strong id="result-count">4</strong> 行</span><span>双击编辑普通值 · 选中后在右侧查看完整值</span></div><div class="grid-scroll"><table><thead><tr><th class="gutter">#</th><th>ID<span class="kind">NUMBER</span></th><th>NAME<span class="kind">VARCHAR2</span></th><th>STATUS<span class="kind">VARCHAR2</span></th><th>AMOUNT<span class="kind">NUMBER(12,2)</span></th><th>UPDATED_AT<span class="kind">TIMESTAMP</span></th><th>DESCRIPTION<span class="kind">CLOB</span></th><th>ATTACHMENT<span class="kind">BLOB</span></th></tr></thead><tbody id="rows"></tbody></table></div></section>
+      <aside class="inspector" aria-label="选中字段详情"><div class="inspector-title"><span>字段值</span><span class="muted" id="position">第 1 行</span></div><div class="inspector-body"><span class="inspector-label">当前列 / 类型</span><div class="field-meta"><strong id="field-name">DESCRIPTION</strong><span class="type-chip" id="field-type">CLOB</span></div><span class="inspector-label">完整值</span><div id="field-editor"></div><div class="inspector-actions"><button class="btn primary" id="apply-value" type="button">应用修改</button><button class="btn" id="revert-value" type="button">还原此值</button></div><p class="inspector-note" id="field-note">长文本在这里展开编辑。应用后只形成待保存变更；点击顶部“保存变更”才会进入数据库保存流程。</p></div></aside>
+    </div>
+    <section class="changes" id="changes" aria-label="待保存变更预览"><div class="changes-head"><span>待保存变更 · 操作摘要</span><button class="btn text" id="close-preview" type="button">收起</button></div><pre id="change-summary"></pre></section>
+    <div class="statusbar"><span>达梦 · SYSDBA · DEMO_ORDERS　|　<span id="status-count">4</span> 行示例结果</span><span>第 <strong>1</strong> / <strong>1</strong> 页　·　每页 50 行　·　<span id="status-pending">0 行待保存</span></span></div>
+  </main>
+  <script>
+    const fields = [
+      { key: 'id', label: 'ID', type: 'NUMBER' }, { key: 'name', label: 'NAME', type: 'VARCHAR2' },
+      { key: 'status', label: 'STATUS', type: 'VARCHAR2' }, { key: 'amount', label: 'AMOUNT', type: 'NUMBER(12,2)' },
+      { key: 'updated', label: 'UPDATED_AT', type: 'TIMESTAMP' }, { key: 'description', label: 'DESCRIPTION', type: 'CLOB' },
+      { key: 'attachment', label: 'ATTACHMENT', type: 'BLOB' }
+    ];
+    const exampleRows = [
+      { __key: 'a', id: '101', name: '示例订单 A', status: '待处理', amount: '1280.00', updated: '2026-09-25 09:18:22', description: '这是示例长文本。实际 CLOB 内容将完整显示在右侧，不在表格中展开所有字符。', attachment: '[二进制内容]' },
+      { __key: 'b', id: '102', name: '示例订单 B', status: '处理中', amount: '450.50', updated: '2026-09-25 10:02:10', description: '第二条示例记录的备注信息。', attachment: null },
+      { __key: 'c', id: '103', name: '示例订单 C', status: '已完成', amount: '990.00', updated: '2026-09-25 10:35:46', description: null, attachment: '[二进制内容]' },
+      { __key: 'd', id: '104', name: '示例订单 D', status: '待处理', amount: '75.00', updated: '2026-09-25 11:10:03', description: '第四条示例记录。', attachment: null }
+    ];
+    const copy = value => JSON.parse(JSON.stringify(value));
+    let rows = copy(exampleRows);
+    let saved = copy(exampleRows);
+    let selected = { row: 0, column: 5 };
+    let filter = '';
+    let sort = '';
+    let editing = null;
+    const $ = id => document.getElementById(id);
+    const visibleIndexes = () => rows.map((_, index) => index).filter(index => !filter || fields.some(field => String(rows[index][field.key] || '').toLowerCase().includes(filter))).sort((a, b) => sort === 'asc' ? Number(rows[a].id) - Number(rows[b].id) : sort === 'desc' ? Number(rows[b].id) - Number(rows[a].id) : a - b);
+    const original = row => row ? saved.find(item => item.__key === row.__key) : null;
+    const changed = (index, key) => rows[index]?.[key] !== original(rows[index])?.[key];
+    const pendingRows = () => rows.filter((row, index) => !original(row) || fields.some(field => changed(index, field.key))).length + saved.filter(row => !rows.some(item => item.__key === row.__key)).length;
+    function render() {
+      const tbody = $('rows'); tbody.replaceChildren();
+      visibleIndexes().forEach(index => {
+        const tr = document.createElement('tr');
+        const number = document.createElement('td'); number.className = 'gutter'; number.textContent = index + 1; tr.append(number);
+        fields.forEach((field, column) => {
+          const cell = document.createElement('td'); cell.dataset.column = column; cell.dataset.row = index;
+          const value = rows[index][field.key]; cell.textContent = value == null ? '<null>' : field.type === 'CLOB' ? (value.length > 26 ? value.slice(0, 26) + '…' : value) : field.type === 'BLOB' ? '文件 · 点击查看' : value;
+          if (value == null) cell.classList.add('null');
+          if (selected.row === index && selected.column === column) cell.classList.add('selected');
+          if (changed(index, field.key)) cell.classList.add('changed');
+          if (field.type === 'CLOB' || field.type === 'BLOB') cell.classList.add('value-link');
+          cell.addEventListener('click', () => { finishInline(true); selected = { row: index, column }; render(); });
+          cell.addEventListener('dblclick', () => { if (field.type !== 'CLOB' && field.type !== 'BLOB') startInline(cell, index, column); });
+          tr.append(cell);
+        }); tbody.append(tr);
+      });
+      const count = pendingRows();
+      $('pending').textContent = count ? `${count} 行待保存` : '无待保存变更'; $('pending').classList.toggle('empty', !count);
+      $('save').disabled = !count; $('revert').disabled = !count; $('preview').disabled = !count;
+      $('result-count').textContent = visibleIndexes().length; $('status-count').textContent = visibleIndexes().length; $('status-pending').textContent = `${count} 行待保存`;
+      renderInspector();
+      if ($('changes').classList.contains('open')) renderChanges();
+    }
+    function renderInspector() {
+      const field = fields[selected.column]; const row = rows[selected.row];
+      $('position').textContent = row ? `第 ${selected.row + 1} 行` : '未选择';
+      $('field-name').textContent = field.label; $('field-type').textContent = field.type;
+      const box = $('field-editor'); box.replaceChildren();
+      if (!row) { $('apply-value').disabled = true; $('revert-value').disabled = true; return; }
+      if (field.type === 'BLOB') {
+        const container = document.createElement('div'); container.className = 'file-box';
+        container.innerHTML = row.attachment ? '二进制文件<strong>正式版按实际文件类型提供预览与下载</strong>' : '当前值为 &lt;null&gt;';
+        box.append(container); $('apply-value').disabled = true; $('revert-value').disabled = !changed(selected.row, field.key);
+        $('field-note').textContent = '预览页不包含真实文件。正式版将区分图片、可下载文件与无法预览的二进制数据，不强制当作 PNG。';
+        return;
+      }
+      let input;
+      if (field.type === 'CLOB') { input = document.createElement('textarea'); input.value = row[field.key] || ''; }
+      else if (field.key === 'status') { input = document.createElement('select'); ['待处理', '处理中', '已完成'].forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; input.append(option); }); input.value = row[field.key] || '待处理'; }
+      else { input = document.createElement('input'); input.type = field.key === 'amount' || field.key === 'id' ? 'number' : field.key === 'updated' ? 'datetime-local' : 'text'; input.value = field.key === 'updated' ? String(row[field.key] || '').replace(' ', 'T') : row[field.key] || ''; }
+      input.id = 'value-input'; box.append(input); $('apply-value').disabled = false; $('revert-value').disabled = !changed(selected.row, field.key);
+      $('field-note').textContent = field.type === 'CLOB' ? '长文本在这里完整编辑；应用后仅形成待保存变更。' : '应用后仅形成待保存变更；保存前可还原此值。';
+    }
+    function startInline(cell, index, column) {
+      if (editing) finishInline(true);
+      const field = fields[column]; const original = rows[index][field.key]; const input = document.createElement('input');
+      input.type = field.key === 'id' || field.key === 'amount' ? 'number' : field.key === 'updated' ? 'datetime-local' : 'text';
+      input.value = field.key === 'updated' ? String(original || '').replace(' ', 'T') : original || '';
+      cell.replaceChildren(input); input.focus(); if (input.type === 'text') input.select(); editing = { index, column, input, original };
+      input.addEventListener('keydown', event => { if (['Enter', 'Escape', 'Tab'].includes(event.key)) { event.preventDefault(); event.stopPropagation(); finishInline(event.key !== 'Escape'); if (event.key === 'Tab') move(0, event.shiftKey ? -1 : 1); if (event.key === 'Enter') move(1, 0); } });
+      input.addEventListener('blur', () => finishInline(true));
+    }
+    function finishInline(commit) {
+      if (!editing) return;
+      const { index, column, input, original } = editing; editing = null;
+      const value = fields[column].key === 'updated' ? input.value.replace('T', ' ') : input.value;
+      rows[index][fields[column].key] = commit ? value : original;
+      render();
+    }
+    function move(rowOffset, columnOffset) {
+      const list = visibleIndexes(); const position = list.indexOf(selected.row); let row = Math.max(0, Math.min(list.length - 1, position + rowOffset));
+      let column = selected.column + columnOffset; if (column >= fields.length) { column = 0; row = Math.min(list.length - 1, row + 1); } if (column < 0) { column = fields.length - 1; row = Math.max(0, row - 1); }
+      if (list[row] !== undefined) selected = { row: list[row], column }; render();
+    }
+    function renderChanges() {
+      const lines = [];
+      rows.forEach((row, index) => { if (!original(row)) lines.push(`+ 第 ${index + 1} 行：新增记录`); else fields.forEach(field => { if (changed(index, field.key)) lines.push(`~ 第 ${index + 1} 行 / ${field.label}：值已修改`); }); });
+      saved.filter(row => !rows.some(item => item.__key === row.__key)).forEach(row => lines.push(`- ID ${row.id}：删除记录`));
+      $('change-summary').textContent = lines.length ? lines.join('\n') + '\n\n-- 正式系统将由后端生成可核对的 SQL；本页不执行 SQL。' : '无待保存变更';
+    }
+    $('apply-value').onclick = () => { const field = fields[selected.column]; if (field.type === 'BLOB' || !rows[selected.row]) return; const input = $('value-input'); rows[selected.row][field.key] = field.key === 'updated' ? input.value.replace('T', ' ') : input.value; render(); };
+    $('revert-value').onclick = () => { const field = fields[selected.column]; const baseline = original(rows[selected.row]); if (!baseline) return; rows[selected.row][field.key] = baseline[field.key]; render(); };
+    $('preview').onclick = () => { $('changes').classList.add('open'); renderChanges(); };
+    $('close-preview').onclick = () => $('changes').classList.remove('open');
+    $('revert').onclick = () => { rows = copy(saved); selected.row = Math.min(selected.row, rows.length - 1); render(); };
+    $('refresh').onclick = () => { if (pendingRows() && !confirm('预览页仍有待保存变更，确认放弃并刷新？')) return; rows = copy(saved); render(); };
+    $('save').onclick = () => { saved = copy(rows); render(); alert('仅预览：已模拟保存状态，未连接数据库。'); };
+    $('add').onclick = () => { rows.push({ __key: `new-${Date.now()}`, id: '', name: '', status: '待处理', amount: '', updated: '', description: null, attachment: null }); selected = { row: rows.length - 1, column: 1 }; filter = ''; $('filter').value = ''; render(); };
+    $('remove').onclick = () => { if (!rows[selected.row]) return; rows.splice(selected.row, 1); selected.row = Math.max(0, Math.min(selected.row, rows.length - 1)); render(); };
+    $('apply-filter').onclick = () => { filter = $('filter').value.trim().toLowerCase(); sort = $('sort').value; render(); };
+    $('filter').addEventListener('keydown', event => { if (event.key === 'Enter') $('apply-filter').click(); });
+    document.addEventListener('keydown', event => { if (editing || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(event.target.tagName)) return; if (event.key === 'ArrowDown') move(1, 0); else if (event.key === 'ArrowUp') move(-1, 0); else if (event.key === 'ArrowRight') move(0, 1); else if (event.key === 'ArrowLeft') move(0, -1); else if (event.key === 'Tab') { event.preventDefault(); move(0, event.shiftKey ? -1 : 1); } });
+    render();
+  </script>
+</body>
+</html>

@@ -205,6 +205,7 @@ export default {
         hasNextPage: true,
         pageNo: 1,
         pageSize: 200,
+        skipCount: false,
         schemaName: item.schema,
         sql: this.dataInfo.dataSource.type === "ORACLE"
           ? `select t.*, t.rowid as "ROWID" from "${item.schema}"."${item.name}" t`

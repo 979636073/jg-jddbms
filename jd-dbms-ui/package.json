@@ -37,6 +37,7 @@
     "url": "https://gitee.com/y_project/RuoYi-Vue.git"
   },
   "dependencies": {
+    "@wchbrad/vue-easy-tree": "1.0.13",
     "@antv/g6": "^4.8.24",
     "@riophae/vue-treeselect": "0.4.0",
     "axios": "0.24.0",
@@ -79,6 +80,7 @@
     "cross-env": "^7.0.3",
     "eslint": "^7.32.0",
     "eslint-plugin-vue": "7.2.0",
+    "html-webpack-plugin": "3.2.0",
     "lint-staged": "10.5.3",
     "monaco-editor-webpack-plugin": "^5.0.0",
     "runjs": "4.4.2",

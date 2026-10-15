@@ -131,7 +131,7 @@ export default {
       selectedHeader: null,
       valueEditorDraft: null,
       valueEditorNull: false,
-      valuePanelVisible: true,
+      valuePanelVisible: false,
       pendingPreviewVisible: false,
       binaryPreviewLoading: false,
       binaryUploadLoading: false,
@@ -680,12 +680,13 @@ export default {
       }
     },
     refresh() {
+      this.queryParams.pageNum = 1;
       this.sort = {
         order: "",
         prop: "",
       };
       if (this.isColor) {
-        this.advancedQuery();
+        this.advancedQuery(undefined, false, true);
       } else {
         // 顶部刷新按钮
         this.pageLoading = true;
@@ -694,12 +695,11 @@ export default {
         this.isColor = false;
         this.filterSql = "";
         this.pageSql = "";
-        this.advancedQuery();
+        this.advancedQuery(undefined, false, true);
         this.clickRow = null;
         this.clickCell = null;
         this.editStatus = true;
       }
-      this.queryParams.pageNum = 1;
     },
     // 粘贴事件
     pasteInfo(e) {
@@ -1281,14 +1281,20 @@ export default {
     async openBinaryViewer(row, header) {
       this.binaryPreviewLoading = true;
       try {
-        const { tableName, schemaName, dataSourceId } = this.queryResultData.uniqueData;
+        const { tableName, schemaName, dataSourceId, databaseName } =
+          this.queryResultData.uniqueData || this.queryResultData.params || {};
         const columnIndex = this.queryResultData.headerList.findIndex(item => item.name === header.name);
         const operation = this.sqlInfo.find(item => String(item.rowId) === String(row["行号"]));
         const pending = operation && (operation.type === "CREATE" ||
           (operation.type === "UPDATE" && !this.sameCellValue(operation.dataList[columnIndex], operation.oldDataList[columnIndex])));
-        if (!pending && !row.ROWID) throw new Error("当前行未提供 ROWID，无法预览或下载二进制值");
         const blobData = pending ? row[header.name] :
-          (await tableServer.getBlobData({ tableName, schemaName, dataSourceId, rowId: row.ROWID, blobColumn: header.name })).data;
+          (await tableServer.getBlobData({
+            tableName, schemaName, dataSourceId, databaseName,
+            rowId: tableName ? row.ROWID : undefined, blobColumn: header.name,
+            sql: this.queryResultData.originalSql,
+            rowIndex: Number(row["行号"]) - 1,
+            columnIndex: columnIndex,
+          })).data;
         if (blobData == null) throw new Error("未获取到二进制内容");
         const formData = new FormData();
         formData.append("blobStr", blobData);
@@ -1296,7 +1302,8 @@ export default {
         if (!result.success) throw new Error(result.errorCode || "无法识别文件类型");
         const detectedType = typeof result.data === "string" ? result.data.toLowerCase() : "";
         const fileType = /^\.[a-z0-9]{1,10}$/.test(detectedType) ? detectedType : ".bin";
-        const fileName = `${tableName}_${header.name}_${row.ROWID || row["行号"]}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
+        // eslint-disable-next-line no-control-regex
+        const fileName = `${tableName || "query"}_${header.name}_${row.ROWID || row["行号"]}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
         this.$refs.fileRef.fromData.name = fileName;
         this.$refs.fileRef.fromData.type = fileType;
         this.$refs.fileRef.blobStr = blobData;
@@ -1948,11 +1955,7 @@ export default {
     handleSizeChange(val) {
       this.queryParams.pageNum = 1;
       this.queryParams.pageSize = val;
-      if (JSON.stringify(this.sortObj) == "{}") {
-        this.advancedQuery(false);
-      } else {
-        this.sortChange(this.sortObj, false);
-      }
+      return this.advancedQuery(false);
     },
     handleSize(val) {
       this.page.pageSize = val;
@@ -1964,12 +1967,7 @@ export default {
     },
     handleCurrentChange(val) {
       this.queryParams.pageNum = val;
-      this.queryParams.isPage = true;
-      if (JSON.stringify(this.sortObj) == "{}") {
-        this.advancedQuery(false);
-      } else {
-        this.sortChange(this.sortObj, false);
-      }
+      return this.advancedQuery(false);
     },
     handleUpdateCurrent(val) {
       this.updatePage.pageNum = val;
@@ -2559,16 +2557,13 @@ export default {
     //   this.getTableList({ sql });
     // },
     sortChange(data, isColumn) {
-      console.log(data, isColumn);
-      if (!this.queryParams.isPage) {
-        this.queryParams.pageNum = 1; //整库排序 点击排序默认回到第一页
-      }
+      this.queryParams.pageNum = 1;
       this.sortObj = data;
       this.sortParams = data;
       // this.isColor = true;
       // this.filterSql = '';
       // this.pageSql = '';
-      this.advancedQuery(isColumn);
+      return this.advancedQuery(isColumn);
     },
     headerCellStyle({ row, column, rowIndex, columnIndex }) {
       if (column.className != "el-table-column--selection") {
@@ -2640,8 +2635,9 @@ export default {
       this.queryParams.pageNum = 1;
       this.advancedQuery();
     },
-    advancedQuery(isColumn) {
-      console.log(this.searchSql, "this.searchSql");
+    async advancedQuery(isColumn, exactCount = false, refreshMetadata = false) {
+      const resultData = this.queryResultData;
+      const requestId = this._queryRequestId = (this._queryRequestId || 0) + 1;
       this.isDialogLoading = true;
       this.isCreate = false;
       let ref = false;
@@ -2666,6 +2662,7 @@ export default {
         ...this.queryResultData.params,
         pageNo: this.queryParams.pageNum,
         pageSize: this.queryParams.pageSize,
+        refresh: refreshMetadata,
         isAsc:
           JSON.stringify(this.sortObj) == "{}"
             ? undefined
@@ -2677,6 +2674,7 @@ export default {
         orderByColumn:
           JSON.stringify(this.sortObj) == "{}" ? undefined : this.sortObj.prop,
       };
+      if (exactCount) params.skipCount = false;
 
       if (params.consoleId) {
         params.sql = this.queryResultData.params.sql;
@@ -2690,26 +2688,41 @@ export default {
         params.isColumn = false;
       }
 
-      sqlServer.executeSql(params).then((res) => {
-        this.isDialogLoading = false;
-        if (res.data[0].success) {
-          this.queryResultData.fuzzyTotal = Number(res.data[0].fuzzyTotal);
-          this.queryResultData.pageNum = Number(res.data[0].pageNo);
-          this.queryResultData.pageSize = Number(res.data[0].pageSize);
-          this.queryResultData.duration = Number(res.data[0].duration);
-          this.pageLoading = false;
+      try {
+        const res = await sqlServer.executeSql(params);
+        if (requestId !== this._queryRequestId || resultData !== this.queryResultData) return;
+        const result = res?.data?.[0];
+        if (!res?.success || !result?.success) throw new Error(result?.message || res?.errorMessage || "查询失败");
+          this.queryResultData.fuzzyTotal = Number(result.fuzzyTotal || 0);
+          this.queryResultData.totalExact = result.totalExact;
+          this.queryResultData.hasNextPage = result.hasNextPage;
+          this.total = Number(result.fuzzyTotal || 0);
+          this.queryResultData.pageNo = this.queryResultData.pageNum = Number(result.pageNo);
+          this.queryResultData.pageSize = Number(result.pageSize);
+          this.queryParams.pageNum = Number(result.pageNo);
+          this.queryParams.pageSize = Number(result.pageSize);
+          this.queryResultData.duration = Number(result.duration);
+          if (exactCount && result.totalExact) this.queryResultData.params.skipCount = false;
           this.sqlInfo = [];
           // 暴力实现
           if (isColumn !== false) {
-            this.queryResultData.headerList = res.data[0].headerList;
+            this.queryResultData.headerList = result.headerList;
           }
-          this.queryResultData.dataList = res.data[0]?.dataList;
+          this.queryResultData.dataList = result.dataList;
           this.$forceUpdate();
           // this.sortObj = {};
-        } else {
-          this.$message.error(res.data[0].message);
+      } catch (error) {
+        if (requestId === this._queryRequestId && resultData === this.queryResultData) {
+          this.queryParams.pageNum = Number(resultData.pageNum || resultData.pageNo || 1);
+          this.queryParams.pageSize = Number(resultData.pageSize || 100);
+          this.$message.error(error.message || "查询失败，请重试");
         }
-      });
+      } finally {
+        if (requestId === this._queryRequestId) {
+          this.isDialogLoading = false;
+          this.pageLoading = false;
+        }
+      }
     },
     clickSize(val) {
       this.resPage.pageSize = val;
@@ -3098,7 +3111,9 @@ export default {
             </div>
             <template v-else>
               <span v-if="scope.row[header.name] || (editorKind(header) === 'binary' && scope.row[header.name] === '')">
-                <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}</span>
+                <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}
+                  <el-button type="text" size="mini" :loading="binaryPreviewLoading" @click.stop="openBinaryViewer(scope.row, header)">查看</el-button>
+                </span>
                 <span v-else>{{ scope.row[header.name] }}</span>
               </span>
               <span v-else style="color: rgba(35, 36, 41, 0.45)"
@@ -3185,7 +3200,9 @@ export default {
                 </div>
                 <template v-else>
                   <span v-if="scope.row[header.name] || (editorKind(header) === 'binary' && scope.row[header.name] === '')">
-                    <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}</span>
+                    <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}
+                  <el-button type="text" size="mini" :loading="binaryPreviewLoading" @click.stop="openBinaryViewer(scope.row, header)">查看</el-button>
+                </span>
                     <span v-else>{{ scope.row[header.name] }}</span>
                   </span>
                   <span v-else style="color: rgba(35, 36, 41, 0.45)"
@@ -3276,11 +3293,6 @@ export default {
       <div class="table_bottom_info">
         <span>【结果】 {{ queryResultData.description }}</span>
         <span>【耗时】 {{ queryResultData.duration }}ms</span>
-        <span>
-          【查询行数】
-          {{ queryResultData.totalExact === false ? "至少 " : "" }}{{ queryResultData.fuzzyTotal }}行
-        </span>
-        <span v-if="queryResultData.hasNextPage">【提示】结果较多，请翻页继续查看</span>
       </div>
       <el-pagination
         @size-change="handleSizeChange"
@@ -3288,9 +3300,14 @@ export default {
         :current-page="queryParams.pageNum"
         :page-sizes="[10, 50, 100, 200, 500, 1000]"
         :page-size="queryParams.pageSize"
-        layout="total, sizes, prev, pager, next, jumper"
+        :layout="queryResultData.totalExact === false ? 'sizes, prev, slot, next' : 'total, sizes, prev, pager, next, jumper'"
         :total="total"
-      ></el-pagination>
+        :disabled="isDialogLoading"
+      >
+        <span v-if="queryResultData.totalExact === false" class="el-pagination__total">第 {{ queryParams.pageNum }} 页</span>
+      </el-pagination>
+      <el-button v-if="queryResultData.totalExact === false" type="text" size="mini"
+        :loading="isDialogLoading" @click="advancedQuery(false, true)">统计总行数</el-button>
     </div>
 
     <SqlPreview ref="sqlPreview" title="SQL预览">

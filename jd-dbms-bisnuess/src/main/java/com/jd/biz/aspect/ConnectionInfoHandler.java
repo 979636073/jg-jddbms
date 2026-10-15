@@ -11,6 +11,7 @@ import com.jd.biz.domain.api.model.DataSource;
 import com.jd.biz.domain.api.enums.DataSourceAction;
 import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
 import com.jd.biz.domain.api.service.DataSourceService;
+import com.jd.biz.domain.core.cache.CacheManage;
 import com.jd.common.tools.base.excption.BusinessException;
 import com.jd.common.tools.base.wrapper.result.DataResult;
 import com.jd.common.tools.base.wrapper.result.ListResult;
@@ -111,6 +112,7 @@ public class ConnectionInfoHandler {
     @Around("within(@com.jd.biz.aspect.ConnectionInfoAspect *)")
     public Object connectionInfoHandler(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
         boolean isClose = true;
+        Long changedMetadataSourceId = null;
         try {
             Object[] params = proceedingJoinPoint.getArgs();
             Long activeDataSourceId = null;
@@ -141,6 +143,7 @@ public class ConnectionInfoHandler {
                 DataSource source = dataSourceService.queryById(activeDataSourceId).getData();
                 if (source == null) throw new ParamBusinessException("dataSourceId");
                 dataSourceAccessBusinessService.checkActionPermission(source, requestAction());
+                if (requestAction() == DataSourceAction.SCHEMA_CHANGE) changedMetadataSourceId = activeDataSourceId;
             }
             Object proceed = proceedingJoinPoint.proceed();
             if (proceed instanceof ListResult) {
@@ -152,6 +155,11 @@ public class ConnectionInfoHandler {
             }
             return proceed;
         } finally {
+            // DDL may commit part of a batch even when a later statement fails.
+            if (changedMetadataSourceId != null) {
+                CacheManage.invalidateColumns(changedMetadataSourceId);
+                CacheManage.invalidateRelations(changedMetadataSourceId);
+            }
             if (isClose) {
                 Chat2DBContext.removeContext();
             } else {

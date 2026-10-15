@@ -13,7 +13,7 @@ cp /package/nginx/nginx.conf "$ROOT/nginx/nginx.conf.template"
 cp /output/redis-server /output/redis-cli "$ROOT/redis/"
 touch "$ROOT/app/jddbms.jar" "$ROOT/web/index.html"
 ln -s /bin/true "$ROOT/bin/java"
-ln -s /bin/true "$ROOT/bin/nginx"
+ln -s /bin/true "$ROOT/nginx/nginx"
 cat >"$ROOT/config/local.env" <<'EOF'
 JDDBMS_META_DB_URL='jdbc:dm://127.0.0.1:5236/JDDBMS'
 JDDBMS_META_DB_USERNAME='JDDBMS'

@@ -22,6 +22,7 @@ import com.jd.biz.domain.api.service.DlTemplateService;
 import com.jd.biz.domain.api.service.OperationLogService;
 import com.jd.biz.domain.api.service.TableService;
 import com.jd.biz.domain.core.converter.CommandConverter;
+import com.jd.biz.domain.core.cache.CacheManage;
 import com.jd.biz.domain.core.util.MetaNameUtils;
 import com.jd.biz.domain.core.util.SqlAuditUtils;
 import com.jd.biz.util.FileUtils;
@@ -95,6 +96,7 @@ public class DlTemplateServiceImpl implements DlTemplateService {
 
     @Override
     public ListResult<ExecuteResult> execute(DlExecuteParam param) {
+        if (Boolean.TRUE.equals(param.getRefresh())) CacheManage.invalidateColumns(param.getDataSourceId());
         CommandExecutor executor = Chat2DBContext.getMetaData().getCommandExecutor();
         Command command = commandConverter.param2model(param);
         command.setIsErrorExecute(param.getIsErrorExecute());
@@ -102,6 +104,13 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         long l = System.currentTimeMillis();
         log.info("SESSION_ID" + command.getSessionId());
         List<ExecuteResult> results = executor.execute(command);
+        if (results != null && results.stream().anyMatch(result -> {
+            String type = SqlAuditUtils.resolveSqlType(result.getSqlType(), result.getOriginalSql());
+            return "CREATE".equals(type) || "ALTER".equals(type) || "DROP".equals(type) || "RENAME".equals(type) || "COMMENT".equals(type);
+        })) {
+            CacheManage.invalidateColumns(param.getDataSourceId());
+            CacheManage.invalidateRelations(param.getDataSourceId());
+        }
         log.info("表数据耗时:{}ms", System.currentTimeMillis() - l);
         return reBuildHeader(results, param.getSchemaName(), param.getDatabaseName(), param.getIsLog(), param.getIsColumn());
     }
@@ -142,6 +151,29 @@ public class DlTemplateServiceImpl implements DlTemplateService {
 
     @Override
     public String getBlobData(GetBlobRequest request) throws SQLException {
+        if (StrUtil.isBlank(request.getRowId())) {
+            DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
+            if (StrUtil.isBlank(request.getSql())
+                    || !(com.alibaba.druid.sql.SQLUtils.parseSingleStatement(request.getSql(), dbType)
+                    instanceof com.alibaba.druid.sql.ast.statement.SQLSelectStatement)
+                    || request.getRowIndex() == null || request.getRowIndex() < 0
+                    || request.getColumnIndex() == null || request.getColumnIndex() < 1) {
+                throw new BusinessException("缺少有效的 BLOB 查询定位信息");
+            }
+            try (PreparedStatement statement = Chat2DBContext.getConnection().prepareStatement(request.getSql())) {
+                statement.setQueryTimeout(60);
+                statement.setMaxRows(request.getRowIndex() + 1);
+                try (ResultSet result = statement.executeQuery()) {
+                    for (int i = 0; i <= request.getRowIndex(); i++) {
+                        if (!result.next()) return null;
+                    }
+                    return readBlobData(result, request.getColumnIndex());
+                }
+            }
+        }
+        if (StrUtil.isBlank(request.getSchemaName()) || StrUtil.isBlank(request.getTableName())) {
+            throw new BusinessException("缺少 BLOB 表定位信息");
+        }
         String sql = "SELECT " + quoteBlobIdentifier(request.getBlobColumn())
                 + " FROM " + quoteBlobIdentifier(request.getSchemaName()) + "."
                 + quoteBlobIdentifier(request.getTableName()) + " WHERE ROWID = ?";
@@ -154,19 +186,23 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             }
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) return null;
-                try (InputStream input = result.getBinaryStream(1)) {
-                    if (input == null) return null;
-                    ByteArrayOutputStream output = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[8192];
-                    int count;
-                    while ((count = input.read(buffer)) != -1) {
-                        output.write(buffer, 0, count);
-                    }
-                    return Base64.getEncoder().encodeToString(output.toByteArray());
-                } catch (IOException e) {
-                    throw new SQLException("读取 BLOB 数据失败", e);
-                }
+                return readBlobData(result, 1);
             }
+        }
+    }
+
+    private String readBlobData(ResultSet result, int columnIndex) throws SQLException {
+        try (InputStream input = result.getBinaryStream(columnIndex)) {
+            if (input == null) return null;
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+            }
+            return Base64.getEncoder().encodeToString(output.toByteArray());
+        } catch (IOException e) {
+            throw new SQLException("读取 BLOB 数据失败", e);
         }
     }
 
@@ -264,6 +300,7 @@ public class DlTemplateServiceImpl implements DlTemplateService {
 
     @Override
     public ListResult<ExecuteResult> executeSelectTable(DlExecuteParam param) {
+        if (Boolean.TRUE.equals(param.getRefresh())) CacheManage.invalidateColumns(param.getDataSourceId());
         Command command = commandConverter.param2model(param);
         List<ExecuteResult> results = Chat2DBContext.getMetaData().getCommandExecutor().executeSelectTable(command);
         return reBuildHeader(results, param.getSchemaName(), param.getDatabaseName());
@@ -506,14 +543,18 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             tableQueryParam.setTableName(MetaNameUtils.getMetaName(tableName));
             tableQueryParam.setSchemaName(schemaName);
             tableQueryParam.setDatabaseName(databaseName);
-            tableQueryParam.setRefresh(true);
+            tableQueryParam.setDataSourceId(Chat2DBContext.getConnectInfo().getDataSourceId());
+            tableQueryParam.setRefresh(false);
             List<TableColumn> columns = tableService.queryColumns(tableQueryParam);
             if (CollectionUtils.isEmpty(columns)) {
                 return headers;
             }
             Map<String, TableColumn> columnMap = columns.stream().collect(
                     Collectors.toMap(TableColumn::getName, tableColumn -> tableColumn));
-            List<TableIndex> tableIndices = tableService.queryIndexes(tableQueryParam);
+            // DM and Oracle columns already carry primary keys; do not load all indexes for data paging.
+            String dbType = Chat2DBContext.getConnectInfo().getDbType();
+            List<TableIndex> tableIndices = "DM".equalsIgnoreCase(dbType) || "ORACLE".equalsIgnoreCase(dbType)
+                    ? Collections.emptyList() : tableService.queryIndexes(tableQueryParam);
             if (!CollectionUtils.isEmpty(tableIndices)) {
                 for (TableIndex tableIndex : tableIndices) {
                     if ("PRIMARY".equalsIgnoreCase(tableIndex.getType())) {

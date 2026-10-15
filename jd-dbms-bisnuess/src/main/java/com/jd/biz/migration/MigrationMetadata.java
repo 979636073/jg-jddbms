@@ -92,6 +92,9 @@ public class MigrationMetadata {
                 table.columns = columns(source, from, table.source, sourceType, targetType, mapping.columns, false);
                 if (table.columns.isEmpty()) throw new BusinessException("没有读取到字段，不能生成空表");
                 applyFields(mapping, table);
+                if ("DM".equals(sourceType)) for (Column column : table.columns) if ("TEXT".equalsIgnoreCase(column.sourceType)) {
+                    report.warnings.add(qualified(from, table.source) + "." + column.name + "：达梦元数据无法区分 TEXT 与 NCLOB，目标按 " + column.targetType + " 建表并进行内容校验；如需 NCLOB，请在字段映射中显式选择。");
+                }
                 for (Column column : table.columns) if (column.sourceExpression != null) {
                     report.warnings.add(qualified(from, table.source) + "." + column.name + "：显式转换 " + column.sourceExpression + " → " + column.targetType + "；全量校验转换后的值，不代表原始类型无损或完整保留对象属性。");
                     if (table.filters.stream().anyMatch(filter -> column.name.equals(filter.column))) throw new BusinessException("转换字段不能同时使用源筛选，请改用其他原始字段筛选");
@@ -121,6 +124,7 @@ public class MigrationMetadata {
                         throw new BusinessException("仅数据迁移要求目标普通表已存在");
                     }
                     List<Column> targetColumns = columns(target, to, table.target, targetType, targetType);
+                    matchDmNclob(table.columns, targetColumns, targetType);
                     table.targetDdl = sourceDdl(target, to, table.target);
                     if (table.targetDdl.toUpperCase(Locale.ROOT).matches("(?s).*\\b(IDENTITY|AUTO_INCREMENT|GENERATED|VIRTUAL)\\b.*")) {
                         throw new BusinessException("目标存在生成列或自增特性，仅数据迁移尚未适配");
@@ -215,9 +219,19 @@ public class MigrationMetadata {
         }
     }
 
+    static void matchDmNclob(List<Column> planned, List<Column> actual, String targetType) {
+        if (!"DM".equals(targetType)) return;
+        for (Column column : planned) if ("NCLOB".equals(column.targetType)) {
+            for (Column found : actual) if (targetName(column).equals(found.name) && "TEXT".equalsIgnoreCase(found.sourceType)) {
+                found.kind = "NCLOB"; found.targetType = "NCLOB";
+            }
+        }
+    }
+
     public void verifyCreated(Connection target, Config config, TablePlan planned, String targetType) throws SQLException {
         config = scoped(config, planned);
         List<Column> actual = columns(target, config.targetSchema, planned.target, targetType, targetType);
+        matchDmNclob(planned.columns, actual, targetType);
         compatible(planned.columns, actual);
         if (planned.targetTablespace != null) try (PreparedStatement query = prepare(target, "SELECT TABLESPACE_NAME FROM ALL_TABLES WHERE OWNER=? AND TABLE_NAME=?", config.targetSchema, planned.target); ResultSet rows = query.executeQuery()) {
             if (!rows.next() || !planned.targetTablespace.equals(rows.getString(1))) throw new BusinessException("目标实际表空间与计划不一致");

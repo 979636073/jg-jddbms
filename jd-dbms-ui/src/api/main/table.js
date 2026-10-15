@@ -7,6 +7,9 @@ function getTableList(data) {
     params: data
   })
 }
+function getTreeTableList(data) {
+  return request({ url: '/api/rdb/table/tree', method: 'get', params: data })
+}
 
 /** 获取库的所有表 */
 function getAllTableList(data) {
@@ -77,6 +80,10 @@ function getTableDetails(data) {
     method: 'get',
     params: data
   })
+}
+
+function getTableSection(data, section) {
+  return request({ url: `/api/rdb/table/${section}`, method: 'get', params: data })
 }
 
 function tableImport(data) {
@@ -237,6 +244,7 @@ function getBlobData(data) {
 export default {
   getBlobData,
   getTableList,
+  getTreeTableList,
   getAllTableList,
   getAllFieldByTable,
   getSchemaInventory,
@@ -246,6 +254,7 @@ export default {
   getDatabaseFieldTypeList,
   getModifyTableSql,
   getTableDetails,
+  getTableSection,
   tableImport,
   importCheck,
   getGrantList,

@@ -32,5 +32,5 @@ public class DataSourceBaseRequest implements DataSourceBaseRequestInfo{
     /**
      * if true, refresh the cache
      */
-    private Boolean refresh;
+    private Boolean refresh = false;
 }
