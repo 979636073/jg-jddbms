@@ -17,7 +17,7 @@
     <div class="result-toolbar">
       <div>
         <h3>整库表结构对比结果</h3>
-        <p>展开发生变化的表，可查看具体字段差异。</p>
+        <p>展开数据表查看字段、索引和约束差异；读取不完整时显示“无法判定”。</p>
       </div>
       <div class="result-tools">
         <el-input
@@ -33,6 +33,7 @@
           <el-radio-button label="source-only">仅源库</el-radio-button>
           <el-radio-button label="target-only">仅目标库</el-radio-button>
           <el-radio-button label="same">一致</el-radio-button>
+          <el-radio-button label="unknown">无法判定</el-radio-button>
         </el-radio-group>
       </div>
     </div>
@@ -56,6 +57,7 @@
           <div v-else class="no-field-detail">
             {{ scope.row.status === 'same' ? '两张表字段结构一致' : '另一侧不存在同名表，无字段差异明细' }}
           </div>
+          <schema-object-result v-if="scope.row.objectRows && scope.row.objectRows.length" :rows="scope.row.objectRows" />
         </template>
       </el-table-column>
       <el-table-column label="表名" min-width="220">
@@ -79,9 +81,9 @@
       <el-table-column label="差异摘要" min-width="280">
         <template slot-scope="scope">
           <span v-if="scope.row.status === 'changed'" class="difference-summary">
-            修改 {{ scope.row.counts.changed }}，仅源表 {{ scope.row.counts.sourceOnly }}，仅目标表 {{ scope.row.counts.targetOnly }}
+            字段修改 {{ scope.row.counts.changed }}，仅源表 {{ scope.row.counts.sourceOnly }}，仅目标表 {{ scope.row.counts.targetOnly }}；结构对象差异 {{ scope.row.objectDifferenceCount || 0 }}
           </span>
-          <span v-else-if="scope.row.status === 'same'" class="same-summary">字段结构一致</span>
+          <span v-else-if="scope.row.status === 'same'" class="same-summary">字段及可见结构对象一致</span>
           <span v-else class="missing-value">{{ tableStatusText(scope.row.status) }}</span>
         </template>
       </el-table-column>
@@ -99,10 +101,11 @@
 
 <script>
 import FieldCompareResult from './FieldCompareResult'
+import SchemaObjectResult from './SchemaObjectResult'
 
 export default {
   name: 'WholeDatabaseResult',
-  components: { FieldCompareResult },
+  components: { FieldCompareResult, SchemaObjectResult },
   props: {
     rows: {
       type: Array,
@@ -122,7 +125,7 @@ export default {
       return this.rows.reduce((result, row) => {
         result[row.status] += 1
         return result
-      }, { changed: 0, 'source-only': 0, 'target-only': 0, same: 0 })
+      }, { changed: 0, 'source-only': 0, 'target-only': 0, same: 0, unknown: 0 })
     },
     summaryItems() {
       return [
@@ -130,7 +133,8 @@ export default {
         { key: 'changed', label: '有变化', value: this.summary.changed },
         { key: 'source-only', label: '仅源库', value: this.summary['source-only'] },
         { key: 'target-only', label: '仅目标库', value: this.summary['target-only'] },
-        { key: 'same', label: '结构一致', value: this.summary.same }
+        { key: 'same', label: '结构一致', value: this.summary.same },
+        { key: 'unknown', label: '无法判定', value: this.summary.unknown }
       ]
     },
     filteredRows() {
@@ -157,7 +161,8 @@ export default {
         changed: '有变化',
         'source-only': '仅源库',
         'target-only': '仅目标库',
-        same: '一致'
+        same: '一致',
+        unknown: '无法判定'
       }[status]
     },
     statusType(status) {
@@ -165,7 +170,8 @@ export default {
         changed: 'danger',
         'source-only': 'warning',
         'target-only': 'info',
-        same: 'success'
+        same: 'success',
+        unknown: 'info'
       }[status]
     },
     tableRowClassName({ row }) {
@@ -178,7 +184,7 @@ export default {
 <style lang="scss" scoped>
 .summary-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
   gap: 12px;
   padding: 18px 24px 0;
 }

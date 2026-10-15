@@ -109,7 +109,7 @@ assert.strictEqual(visibleLengthChange[0].status, 'changed')
 assert(visibleLengthChange[0].changeDetails.some(item => item.label === '长度' && item.source === '20' && item.target === '40'))
 
 const wholeResultFile = path.join(__dirname, '../src/views/main/tableCompare/components/WholeDatabaseResult.vue')
-const wholeResult = loadComponent(wholeResultFile, { module: { exports: {} }, FieldCompareResult: {} }).component
+const wholeResult = loadComponent(wholeResultFile, { module: { exports: {} }, FieldCompareResult: {}, SchemaObjectResult: {} }).component
 const wholeSummary = wholeResult.computed.summary.call({ rows: databaseRows })
 assert.strictEqual(wholeSummary['source-only'], 2)
 assert.strictEqual(wholeSummary['target-only'], 2)
@@ -129,6 +129,15 @@ const report = reportContext.module.exports({
 assert(report.includes('长度') && report.includes('20') && report.includes('40'), 'PDF 报告应包含具体变化值')
 assert(report.includes('&lt;危险&gt;') && !report.includes('<危险>'), '数据库元数据应转义后写入报告')
 assert(report.includes('window.print()'), '报告应支持浏览器保存 PDF')
+const objectReport = reportContext.module.exports({
+  mode: 'database', tableRows: [{ sourceName: 'T', targetName: 'T', status: 'changed',
+    counts: { changed: 0, sourceOnly: 0, targetOnly: 0 }, objectDifferenceCount: 1, fieldRows: [] }],
+  objectRows: [{ kind: 'INDEX', name: 'IX', status: 'changed', changeDetails: [
+    { label: '索引表达式[1]', source: '<UPPER>', target: 'LOWER(VAL)' }
+  ] }]
+})
+assert(objectReport.includes('结构对象差异 1') && objectReport.includes('索引表达式[1]'), '报告应包含仅索引变化及属性明细')
+assert(objectReport.includes('&lt;UPPER&gt;') && !objectReport.includes('<UPPER>'), '结构属性差异应转义')
 if (process.env.PDF_FIXTURE_HTML) fs.writeFileSync(process.env.PDF_FIXTURE_HTML, report, 'utf8')
 
 const tagsFile = path.join(__dirname, '../src/components/JdTagsView/index.vue')

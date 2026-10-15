@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div>
         <h2>表结构对比</h2>
-        <p>{{ compareMode === 'table' ? '选择任意两个数据源中的表，快速定位字段结构差异。' : '选择两个数据库或模式，批量检查其中所有数据表的字段结构。' }}</p>
+        <p>{{ compareMode === 'table' ? '选择任意两个数据源中的表，对比字段、索引和约束。' : '选择两个数据库或模式，批量检查字段、索引和约束差异。' }}</p>
       </div>
       <el-radio-group v-model="compareMode" size="small" :disabled="comparing" @change="handleModeChange">
         <el-radio-button label="table">单表对比</el-radio-button>
@@ -219,6 +219,7 @@ import FieldCompareResult from './components/FieldCompareResult'
 import WholeDatabaseResult from './components/WholeDatabaseResult'
 import SchemaObjectResult from './components/SchemaObjectResult'
 import { buildCompareReport } from './report'
+import { buildObjectRows, applyObjectDifferences } from './objects'
 
 function createSide() {
   return {
@@ -491,6 +492,7 @@ export default {
         } catch (error) {
           this.objectRows = []
           this.inventoryIssues = [error.message || '其他结构对象清单读取失败，无法判定一致性']
+          applyObjectDifferences(this.databaseRows, [], true)
         }
         this.hasCompared = true
       } catch (error) {
@@ -504,8 +506,8 @@ export default {
     },
     async compareSingleTable() {
       const [sourceRes, targetRes] = await Promise.all([
-        tableServer.getAllFieldByTable(this.buildRequest('source')),
-        tableServer.getAllFieldByTable(this.buildRequest('target'))
+        tableServer.getAllFieldByTable({ ...this.buildRequest('source'), refresh: true }),
+        tableServer.getAllFieldByTable({ ...this.buildRequest('target'), refresh: true })
       ])
       const sourceColumns = Array.isArray(sourceRes.data) ? sourceRes.data : []
       const targetColumns = Array.isArray(targetRes.data) ? targetRes.data : []
@@ -524,8 +526,8 @@ export default {
       this.wholeProgress = { stage: 'columns', completed: 0, total: matchedRows.length }
       await this.runWithConcurrency(matchedRows, 4, async row => {
         const [sourceColumnsRes, targetColumnsRes] = await Promise.all([
-          tableServer.getAllFieldByTable({ ...this.buildRequest('source'), tableName: row.sourceName }),
-          tableServer.getAllFieldByTable({ ...this.buildRequest('target'), tableName: row.targetName })
+          tableServer.getAllFieldByTable({ ...this.buildRequest('source'), tableName: row.sourceName, refresh: true }),
+          tableServer.getAllFieldByTable({ ...this.buildRequest('target'), tableName: row.targetName, refresh: true })
         ])
         const sourceColumns = Array.isArray(sourceColumnsRes.data) ? sourceColumnsRes.data : []
         const targetColumns = Array.isArray(targetColumnsRes.data) ? targetColumnsRes.data : []
@@ -575,8 +577,8 @@ export default {
     },
     async compareObjects() {
       const [source, target] = await Promise.all([
-        tableServer.getSchemaInventory(this.buildRequest('source')),
-        tableServer.getSchemaInventory(this.buildRequest('target'))
+        tableServer.getSchemaInventory({ ...this.buildRequest('source'), tableName: this.compareMode === 'table' ? this.source.tableName : undefined }),
+        tableServer.getSchemaInventory({ ...this.buildRequest('target'), tableName: this.compareMode === 'table' ? this.target.tableName : undefined })
       ])
       if (!source.success || !target.success) throw new Error(source.errorMessage || target.errorMessage || '对象清单读取失败')
       const left = source.data || {}
@@ -587,27 +589,8 @@ export default {
         if ((inventory.truncated || []).length) issues.push(`${label} ${inventory.truncated.join('、')} 超过单次上限，请缩小范围`)
       })
       this.inventoryIssues = issues
-      const permitted = item => this.compareMode === 'database' ||
-        ['INDEX', 'CONSTRAINT', 'TRIGGER'].includes(item.kind) &&
-        item.name.startsWith(this.source.tableName + '.')
-      const leftMap = new Map((left.objects || []).filter(permitted).map(item => [`${item.kind}|${item.name}`, item]))
-      const rightMap = new Map((right.objects || []).filter(item => this.compareMode === 'database' ||
-        ['INDEX', 'CONSTRAINT', 'TRIGGER'].includes(item.kind) &&
-        item.name.startsWith(this.target.tableName + '.')).map(item => [`${item.kind}|${item.name}`, item]))
-      const keys = new Set([...leftMap.keys(), ...rightMap.keys()])
-      const failedKinds = new Set([
-        ...Object.keys(left.errors || {}), ...Object.keys(right.errors || {}),
-        ...(left.truncated || []), ...(right.truncated || [])
-      ])
-      this.objectRows = [...keys].sort().map(key => {
-        const sourceObject = leftMap.get(key)
-        const targetObject = rightMap.get(key)
-        const kind = key.split('|')[0]
-        const status = failedKinds.has(kind) ? 'unknown' : !sourceObject ? 'target-only'
-          : !targetObject ? 'source-only'
-            : sourceObject.fingerprint === targetObject.fingerprint ? 'same' : 'changed'
-        return { key, kind, name: (sourceObject || targetObject).name, source: sourceObject, target: targetObject, status }
-      })
+      this.objectRows = buildObjectRows(left, right, this.compareMode, this.source.tableName, this.target.tableName)
+      applyObjectDifferences(this.databaseRows, this.objectRows)
     },
     async runWithConcurrency(items, limit, worker) {
       let nextIndex = 0

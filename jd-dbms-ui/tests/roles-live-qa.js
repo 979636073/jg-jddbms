@@ -1,6 +1,13 @@
 // Opt-in local DM acceptance. Requires administrator session jddbms; creates only disposable fixtures.
 const { spawnSync } = require('child_process')
 const path = require('path')
+const fs = require('fs')
+const recoveryFile = path.join(__dirname, '../../.local/role-qa-fixtures.json')
+function saveRecovery(f) {
+  fs.mkdirSync(path.dirname(recoveryFile), { recursive: true })
+  fs.writeFileSync(recoveryFile, JSON.stringify({ suffix: f.suffix, users: f.users.map(user => ({ id: user.id, name: user.name })),
+    tables: f.tables, connections: f.connections, tasks: f.tasks.map(task => task.id), auxUsers: f.auxUsers, roles: f.roles }))
+}
 const session = 'roles-qa'
 const browserBinary = process.platform === 'win32'
   ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser'
@@ -12,7 +19,21 @@ function cli(args, input) {
   return result.stdout?.trim() || ''
 }
 function evaluate(fn, data, browser = session) {
-  return JSON.parse(cli(['--session', browser, 'eval', '--stdin'], '(' + fn.toString() + ')(' + JSON.stringify(data) + ')'))
+  // Keep each browser RPC short while real database/role suites run in the page.
+  const key = '__roleQaJob'
+  cli(['--session', browser, 'eval', '--stdin'], 'window.' + key + '={done:false};Promise.resolve().then(()=>('
+    + fn.toString() + ')(' + JSON.stringify(data) + ')).then(value=>window.' + key
+    + '={done:true,value},error=>window.' + key + '={done:true,error:error.message});"started"')
+  const deadline = Date.now() + 180000
+  while (Date.now() < deadline) {
+    const job = JSON.parse(cli(['--session', browser, 'eval', '--stdin'], 'window.' + key))
+    if (job?.done) {
+      if (job.error) throw Error(job.error)
+      return job.value
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)
+  }
+  throw Error('Role acceptance timed out; inspect window.' + key + ' before retrying')
 }
 const all = ['METADATA_READ', 'DATA_READ', 'DATA_WRITE', 'SCHEMA_CHANGE', 'SQL_EXECUTE', 'MONITOR_VIEW', 'MIGRATION_RUN', 'DATASOURCE_MANAGE']
 const expected = {
@@ -61,6 +82,7 @@ try {
     }
     return data;
   }, { expected, all, adminToken })
+  saveRecovery(fixtures)
   const apiReport = evaluate(async ({ fixtures: f, expected, all }) => {
     const out = { checks: [], failures: [] };
     const api = async (url, method = 'GET', body, token = f.token) => (await fetch('/dev-api' + url,
@@ -96,6 +118,8 @@ try {
           if (action === 'DATA_READ' && success && !allowed.includes('DATA_WRITE')) assert(r.data.every(x => !x.canEdit), user.key + '/' + kind + '/read-only-result', r);
         }
         const monitorState = await api('/api/rdb/monitor/state?dataSourceId=' + id, 'GET', undefined, user.token);
+        const inventory = await api('/api/rdb/schema-inventory?dataSourceId=' + id + '&schemaName=TEST-TEST&tableName=' + f.table, 'GET', undefined, user.token);
+        assert(allowed.includes('METADATA_READ') ? ok(inventory) && !Object.keys(inventory.data?.errors || {}).length : denied(inventory), user.key + '/' + kind + '/structure-inventory', inventory);
         assert(allowed.includes('MONITOR_VIEW') ? ok(monitorState) : denied(monitorState), user.key + '/' + kind + '/monitor-history', monitorState);
         if (ok(monitorState)) assert(monitorState.data.canManage === allowed.includes('DATASOURCE_MANAGE'), user.key + '/' + kind + '/monitor-config-visibility', monitorState);
         // Admin's existing connection is read-only in this suite; only cloned fixtures get configuration writes.
@@ -220,6 +244,7 @@ try {
   fixtures.auxUsers = apiReport.auxUsers;
   fixtures.roles = apiReport.roles;
   fixtures.connections = apiReport.connections;
+  saveRecovery(fixtures)
   // Each role uses the real application and its own authenticated browser state.
   for (const user of fixtures.users) {
     evaluate(({ token }) => { sessionStorage.clear(); localStorage.clear(); document.cookie = 'JDDBMS-Token=' + token + '; path=/'; return true }, user)
@@ -284,7 +309,8 @@ try {
 } finally {
   if (!fixtures) fixtures = evaluate(() => window.__roleFixtures || null)
   // The admin session remains untouched; fixture IDs never include existing connections or users.
-  const cleanup = evaluate(async f => {
+  let cleanup
+  try { cleanup = evaluate(async f => {
     if (!f) return { skipped: true };
     const token = document.querySelector('#app').__vue__.$store.getters.token;
     const api = async (url, method = 'GET', body) => (await fetch('/dev-api' + url, { method,
@@ -310,8 +336,9 @@ try {
     for (const id of f.auxUsers) if ((await api('/system/user/' + id, 'DELETE')).code !== 200) errors.push('user/' + id);
     for (const id of f.roles) if ((await api('/system/role/' + id, 'DELETE')).code !== 200) errors.push('role/' + id);
     return { errors };
-  }, fixtures, 'jddbms')
+  }, fixtures, 'jddbms') } catch (error) { cleanup = { errors: [error.message] } }
   if (cleanup.errors?.length) report.failures.push({ name: 'cleanup', errors: cleanup.errors })
+  else if (fs.existsSync(recoveryFile)) fs.unlinkSync(recoveryFile)
   cli(['--session', session, 'close'])
 }
 report.status = report.failures.length ? 'FAIL' : 'PASS'

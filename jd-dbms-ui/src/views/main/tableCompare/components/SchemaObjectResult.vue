@@ -1,7 +1,7 @@
 <template>
   <div class="schema-object-result">
     <h3>其他结构对象对比</h3>
-    <p>比较索引、约束、视图、触发器、程序、序列和同义词的可见定义；对象名称按数据库大小写精确匹配。</p>
+    <p>比较可见定义；显式对象名按大小写匹配，系统生成名称按定义匹配。单表对比忽略所属表名前缀。</p>
     <el-alert v-for="issue in issues" :key="issue" :title="issue" type="warning" :closable="false" class="issue" />
     <div class="object-tools">
       <el-input v-model.trim="keyword" clearable size="small" prefix-icon="el-icon-search" placeholder="搜索对象名" />
@@ -13,9 +13,14 @@
     </div>
     <el-table :data="pageRows" size="small" row-key="key" empty-text="没有匹配的结构对象">
       <el-table-column type="expand" width="44"><template slot-scope="scope">
+        <el-table v-if="scope.row.changeDetails && scope.row.changeDetails.length" :data="scope.row.changeDetails" size="mini">
+          <el-table-column prop="label" label="差异属性（方括号为字段顺序）" min-width="220" />
+          <el-table-column prop="source" label="源侧" min-width="200" />
+          <el-table-column prop="target" label="目标侧" min-width="200" />
+        </el-table>
         <div class="definition-grid">
-          <div><strong>源定义摘要</strong><pre>{{ scope.row.source ? scope.row.source.definition : '不存在' }}</pre></div>
-          <div><strong>目标定义摘要</strong><pre>{{ scope.row.target ? scope.row.target.definition : '不存在' }}</pre></div>
+          <div><strong>源定义摘要 · {{ scope.row.source && scope.row.source.name }}</strong><pre>{{ scope.row.source ? scope.row.source.definition : scope.row.status === 'unknown' ? '无法判定' : '不存在' }}</pre></div>
+          <div><strong>目标定义摘要 · {{ scope.row.target && scope.row.target.name }}</strong><pre>{{ scope.row.target ? scope.row.target.definition : scope.row.status === 'unknown' ? '无法判定' : '不存在' }}</pre></div>
         </div>
       </template></el-table-column>
       <el-table-column label="类型" width="110"><template slot-scope="scope">{{ kindLabel(scope.row.kind) }}</template></el-table-column>
