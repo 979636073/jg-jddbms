@@ -60,7 +60,8 @@ public class RdbDmlControllerTest {
     @Test
     public void sqlFilterKeepsQueryLiteralsAndStillCleansOrdinaryRequests() throws Exception {
         String body = "{\"sql\":\"SELECT '<tag>&gt;</tag>' FROM T WHERE ID <> 10\"}";
-        for (String path : new String[]{"/api/rdb/dml/execute", "/api/rdb/dml/getBlobData", "/system/notice"}) {
+        for (String path : new String[]{"/api/rdb/dml/execute", "/api/rdb/dml/getBlobData",
+                "/api/rdb/dml/executeExplain", "/system/notice"}) {
             MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
             request.setServletPath(path);
             request.setContentType(MediaType.APPLICATION_JSON_VALUE);

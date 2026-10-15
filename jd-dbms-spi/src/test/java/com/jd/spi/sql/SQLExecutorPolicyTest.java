@@ -20,6 +20,28 @@ import static org.junit.Assert.assertTrue;
 
 public class SQLExecutorPolicyTest {
     @Test
+    public void commandKeepsHtmlEntityLiteralsInOriginalSql() {
+        ConnectInfo info = new ConnectInfo();
+        info.setDbType("ORACLE");
+        info.setDriverConfig(new com.jd.spi.config.DriverConfig());
+        info.setConnection(proxy(Connection.class, (method, args) -> {
+            if ("createStatement".equals(method)) throw new IllegalStateException("Test database unavailable");
+            return null;
+        }));
+        Chat2DBContext.putContext(info);
+        String sql = "UPDATE T SET V = '&gt;', W = '&lt;' WHERE ID <> 10";
+        Command command = new Command();
+        command.setScript(sql);
+        try {
+            java.util.List<ExecuteResult> results = SQLExecutor.getInstance().execute(command);
+            assertEquals(sql, command.getScript());
+            assertEquals(sql, results.get(0).getOriginalSql());
+        } finally {
+            Chat2DBContext.detachContext();
+        }
+    }
+
+    @Test
     public void recognizesNativeQueriesWhenTheParserDoesNotUnderstandThem() {
         assertTrue(SQLExecutor.isReadQuery("-- note\nSELECT LEVEL FROM dual CONNECT BY LEVEL <= 405"));
         assertTrue(SQLExecutor.isReadQuery("/* hint */ WITH t AS (SELECT 1 FROM dual) SELECT * FROM t"));

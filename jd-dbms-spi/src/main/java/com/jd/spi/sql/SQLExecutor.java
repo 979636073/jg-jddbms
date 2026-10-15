@@ -920,8 +920,6 @@ public class SQLExecutor implements CommandExecutor {
             String px = command.getIsAsc() ? "\" ASC" : "\" DESC";
             sql = "SELECT * FROM (" + sql + ") A order by A.\"" + command.getOrderByColumn() + px;
         }
-        sql = sql.replace("&gt;", ">");
-        sql = sql.replace("&lt;", "<");
         command.setScript(sql);
         List<ExecuteResult> result = new ArrayList<>();
         String type = Chat2DBContext.getConnectInfo().getDbType();
