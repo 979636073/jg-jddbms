@@ -28,7 +28,7 @@ async function main() {
       originalSql: 'SELECT ID, PAYLOAD AS DATA FROM T ORDER BY ID',
       headerList: [{ name: '行号' }, { name: 'ID' }, { name: 'DATA' }]
     },
-    sqlInfo: [], $refs: { fileRef: { fromData: {} } },
+    sqlInfo: [], oldTableData: [], $refs: { fileRef: { async open(params) { requests.push(params) } } },
     $message: { error(message) { throw new Error(message) } }
   }
   const row = { '行号': '202', ID: '202', DATA: 'A' }
@@ -37,10 +37,9 @@ async function main() {
   assert.strictEqual(requests.length, 1)
   assert.strictEqual(requests[0].dataSourceId, 42)
   assert.strictEqual(requests[0].sql, state.queryResultData.originalSql)
-  assert.strictEqual(requests[0].rowIndex, 201)
-  assert.strictEqual(requests[0].columnIndex, 2)
-  assert.strictEqual(state.$refs.fileRef.blobStr, 'AQID')
-  assert.strictEqual(state.$refs.fileRef.dialogVisible, true)
+  assert.deepStrictEqual(Array.from(requests[0].resultColumns), ['ID', 'DATA'])
+  assert.deepStrictEqual(Array.from(requests[0].resultValues), ['202', 'A'])
+  assert.strictEqual(requests[0].rowIndex, undefined, '禁止通过结果行号重新定位 BLOB')
   assert.strictEqual(state.binaryPreviewLoading, false)
 
   state.queryResultData.uniqueData = { dataSourceId: 42, schemaName: 'QA', tableName: 'T' }
@@ -55,18 +54,16 @@ async function main() {
     .replace('export default', 'module.exports ='), consoleContext)
   const consoleMethods = consoleContext.module.exports.methods
   const consoleState = { ...state, ...consoleMethods, binaryLoading: false,
-    rows: [['202', '202', 'A']], columns: state.queryResultData.headerList,
+    rows: [['202', '202', 'A']], columns: state.queryResultData.headerList.map((column, index) => ({ ...column, index, dataType: index === 0 ? 'CHAT2DB_ROW_NUMBER' : '' })),
     queryResultData: { ...state.queryResultData, uniqueData: undefined } }
   assert.strictEqual(requests.length, 2, '渲染控制台不能读取 BLOB')
   await consoleState.showBinary(0, 2)
-  assert.strictEqual(requests[2].rowIndex, 201)
-  assert.strictEqual(requests[2].columnIndex, 2)
+  assert.deepStrictEqual(Array.from(requests[2].resultValues), ['202', 'A'])
   assert.strictEqual(requests[2].sql, state.queryResultData.originalSql)
-  assert.strictEqual(consoleState.$refs.fileRef.dialogVisible, true)
   consoleState.rows = [['203', '203', null]]
   await consoleState.showBinary(0, 2)
   assert.strictEqual(requests.length, 3, 'NULL 不触发文件读取')
-  console.log('BLOB 控制台无 ROWID、分页定位与表数据按需读取回归通过')
+  console.log('BLOB 控制台完整主键定位与表数据按需读取回归通过')
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1 })

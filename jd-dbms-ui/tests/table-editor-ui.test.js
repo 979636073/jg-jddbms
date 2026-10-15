@@ -151,11 +151,13 @@ let downloadCall
 const dialogContext = {
   module: { exports: {} },
   process: { env: { VUE_APP_BASE_API: '' } },
+  AbortController,
+  crypto: require('crypto').webcrypto,
   downloadFile(url, params) { downloadCall = { url, params } }
 }
 vm.runInNewContext(binaryDialogSource.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), dialogContext)
 const dialog = dialogContext.module.exports
-const downloadState = { blobStr: 'AA==', fromData: { name: 'QA_IMAGE_DATA_1', type: '.bin' }, handleClose() { this.closed = true } }
+const downloadState = { blobStr: 'AA==', fromData: { name: 'QA_IMAGE_DATA_1', type: '.bin' }, $message: { success() {}, error() {} } }
 const downloadPromise = dialog.methods.downLoad.call(downloadState)
 assert.strictEqual(downloadCall.params.fileName, 'QA_IMAGE_DATA_1')
 assert.strictEqual(downloadCall.params.prefix, '.bin')
@@ -256,11 +258,11 @@ assert.strictEqual(binaryCommitState.clickRow, null)
 context.FormData = class { append() {} }
 context.tableServer.getBlobData = async () => ({ data: 'AA==' })
 context.tableServer.getTableDataBlob = async () => ({ success: true, data: null })
-const fileRef = { fromData: { type: '' }, dialogVisible: false, isShow: true }
+const fileRef = { async open(request, name, localBase64) { this.request = request; this.name = name; this.blobStr = localBase64 } }
 const binaryErrors = []
 const binaryState = {
   queryResultData: { headerList: [{ name: 'IMAGE_DATA' }], uniqueData: { tableName: 'QA', schemaName: 'JDDBMS_QA', dataSourceId: 1 } },
-  sqlInfo: [],
+  sqlInfo: [], oldTableData: [],
   sameCellValue: component.methods.sameCellValue,
   $refs: { fileRef },
   $message: { warning() {}, error(message) { binaryErrors.push(message) } },
@@ -269,19 +271,10 @@ const binaryState = {
 component.methods.openBinaryViewer.call(binaryState, { ROWID: '1', '行号': 1, IMAGE_DATA: 'A' }, { name: 'IMAGE_DATA' })
   .then(async () => {
     await downloadPromise
-    assert.strictEqual(downloadState.closed, true)
+    assert.strictEqual(downloadState.downloadLoading, false)
     assert.deepStrictEqual(binaryErrors, [], '未知文件类型不应触发空值 includes 异常')
-    assert.strictEqual(fileRef.fromData.type, '.bin', '未知类型应自动使用 .bin 后缀')
-    assert.strictEqual(fileRef.fromData.name, 'QA_IMAGE_DATA_1', '下载名应由表、字段和行标识自动生成')
-    assert.strictEqual(fileRef.isShow, false, '未知类型不应被当作图片预览')
-    assert.strictEqual(fileRef.dialogVisible, true, '未知类型仍应允许下载')
-    context.tableServer.getTableDataBlob = async () => ({ success: true, data: '.png' })
-    await component.methods.openBinaryViewer.call(binaryState, { ROWID: '1', '行号': 1, IMAGE_DATA: 'A' }, { name: 'IMAGE_DATA' })
-    assert.strictEqual(fileRef.fromData.type, '.png')
-    assert.strictEqual(fileRef.isShow, true, '已识别的图片仍应可以预览')
-    context.tableServer.getTableDataBlob = async () => ({ success: true, data: '.pdf' })
-    await component.methods.openBinaryViewer.call(binaryState, { ROWID: '1', '行号': 1, IMAGE_DATA: 'A' }, { name: 'IMAGE_DATA' })
-    assert.strictEqual(fileRef.isShow, false, '非图片格式不应使用图片组件预览')
+    assert.strictEqual(fileRef.name, 'QA_IMAGE_DATA_1', '下载名应由表、字段和行标识自动生成')
+    assert.strictEqual(fileRef.request.rowId, '1', '文件弹窗应收到原表的稳定定位信息')
     const uploads = []
     const uploadFeedback = []
     const uploadReadStates = []
@@ -365,7 +358,7 @@ component.methods.openBinaryViewer.call(binaryState, { ROWID: '1', '行号': 1, 
     assert.strictEqual(downloadError, '下载失败（HTTP 500）')
 
     const utilitySource = fs.readFileSync(path.join(__dirname, '../src/utils/file.js'), 'utf8')
-      .replace(/^import .*;?\s*$/gm, '').replace('export async function', 'async function') + '\nmodule.exports = downloadFile'
+      .replace(/^import .*;?\s*$/gm, '').replace(/export /g, '') + '\nmodule.exports = downloadFile'
     let savedName
     const anchor = { style: {}, click() { savedName = this.download } }
     const utilityContext = {

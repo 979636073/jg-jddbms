@@ -59,14 +59,10 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -149,65 +145,18 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         return Chat2DBContext.getMetaData().getCommandExecutor().cancel(executionId);
     }
 
+    @Autowired
+    private BlobReadService blobReadService;
+
     @Override
     public String getBlobData(GetBlobRequest request) throws SQLException {
-        if (StrUtil.isBlank(request.getRowId())) {
-            DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
-            if (StrUtil.isBlank(request.getSql())
-                    || !(com.alibaba.druid.sql.SQLUtils.parseSingleStatement(request.getSql(), dbType)
-                    instanceof com.alibaba.druid.sql.ast.statement.SQLSelectStatement)
-                    || request.getRowIndex() == null || request.getRowIndex() < 0
-                    || request.getColumnIndex() == null || request.getColumnIndex() < 1) {
-                throw new BusinessException("缺少有效的 BLOB 查询定位信息");
-            }
-            try (PreparedStatement statement = Chat2DBContext.getConnection().prepareStatement(request.getSql())) {
-                statement.setQueryTimeout(60);
-                statement.setMaxRows(request.getRowIndex() + 1);
-                try (ResultSet result = statement.executeQuery()) {
-                    for (int i = 0; i <= request.getRowIndex(); i++) {
-                        if (!result.next()) return null;
-                    }
-                    return readBlobData(result, request.getColumnIndex());
-                }
-            }
-        }
-        if (StrUtil.isBlank(request.getSchemaName()) || StrUtil.isBlank(request.getTableName())) {
-            throw new BusinessException("缺少 BLOB 表定位信息");
-        }
-        String sql = "SELECT " + quoteBlobIdentifier(request.getBlobColumn())
-                + " FROM " + quoteBlobIdentifier(request.getSchemaName()) + "."
-                + quoteBlobIdentifier(request.getTableName()) + " WHERE ROWID = ?";
-        try (PreparedStatement statement = Chat2DBContext.getConnection().prepareStatement(sql)) {
-            String rowId = request.getRowId();
-            if (rowId.matches("[0-9]+")) {
-                statement.setLong(1, Long.parseLong(rowId));
-            } else {
-                statement.setString(1, rowId);
-            }
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) return null;
-                return readBlobData(result, 1);
-            }
-        }
-    }
-
-    private String readBlobData(ResultSet result, int columnIndex) throws SQLException {
-        try (InputStream input = result.getBinaryStream(columnIndex)) {
-            if (input == null) return null;
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            int count;
-            while ((count = input.read(buffer)) != -1) {
-                output.write(buffer, 0, count);
-            }
-            return Base64.getEncoder().encodeToString(output.toByteArray());
+        try {
+            BlobReadService.Preview preview = blobReadService.preview(request);
+            if (preview.isTooLarge()) throw new BusinessException("BLOB 超过 8 MiB 预览限制，请使用流式下载");
+            return preview.getBase64();
         } catch (IOException e) {
             throw new SQLException("读取 BLOB 数据失败", e);
         }
-    }
-
-    private String quoteBlobIdentifier(String identifier) {
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
     private ListResult<ExecuteResult> reBuildHeader(List<ExecuteResult> results, String schemaName, String databaseName, Boolean isLog, Boolean isColumn) {

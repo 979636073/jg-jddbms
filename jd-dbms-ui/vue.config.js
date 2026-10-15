@@ -51,6 +51,13 @@ module.exports = {
         // target: `http://172.16.10.103:28080`,
         // target: `http://130.9.72.230:28080`,
         changeOrigin: true,
+        onProxyRes(proxyResponse, request, response) {
+          if (request.url.includes('/api/rdb/dml/blob/download')) {
+            response.on('close', () => {
+              if (!response.writableEnded) proxyResponse.destroy()
+            })
+          }
+        },
         pathRewrite: {
           ['^' + process.env.VUE_APP_BASE_API]: ''
         }

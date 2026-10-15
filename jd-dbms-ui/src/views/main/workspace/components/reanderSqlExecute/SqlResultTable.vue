@@ -2,7 +2,6 @@
 import sqlServer from "@/api/main/sql";
 import { copyText } from "@/utils";
 import { prepareSqlResult } from "@/utils/sqlResult";
-import tableServer from "@/api/main/table";
 import FileDialog from "../renderSearchResult/filedialog.vue";
 
 const ROW_HEIGHT = 28;
@@ -191,27 +190,17 @@ export default {
       if (this.binaryLoading || this.rows[rowIndex][columnIndex] == null) return;
       this.binaryLoading = true;
       try {
-        const source = this.queryResultData;
-        const response = await tableServer.getBlobData({
-          ...source.params, sql: source.originalSql || source.params.sql,
-          blobColumn: this.columns[columnIndex].name, columnIndex,
-          rowIndex: Number(this.rows[rowIndex][0]) - 1,
-        });
-        if (!response.success || response.data == null) throw new Error(response.errorMessage || "未获取到二进制内容");
-        const form = new FormData();
-        form.append("blobStr", response.data);
-        const result = await tableServer.getTableDataBlob(form);
-        if (!result.success) throw new Error(result.errorMessage || "无法识别文件类型");
-        const type = String(result.data || "").toLowerCase();
-        const file = this.$refs.fileRef;
+        const params = this.queryResultData.params || {};
+        const columns = this.columns.filter(column => column.dataType !== "CHAT2DB_ROW_NUMBER");
         // eslint-disable-next-line no-control-regex
-        file.fromData = { name: `query_${this.columns[columnIndex].name}_${rowIndex + 1}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_"),
-          type: /^\.[a-z0-9]{1,10}$/.test(type) ? type : ".bin" };
-        file.blobStr = response.data;
-        file.isShow = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"].includes(file.fromData.type);
-        file.dialogVisible = true;
-      } catch (error) { this.$message.error(error.message || "文件预览失败"); }
-      finally { this.binaryLoading = false; }
+        const name = `query_${this.columns[columnIndex].name}_${rowIndex + 1}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
+        await this.$refs.fileRef.open({
+          dataSourceId: params.dataSourceId, databaseName: params.databaseName, schemaName: params.schemaName,
+          sql: this.queryResultData.originalSql, blobColumn: this.columns[columnIndex].name,
+          resultColumns: columns.map(column => column.name),
+          resultValues: columns.map(column => this.rows[rowIndex][column.index]),
+        }, name);
+      } finally { this.binaryLoading = false; }
     },
     contextMenu(event, rowIndex, columnIndex) {
       this.selectCell(rowIndex, columnIndex);

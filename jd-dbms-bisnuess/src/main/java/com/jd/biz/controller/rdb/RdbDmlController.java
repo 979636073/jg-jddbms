@@ -19,6 +19,8 @@ import com.jd.biz.domain.api.param.DlExecuteParam;
 import com.jd.biz.domain.api.param.OrderByParam;
 import com.jd.biz.domain.api.param.UpdateSelectResultParam;
 import com.jd.biz.domain.api.service.DlTemplateService;
+import com.jd.biz.domain.core.impl.BlobReadService;
+import org.springframework.web.bind.annotation.PostMapping;
 import com.jd.biz.domain.api.service.DataSourceService;
 import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
 import com.jd.biz.domain.api.enums.DataSourceAction;
@@ -79,6 +81,9 @@ public class RdbDmlController {
 
     @Autowired
     private DlTemplateService dlTemplateService;
+
+    @Autowired
+    private BlobReadService blobReadService;
 
     @Autowired
     private DataSourceService dataSourceService;
@@ -157,9 +162,38 @@ public class RdbDmlController {
      */
     @RequestMapping(value = "/getBlobData", method = {RequestMethod.POST, RequestMethod.PUT})
     public DataResult<String> getBlobData(@Valid @RequestBody GetBlobRequest request) throws SQLException {
-        log.info("入参:{}", JSON.toJSONString(request));
-        String blobData = dlTemplateService.getBlobData(request);
-        return DataResult.of(blobData);
+        try {
+            return DataResult.of(dlTemplateService.getBlobData(request));
+        } catch (BusinessException error) {
+            return DataResult.error("blob.readFailed", error.getMessage());
+        }
+    }
+
+    @PostMapping("/blob/preview")
+    public DataResult<BlobReadService.Preview> previewBlob(@Valid @RequestBody GetBlobRequest request) throws Exception {
+        try {
+            return DataResult.of(blobReadService.preview(request));
+        } catch (BusinessException error) {
+            return DataResult.error("blob.readFailed", error.getMessage());
+        }
+    }
+
+    @PostMapping("/blob/download")
+    public void downloadBlob(@Valid @RequestBody GetBlobRequest request, HttpServletResponse response) throws Exception {
+        try {
+            blobReadService.download(request, response);
+        } catch (BusinessException error) {
+            if (response.isCommitted()) throw new java.io.IOException(error.getMessage(), error);
+            response.reset();
+            response.setStatus(400);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getOutputStream().write(JSON.toJSONBytes(DataResult.error("blob.readFailed", error.getMessage())));
+        }
+    }
+
+    @PostMapping("/blob/cancel")
+    public DataResult<Boolean> cancelBlob(@Valid @RequestBody GetBlobRequest request) throws SQLException {
+        return DataResult.of(blobReadService.cancel(request));
     }
 
 

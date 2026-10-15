@@ -6,6 +6,8 @@ import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+import java.util.List;
 
 /**
  * @author moji
@@ -40,4 +42,10 @@ public class GetBlobRequest extends DataSourceBaseRequest {
     private String sql;
     private Integer rowIndex;
     private Integer columnIndex;
+
+    private List<String> resultColumns;
+    private List<String> resultValues;
+
+    @Size(max = 64)
+    private String readId;
 }

@@ -8,6 +8,7 @@ import com.jd.spi.sql.Chat2DBContext;
 import com.jd.spi.sql.ConnectInfo;
 import org.junit.After;
 import org.junit.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -16,6 +17,7 @@ import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
@@ -41,7 +43,7 @@ public class DlTemplateBlobTest {
         useConnection(payload, sql, rowId);
 
         GetBlobRequest request = request("AA' OR '1'='1");
-        String encoded = new DlTemplateServiceImpl().getBlobData(request);
+        String encoded = service().getBlobData(request);
 
         assertArrayEquals(payload, Base64.getDecoder().decode(encoded));
         assertEquals("SELECT \"IMAGE_DATA\" FROM \"QA\".\"T\" WHERE ROWID = ?", sql.get());
@@ -51,10 +53,10 @@ public class DlTemplateBlobTest {
     @Test
     public void keepsEmptyBlobDistinctFromNull() throws Exception {
         useConnection(new byte[0], new AtomicReference<>(), new AtomicReference<>());
-        assertEquals("", new DlTemplateServiceImpl().getBlobData(request("AA")));
+        assertEquals("", service().getBlobData(request("AA")));
         Chat2DBContext.removeContext();
         useConnection(null, new AtomicReference<>(), new AtomicReference<>());
-        assertNull(new DlTemplateServiceImpl().getBlobData(request("AA")));
+        assertNull(service().getBlobData(request("AA")));
         assertEquals("", FileUtils.getBlobType(new byte[0]));
         assertEquals("", FileUtils.getBlobType(new byte[]{1, 2, 3}));
     }
@@ -63,7 +65,8 @@ public class DlTemplateBlobTest {
     public void bindsNumericDmRowIdAsLong() throws Exception {
         AtomicReference<String> rowId = new AtomicReference<>();
         useConnection(new byte[]{1}, new AtomicReference<>(), rowId);
-        assertEquals("AQ==", new DlTemplateServiceImpl().getBlobData(request("42")));
+        Chat2DBContext.getConnectInfo().setDbType("DM");
+        assertEquals("AQ==", service().getBlobData(request("42")));
         assertEquals("42", rowId.get());
     }
 
@@ -73,17 +76,20 @@ public class DlTemplateBlobTest {
     }
 
     @Test
-    public void readsBlobFromConsoleQueryWithoutRowId() throws Exception {
+    public void readsBlobFromConsoleQueryWithExplicitRowId() throws Exception {
         AtomicReference<String> sql = new AtomicReference<>();
         useConnection(new byte[]{1, 2, 3}, sql, new AtomicReference<>());
         GetBlobRequest request = new GetBlobRequest();
         request.setBlobColumn("PAYLOAD_ALIAS");
-        request.setSql("SELECT PAYLOAD AS PAYLOAD_ALIAS FROM T ORDER BY ID");
+        request.setSchemaName("QA");
+        request.setSql("SELECT ROWID, PAYLOAD AS PAYLOAD_ALIAS FROM T ORDER BY ID");
+        request.setResultColumns(java.util.Arrays.asList("ROWID", "PAYLOAD_ALIAS"));
+        request.setResultValues(java.util.Arrays.asList("AA", "A"));
         request.setRowIndex(2);
         request.setColumnIndex(1);
 
-        assertEquals("AQID", new DlTemplateServiceImpl().getBlobData(request));
-        assertEquals(request.getSql(), sql.get());
+        assertEquals("AQID", service().getBlobData(request));
+        assertEquals("SELECT \"PAYLOAD\" FROM \"QA\".\"T\" WHERE \"ROWID\" = ?", sql.get());
     }
 
     @Test(expected = BusinessException.class)
@@ -93,7 +99,7 @@ public class DlTemplateBlobTest {
         request.setSql("DELETE FROM T");
         request.setRowIndex(0);
         request.setColumnIndex(1);
-        new DlTemplateServiceImpl().getBlobData(request);
+        service().getBlobData(request);
     }
 
     @Test
@@ -116,6 +122,12 @@ public class DlTemplateBlobTest {
         return Base64.getEncoder().encodeToString(output.toByteArray());
     }
 
+    private DlTemplateServiceImpl service() {
+        DlTemplateServiceImpl service = new DlTemplateServiceImpl();
+        ReflectionTestUtils.setField(service, "blobReadService", new BlobReadService());
+        return service;
+    }
+
     private GetBlobRequest request(String rowId) {
         GetBlobRequest request = new GetBlobRequest();
         request.setSchemaName("QA");
@@ -131,6 +143,9 @@ public class DlTemplateBlobTest {
                     if ("next".equals(method.getName())) return true;
                     if ("getBinaryStream".equals(method.getName()))
                         return payload == null ? null : new ByteArrayInputStream(payload);
+                    if ("getMetaData".equals(method.getName())) return Proxy.newProxyInstance(
+                            ResultSetMetaData.class.getClassLoader(), new Class[]{ResultSetMetaData.class},
+                            (p, m, a) -> defaultValue(m.getReturnType()));
                     return defaultValue(method.getReturnType());
                 });
         PreparedStatement statement = (PreparedStatement) Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),

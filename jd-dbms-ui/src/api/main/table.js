@@ -239,9 +239,18 @@ function getBlobData(data) {
   })
 }
 
+function previewBlob(data, signal) {
+  return request({ url: '/api/rdb/dml/blob/preview', method: 'post', data, signal })
+}
+function cancelBlob(data) {
+  return request({ url: '/api/rdb/dml/blob/cancel', method: 'post', data })
+}
+
 
 
 export default {
+  previewBlob,
+  cancelBlob,
   getBlobData,
   getTableList,
   getTreeTableList,

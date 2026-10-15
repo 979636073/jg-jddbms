@@ -1279,38 +1279,26 @@ export default {
         type === "date" ? date : `${date} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
     },
     async openBinaryViewer(row, header) {
+      if (this.binaryPreviewLoading) return;
       this.binaryPreviewLoading = true;
       try {
         const { tableName, schemaName, dataSourceId, databaseName } =
           this.queryResultData.uniqueData || this.queryResultData.params || {};
-        const columnIndex = this.queryResultData.headerList.findIndex(item => item.name === header.name);
+        const headers = this.queryResultData.headerList;
+        const columnIndex = headers.findIndex(item => item.name === header.name);
         const operation = this.sqlInfo.find(item => String(item.rowId) === String(row["行号"]));
         const pending = operation && (operation.type === "CREATE" ||
           (operation.type === "UPDATE" && !this.sameCellValue(operation.dataList[columnIndex], operation.oldDataList[columnIndex])));
-        const blobData = pending ? row[header.name] :
-          (await tableServer.getBlobData({
-            tableName, schemaName, dataSourceId, databaseName,
-            rowId: tableName ? row.ROWID : undefined, blobColumn: header.name,
-            sql: this.queryResultData.originalSql,
-            rowIndex: Number(row["行号"]) - 1,
-            columnIndex: columnIndex,
-          })).data;
-        if (blobData == null) throw new Error("未获取到二进制内容");
-        const formData = new FormData();
-        formData.append("blobStr", blobData);
-        const result = await tableServer.getTableDataBlob(formData);
-        if (!result.success) throw new Error(result.errorCode || "无法识别文件类型");
-        const detectedType = typeof result.data === "string" ? result.data.toLowerCase() : "";
-        const fileType = /^\.[a-z0-9]{1,10}$/.test(detectedType) ? detectedType : ".bin";
+        const original = this.oldTableData.find(item => String(item["行号"]) === String(row["行号"])) || row;
         // eslint-disable-next-line no-control-regex
         const fileName = `${tableName || "query"}_${header.name}_${row.ROWID || row["行号"]}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
-        this.$refs.fileRef.fromData.name = fileName;
-        this.$refs.fileRef.fromData.type = fileType;
-        this.$refs.fileRef.blobStr = blobData;
-        this.$refs.fileRef.isShow = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"].includes(fileType);
-        this.$refs.fileRef.dialogVisible = true;
-      } catch (error) {
-        this.$message.error(error.message || "文件预览失败");
+        await this.$refs.fileRef.open({
+          tableName, schemaName, dataSourceId, databaseName,
+          rowId: tableName ? original.ROWID : undefined, blobColumn: header.name,
+          sql: this.queryResultData.originalSql,
+          resultColumns: headers.slice(1).map(item => item.name),
+          resultValues: headers.slice(1).map(item => original[item.name]),
+        }, fileName, pending ? row[header.name] : undefined);
       } finally {
         this.binaryPreviewLoading = false;
       }

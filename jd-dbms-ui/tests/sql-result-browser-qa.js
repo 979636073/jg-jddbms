@@ -17,6 +17,7 @@ const fileSource = compiler.parseComponent(fs.readFileSync(path.join(__dirname,
 const fileTemplate = compiler.compile(fileSource.template.content)
 if (fileTemplate.errors.length) throw new Error(fileTemplate.errors.join('\n'))
 const fileScript = fileSource.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'const FileDialog =')
+const fileHelpers = fs.readFileSync(path.join(__dirname, '../src/utils/file.js'), 'utf8').replace(/^import .*;?\s*$/gm, '').replace(/export /g, '')
 const browserScript = `
 (async () => {
   const Vue = document.querySelector('#app').__vue__.$options._base;
@@ -25,10 +26,10 @@ const browserScript = `
   const binaryRequests = [];
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=';
   const tableServer = {
-    getBlobData: async params => { binaryRequests.push(params); return {success:true, data:params.rowIndex === 2 ? '' : png}; },
-    getTableDataBlob: async form => ({success:true, data:form.get('blobStr') ? '.png' : ''})
+    previewBlob: async params => { binaryRequests.push(params); return {success:true, data:{base64:params.resultValues[0] === '3' ? '' : png}}; },
+    cancelBlob: async () => ({success:true})
   };
-  const downloadFile = async () => {};
+  ${fileHelpers}
   ${fileScript}
   FileDialog.render = new Function(${JSON.stringify(fileTemplate.render)});
   FileDialog.staticRenderFns = ${JSON.stringify(fileTemplate.staticRenderFns)}.map(body => new Function(body));
@@ -112,7 +113,7 @@ const browserScript = `
   ensure(binaryButton, 'BLOB view button missing');
   binaryButton.click(); await tick();
   const file = table.$refs.fileRef;
-  ensure(binaryRequests.length === 1 && binaryRequests[0].rowIndex === 0 && binaryRequests[0].columnIndex === 3,
+  ensure(binaryRequests.length === 1 && binaryRequests[0].resultColumns[0] === 'ID' && binaryRequests[0].resultValues[0] === '1' && binaryRequests[0].rowIndex === undefined,
     'BLOB click locator failed: ' + JSON.stringify(binaryRequests));
   ensure(file.dialogVisible && file.isShow && file.imageSrc === 'data:image/png;base64,' + png, 'image preview failed');
   file.handleClose();

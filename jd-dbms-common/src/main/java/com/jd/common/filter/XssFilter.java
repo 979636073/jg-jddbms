@@ -61,7 +61,9 @@ public class XssFilter implements Filter
         String method = request.getMethod();
         // SQL 是原始文本，HTML 清洗会改写比较运算符及字符串字面量。
         if ("/api/rdb/dml/execute".equals(url) || "/api/rdb/dml/getBlobData".equals(url)
-                || "/api/rdb/dml/executeExplain".equals(url) || "/api/rdb/dml/execute_table".equals(url))
+                || "/api/rdb/dml/executeExplain".equals(url) || "/api/rdb/dml/execute_table".equals(url)
+                || "/api/rdb/dml/blob/preview".equals(url) || "/api/rdb/dml/blob/download".equals(url)
+                || "/api/rdb/dml/blob/cancel".equals(url))
         {
             return true;
         }

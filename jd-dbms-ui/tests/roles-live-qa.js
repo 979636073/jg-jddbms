@@ -100,10 +100,17 @@ try {
           assert(allowed.includes('DATA_READ') ? ok(r) && r.data?.every(x => x.success && x.dataList?.length > 0) : denied(r),
             user.key + '/' + kind + '/view/' + tableName, r);
         }
-        const blob = await api('/api/rdb/dml/getBlobData', 'POST', { dataSourceId: id, schemaName: 'TEST-TEST',
-          blobColumn: 'PAYLOAD', sql: 'SELECT PAYLOAD FROM "TEST-TEST".BLOB_LARGE_TEST_20261015 WHERE ID=1', rowIndex: 0, columnIndex: 1 }, user.token);
-        assert(allowed.includes('DATA_READ') ? ok(blob) && typeof blob.data === 'string' && blob.data.length > 0 : denied(blob),
+        const blobRequest = { dataSourceId: id, schemaName: 'TEST-TEST', blobColumn: 'PAYLOAD', readId: crypto.randomUUID(),
+          sql: 'SELECT ID,PAYLOAD FROM "TEST-TEST".BLOB_LARGE_TEST_20261015 WHERE ID=1', resultColumns: ['ID', 'PAYLOAD'], resultValues: ['1', 'A'] };
+        const blob = await api('/api/rdb/dml/blob/preview', 'POST', blobRequest, user.token);
+        assert(allowed.includes('DATA_READ') ? ok(blob) && blob.data?.base64?.length > 0 : denied(blob),
           user.key + '/' + kind + '/blob-read', blob);
+        const cancelled = await api('/api/rdb/dml/blob/cancel', 'POST', blobRequest, user.token);
+        assert(allowed.includes('DATA_READ') ? ok(cancelled) && cancelled.data === false : denied(cancelled), user.key + '/' + kind + '/blob-cancel', cancelled);
+        const downloaded = await fetch('/dev-api/api/rdb/dml/blob/download', {method:'POST', headers:{Authorization:'Bearer ' + user.token,'Content-Type':'application/json'}, body:JSON.stringify(blobRequest)});
+        const downloadIsJson = (downloaded.headers.get('content-type') || '').includes('application/json');
+        const downloadResult = downloadIsJson ? await downloaded.json() : { bytes: (await downloaded.arrayBuffer()).byteLength };
+        assert(allowed.includes('DATA_READ') ? downloaded.ok && downloadResult.bytes > 0 : denied(downloadResult), user.key + '/' + kind + '/blob-download', downloadResult);
         const target = 'QM_' + f.suffix + '_' + out.checks.length; f.tables.push(target);
         const draft = await api('/api/migration/tasks', 'POST', { name: '角色验收 ' + target, sourceId: id, targetId: id,
           sourceSchema: 'TEST-TEST', targetSchema: 'TEST-TEST', tables: [{ source: f.table, target }] }, user.token);

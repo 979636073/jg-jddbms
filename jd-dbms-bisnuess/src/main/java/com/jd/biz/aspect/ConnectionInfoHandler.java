@@ -179,7 +179,7 @@ public class ConnectionInfoHandler {
         if (path.startsWith("/api/rdb/dml/")) {
             if (path.endsWith("/execute") || path.endsWith("/jdbcexecute") ||
                     path.endsWith("/execute_ddl")) return DataSourceAction.SQL_EXECUTE;
-            if (path.endsWith("/execute_table") || path.endsWith("/getblobdata") ||
+            if (path.contains("/blob/") || path.endsWith("/execute_table") || path.endsWith("/getblobdata") ||
                     path.endsWith("/count")) return DataSourceAction.DATA_READ;
             if (path.endsWith("/execute_update") || path.endsWith("/execute_blob_sql") ||
                     path.endsWith("/commitsession")) return DataSourceAction.DATA_WRITE;

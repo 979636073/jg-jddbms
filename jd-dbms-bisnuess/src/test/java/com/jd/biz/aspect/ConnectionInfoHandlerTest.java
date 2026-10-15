@@ -23,6 +23,19 @@ import static org.junit.Assert.assertNull;
 
 public class ConnectionInfoHandlerTest {
     @Test
+    public void blobEndpointsRequireDataReadPermission() {
+        try {
+            for (String endpoint : new String[]{"preview", "download", "cancel"}) {
+                org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest(
+                        "POST", "/api/rdb/dml/blob/" + endpoint);
+                org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                        new org.springframework.web.context.request.ServletRequestAttributes(request));
+                Object action = org.springframework.test.util.ReflectionTestUtils.invokeMethod(new ConnectionInfoHandler(), "requestAction");
+                assertEquals("DATA_READ", String.valueOf(action));
+            }
+        } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); }
+    }
+    @Test
     public void retainedTransactionMustNotLeakIntoTheNextRequest() throws Throwable {
         for (boolean startsWithFailure : new boolean[]{false, true}) {
             AtomicInteger closes = new AtomicInteger();
