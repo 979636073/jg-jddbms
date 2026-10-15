@@ -69,7 +69,6 @@ function getTriggerList(data) {
 }
 
 function executeSql(data) {
-  data.sql = data.sql.replace(/</g,"&lt;").replace(/>/g,"&gt;")
   return request({
     url: '/api/rdb/dml/execute',
     method: 'post',

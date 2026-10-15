@@ -17,6 +17,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -99,6 +100,13 @@ public class EasyControllerExceptionHandler {
     @ResponseBody
     public AjaxResult handleUserException(UserException exception) {
         return AjaxResult.error(exception.getMessage());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(value = HttpStatus.OK)
+    @ResponseBody
+    public AjaxResult handleAccessDeniedException(AccessDeniedException exception) {
+        return AjaxResult.error(HttpStatus.FORBIDDEN.value(), "没有操作权限");
     }
 
     /**

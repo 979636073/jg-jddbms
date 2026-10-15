@@ -26,10 +26,11 @@ assert(!summaryText.includes('【查询行数】') && !summaryText.includes('【
 summary.$destroy()
 const pending = []
 context.sqlServer.executeSql = params => new Promise(resolve => pending.push({ params, resolve }))
+context.sqlServer.viewTable = params => new Promise(resolve => pending.push({ params, resolve, tableRead: true }))
 const errors = []
 const state = {
   ...component.data(), ...component.methods,
-  queryResultData: { params: { sql: 'SELECT * FROM T', skipCount: true }, pageNo: 1, pageSize: 100 },
+  queryResultData: { params: { sql: 'SELECT * FROM T', tableName: 'T', skipCount: true }, pageNo: 1, pageSize: 100 },
   $forceUpdate() {}, $message: { error: text => errors.push(text) }
 }
 const response = (pageNo, extra = {}) => ({ success: true, data: [{ success: true, pageNo, pageSize: 100, fuzzyTotal: pageNo * 100 + 1,
@@ -37,6 +38,7 @@ const response = (pageNo, extra = {}) => ({ success: true, data: [{ success: tru
 async function run() {
   const second = state.handleCurrentChange(2)
   assert.strictEqual(pending[0].params.refresh, false, '普通翻页复用编辑元数据缓存')
+  assert.strictEqual(pending[0].tableRead, true, '表格翻页不能要求任意 SQL 权限')
   const third = state.handleCurrentChange(3)
   pending[1].resolve(response(3)); await third
   pending[0].resolve(response(2)); await second

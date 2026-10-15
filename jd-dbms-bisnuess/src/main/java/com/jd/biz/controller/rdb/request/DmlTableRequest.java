@@ -58,4 +58,12 @@ public class DmlTableRequest extends DataSourceBaseRequest implements DataSource
      */
     private String orderByColumn;
 
+    private Boolean isView = false;
+
+    private String filterSql;
+
+    private Boolean skipCount = false;
+
+    private Boolean refresh = false;
+
 }

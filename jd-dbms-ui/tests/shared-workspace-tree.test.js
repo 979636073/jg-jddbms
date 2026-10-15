@@ -33,7 +33,7 @@ async function main() {
   const sidebar = load('SideBar.vue', {
     connectionServer: {}, viewServer: {}, tableServer: {}, userServer: {}, tableSpaceServer: {},
     SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {}, database: {},
-    sqlServer: { executeSql(params) { requests.push(params); return new Promise(resolve => { resolveQuery = resolve }) } }
+    sqlServer: { viewTable(params) { requests.push(params); return new Promise(resolve => { resolveQuery = resolve }) } }
   }).component
   const tree = { ...sidebar.methods, dataInfo: { dataSource: { id: 9, type: 'DM' } }, schema: 'OTHER', type: 'views', pageId: 'b',
     activeClass: 6, nameTbale: 'KEPT', heightIndexs: [6], isQuery: false, $refs: {},

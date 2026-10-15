@@ -79,7 +79,7 @@ component.methods.addSearchForm.call(invalidConditionState, 'And')
 assert.strictEqual(invalidConditionState.searchSql, '"ID" IS NULL', 'IS NULL 不需要输入比较值')
 
 let request
-sqlServer.executeSql = params => {
+sqlServer.viewTable = params => {
   request = params
   return { then() {} }
 }
@@ -92,10 +92,11 @@ const queryState = {
   filterSql: '"ID" = \'211\'',
   searchDialogForm: { columnTitle: 'ID', sql: '=', contentTest: '211' },
   queryParams: { pageNum: 1, pageSize: 100 },
-  queryResultData: { params: { sql: 'SELECT t.*, t.rowid FROM "JDDBMS"."AA_FOREGN_TABLE" t' } },
+  queryResultData: { params: { tableName: 'AA_FOREGN_TABLE', sql: 'SELECT t.*, t.rowid FROM "JDDBMS"."AA_FOREGN_TABLE" t' } },
   sortObj: {}
 }
 component.methods.advancedQuery.call(queryState)
+assert.strictEqual(request.filterSql, '"ID" = \'211\'', '表格筛选应通过只读表查询传递条件')
 assert.strictEqual(
   request.sql,
   'SELECT t.*, t.rowid FROM "JDDBMS"."AA_FOREGN_TABLE" t WHERE "ID" = \'211\'',

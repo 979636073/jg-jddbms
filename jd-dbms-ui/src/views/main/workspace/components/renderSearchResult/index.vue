@@ -2689,7 +2689,9 @@ export default {
       }
 
       try {
-        const res = await sqlServer.executeSql(params);
+        const isTableQuery = params.tableName && !params.consoleId;
+        if (isTableQuery) params.filterSql = this.pageSql || "";
+        const res = await (isTableQuery ? sqlServer.viewTable(params) : sqlServer.executeSql(params));
         if (requestId !== this._queryRequestId || resultData !== this.queryResultData) return;
         const result = res?.data?.[0];
         if (!res?.success || !result?.success) throw new Error(result?.message || res?.errorMessage || "查询失败");

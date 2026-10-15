@@ -4,6 +4,7 @@ import org.junit.Test;
 import com.alibaba.fastjson2.JSON;
 import com.jd.biz.controller.rdb.request.GetBlobRequest;
 import com.jd.biz.controller.rdb.request.DmlRequest;
+import com.jd.biz.controller.rdb.request.DmlTableRequest;
 import com.jd.biz.controller.rdb.converter.RdbWebConverter;
 import com.jd.biz.domain.api.param.DlExecuteParam;
 import com.jd.biz.domain.api.service.DlTemplateService;
@@ -61,7 +62,7 @@ public class RdbDmlControllerTest {
     public void sqlFilterKeepsQueryLiteralsAndStillCleansOrdinaryRequests() throws Exception {
         String body = "{\"sql\":\"SELECT '<tag>&gt;</tag>' FROM T WHERE ID <> 10\"}";
         for (String path : new String[]{"/api/rdb/dml/execute", "/api/rdb/dml/getBlobData",
-                "/api/rdb/dml/executeExplain", "/system/notice"}) {
+                "/api/rdb/dml/executeExplain", "/api/rdb/dml/execute_table", "/system/notice"}) {
             MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
             request.setServletPath(path);
             request.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -116,5 +117,29 @@ public class RdbDmlControllerTest {
 
         assertEquals("SELECT T.*, ROWID FROM (" + sql + ") T",
                 RdbDmlController.prepareDataViewSql(sql));
+    }
+
+    @Test
+    public void tableReadBuildsOnlyServerSelectedTableAndKeepsFilterOperators() {
+        DmlTableRequest request = new DmlTableRequest();
+        request.setFilterSql("ID >= 1 AND VAL = '&gt;'");
+        assertEquals("SELECT t.*, t.rowid FROM \"TEST-TEST\".\"T\" t WHERE ID >= 1 AND VAL = '&gt;'",
+                RdbDmlController.tableReadSql(request, "\"TEST-TEST\".\"T\"", "DM").replaceAll("\\s+", " "));
+        request.setIsView(true);
+        request.setFilterSql(null);
+        assertEquals("SELECT t.* FROM \"TEST-TEST\".\"V\" t",
+                RdbDmlController.tableReadSql(request, "\"TEST-TEST\".\"V\"", "DM"));
+    }
+
+    @Test
+    public void tableReadRejectsStatementsAndClausesInFilter() {
+        for (String filter : new String[]{"ID=1; DELETE FROM T", "1=1 UNION SELECT 1 FROM T", "1=1 INTO T", "1=1 FOR UPDATE"}) {
+            DmlTableRequest request = new DmlTableRequest();
+            request.setFilterSql(filter);
+            try {
+                RdbDmlController.tableReadSql(request, "\"TEST-TEST\".\"T\"", "DM");
+                throw new AssertionError("Accepted unsafe filter: " + filter);
+            } catch (RuntimeException expected) { }
+        }
     }
 }

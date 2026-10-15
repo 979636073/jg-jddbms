@@ -949,10 +949,7 @@ export default {
       this.$emit("manageDataSources", { id: dataSource?.id, mode: mode || (dataSource ? "edit" : "create") });
     },
     canManageDataSource(dataSource) {
-      const roles = this.$store.state.user.roles || [];
-      return dataSource && (roles.includes('admin') || roles.includes('dbms_security') ||
-        (String(dataSource.userId) === String(this.currentUserId) &&
-          (roles.includes('dbms_developer') || roles.includes('dbms_datasource'))));
+      return Boolean(dataSource?.canManage);
     },
     openSharing(dataSource) {
       this.sharingDataSourceId = dataSource.id;
@@ -2258,8 +2255,9 @@ export default {
             total: 0,
             type: dataSource.type,
             isDataView: objectGroup == "views" ? false : true,
+            isView: objectGroup == "views",
           };
-          await sqlServer.executeSql(send).then((res) => {
+          await sqlServer.viewTable(send).then((res) => {
             const result = res?.data?.[0];
             if (!res?.success || !result) {
               this.$message.error(res?.errorMessage || "打开对象失败");

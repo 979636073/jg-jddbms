@@ -98,6 +98,9 @@ async function main() {
   assert.strictEqual(apiRequests[0].timeout, 255000, '批量传输超时应覆盖每条 SQL 的超时与返回余量')
   apiContext.module.exports.executeSql({ sql: 'SELECT 1 FROM dual' })
   assert.strictEqual(apiRequests[1].timeout, 60000, '未指定 SQL 超时的原有调用保持不变')
+  const originalSql = "SELECT '&gt;' FROM T WHERE ID >= 1 AND ID <> 2"
+  apiContext.module.exports.executeSql({ sql: originalSql })
+  assert.strictEqual(apiRequests[2].data.sql, originalSql, 'SQL 请求不得把比较运算符转换为 HTML 实体')
 
   let provider, tokenizer
   const metadataRequests = []

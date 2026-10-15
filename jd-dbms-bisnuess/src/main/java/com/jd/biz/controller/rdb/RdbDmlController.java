@@ -19,6 +19,10 @@ import com.jd.biz.domain.api.param.DlExecuteParam;
 import com.jd.biz.domain.api.param.OrderByParam;
 import com.jd.biz.domain.api.param.UpdateSelectResultParam;
 import com.jd.biz.domain.api.service.DlTemplateService;
+import com.jd.biz.domain.api.service.DataSourceService;
+import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
+import com.jd.biz.domain.api.enums.DataSourceAction;
+import com.jd.common.tools.common.exception.PermissionDeniedBusinessException;
 import com.jd.biz.domain.core.util.SqlSafetyChecker;
 import com.jd.biz.http.GatewayClientService;
 import com.jd.common.annotation.Log;
@@ -75,6 +79,12 @@ public class RdbDmlController {
 
     @Autowired
     private DlTemplateService dlTemplateService;
+
+    @Autowired
+    private DataSourceService dataSourceService;
+
+    @Autowired
+    private DataSourceAccessBusinessService dataSourceAccessBusinessService;
 
     @Autowired
     private GatewayClientService gatewayClientService;
@@ -286,8 +296,36 @@ public class RdbDmlController {
     @RequestMapping(value = "/execute_table", method = {RequestMethod.POST, RequestMethod.PUT})
     public ListResult<ExecuteResultVO> executeTable(@RequestBody DmlTableRequest request) {
         DlExecuteParam param = rdbWebConverter.request2param(request);
-        return dlTemplateService.executeSelectTable(param)
-                .map(rdbWebConverter::dto2vo);
+        String table = Chat2DBContext.getMetaData().getMetaDataName(request.getDatabaseName(),
+                request.getSchemaName(), request.getTableName());
+        param.setSql(tableReadSql(request, table, Chat2DBContext.getConnectInfo().getDbType()));
+        ListResult<ExecuteResultVO> result = dlTemplateService.execute(param).map(rdbWebConverter::dto2vo);
+        try {
+            dataSourceAccessBusinessService.checkActionPermission(dataSourceService.queryById(request.getDataSourceId()).getData(),
+                    DataSourceAction.DATA_WRITE);
+        } catch (PermissionDeniedBusinessException denied) {
+            if (result.getData() != null) result.getData().forEach(item -> item.setCanEdit(false));
+        }
+        return result;
+    }
+
+    static String tableReadSql(DmlTableRequest request, String table, String dbType) {
+        String columns = "t.*";
+        if (!Boolean.TRUE.equals(request.getIsView())) {
+            if ("DM".equals(dbType)) columns = "t.*, t.rowid";
+            else if ("ORACLE".equals(dbType)) columns = "t.*, t.rowid AS \"ROWID\"";
+        }
+        String sql = "SELECT " + columns + " FROM " + table + " t";
+        if (StrUtil.isNotBlank(request.getFilterSql())) {
+            com.alibaba.druid.sql.parser.SQLExprParser parser = com.alibaba.druid.sql.parser.SQLParserUtils
+                    .createExprParser(request.getFilterSql(), JdbcUtils.parse2DruidDbType(dbType));
+            com.alibaba.druid.sql.ast.SQLExpr filter = parser.expr();
+            if (parser.getLexer().token() != com.alibaba.druid.sql.parser.Token.EOF) {
+                throw new BusinessException("查询条件只能包含筛选表达式");
+            }
+            sql += " WHERE " + filter;
+        }
+        return sql;
     }
 
     /**
