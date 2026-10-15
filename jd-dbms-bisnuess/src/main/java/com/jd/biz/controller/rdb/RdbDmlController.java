@@ -99,14 +99,6 @@ public class RdbDmlController {
     @RequestMapping(value = "/execute", method = {RequestMethod.POST, RequestMethod.PUT})
     public ListResult<ExecuteResultVO> manage(@RequestBody DmlRequest request) {
         log.info("入参:{}", JSON.toJSONString(request));
-        if (StrUtil.isNotBlank(request.getSql())) {
-            String sql = request.getSql();
-//            sql = Base64.getEncoder().(sql);
-            sql = sql.replace("&gt;", ">");
-            sql = sql.replace("&lt;", "<");
-//            sql = sql.replaceAll("'", "''");
-            request.setSql(sql);
-        }
         if (request.getIsDataView() && StrUtil.isNotBlank(request.getSql())) {
             request.setSql(prepareDataViewSql(request.getSql()));
         }

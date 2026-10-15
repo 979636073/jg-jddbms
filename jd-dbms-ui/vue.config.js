@@ -1,5 +1,15 @@
 'use strict'
 const path = require('path')
+const { execFileSync } = require('child_process')
+
+try {
+  const git = args => execFileSync('git', args, { cwd: __dirname, encoding: 'utf8' }).trim()
+  const revision = git(['rev-parse', '--short=12', 'HEAD'])
+  const dirty = git(['status', '--porcelain', '--untracked-files=no']) ? '（含未提交改动）' : ''
+  process.env.VUE_APP_BUILD_VERSION = `${revision}${dirty}`
+} catch (error) {
+  process.env.VUE_APP_BUILD_VERSION = process.env.VUE_APP_BUILD_VERSION || '源码构建（无 Git 信息）'
+}
 
 function resolve(dir) {
   return path.join(__dirname, dir)

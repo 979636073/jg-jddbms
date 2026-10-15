@@ -15,14 +15,26 @@ export default {
   data() {
     return { pageNo: 1, pageSize: 200, loading: false, scrollTop: 0, scrollLeft: 0,
       viewportWidth: 800, viewportHeight: 200, selectedCell: null, selectedColumns: [],
-      valueVisible: false, valueText: "", sort: {}, binaryLoading: false };
+      valueVisible: false, valueText: "", sort: {}, binaryLoading: false, columnWidths: {} };
   },
   computed: {
     rows() { return this.queryResultData.dataList || []; },
+    automaticWidths() {
+      const sample = this.rows.slice(0, 100);
+      return (this.queryResultData.headerList || []).map((header, index) => {
+        if (header.dataType === "CHAT2DB_ROW_NUMBER") return 64;
+        let width = this.textWidth(header.name, true) + 44;
+        for (const row of sample) {
+          const value = this.isBinary(header) && row[index] != null ? "文件 查看" : this.displayValue(row[index]);
+          width = Math.max(width, this.textWidth(value) + 24);
+        }
+        return Math.min(480, Math.max(80, Math.ceil(width)));
+      });
+    },
     columns() {
       let left = 0;
       return (this.queryResultData.headerList || []).map((header, index) => {
-        const width = header.dataType === "CHAT2DB_ROW_NUMBER" ? 64 : COLUMN_WIDTH;
+        const width = this.columnWidths[index] || this.automaticWidths[index];
         const column = { ...header, index, left, width };
         left += width;
         return column;
@@ -47,7 +59,9 @@ export default {
   watch: {
     queryResultData: {
       immediate: true,
-      handler(result) {
+      handler(result, previous) {
+        if (!previous || result.originalSql !== previous.originalSql || result.params?.sql !== previous.params?.sql ||
+          JSON.stringify(result.headerList) !== JSON.stringify(previous.headerList)) this.columnWidths = {};
         this.pageNo = Number(result.pageNo || 1);
         this.pageSize = Number(result.pageSize || 200);
         this.sort = { prop: result.params && result.params.orderByColumn, asc: result.params && result.params.isAsc };
@@ -66,11 +80,40 @@ export default {
     this._resizeObserver.observe(this.$refs.viewport);
   },
   beforeDestroy() {
+    this.stopResize();
     this._requestId = (this._requestId || 0) + 1;
     if (this._resizeObserver) this._resizeObserver.disconnect();
     if (this._scrollFrame) cancelAnimationFrame(this._scrollFrame);
   },
   methods: {
+    textWidth(value, bold = false) {
+      if (!this._textContext && typeof document !== "undefined") this._textContext = document.createElement("canvas").getContext("2d");
+      const text = String(value == null ? "" : value);
+      if (!this._textContext) return Array.from(text).reduce((width, char) => width + (char.charCodeAt(0) > 255 ? 12 : 7), 0);
+      if (!this._textFont) this._textFont = getComputedStyle(this.$el || document.body).fontFamily;
+      this._textContext.font = `${bold ? "600 " : ""}12px ${this._textFont}`;
+      return this._textContext.measureText(text).width;
+    },
+    startResize(event, column) {
+      if (event.button !== 0) return;
+      this._columnResize = { index: column.index, startX: event.clientX, width: column.width };
+      window.addEventListener("pointermove", this.resizeColumn);
+      window.addEventListener("pointerup", this.stopResize);
+      window.addEventListener("pointercancel", this.stopResize);
+    },
+    resizeColumn(event) {
+      if (!this._columnResize) return;
+      const { index, startX, width } = this._columnResize;
+      this.$set(this.columnWidths, index, Math.max(64, width + event.clientX - startX));
+    },
+    stopResize() {
+      if (!this._columnResize) return;
+      this._columnResize = null;
+      window.removeEventListener("pointermove", this.resizeColumn);
+      window.removeEventListener("pointerup", this.stopResize);
+      window.removeEventListener("pointercancel", this.stopResize);
+    },
+    fitColumn(column) { this.$delete(this.columnWidths, column.index); },
     measure() {
       const viewport = this.$refs.viewport;
       if (viewport) {
@@ -198,6 +241,9 @@ export default {
                 :aria-label="column.name + ' 降序'" @click.stop="changeSort(column, false)"><i class="el-icon-caret-bottom" /></button>
             </span>
             <span class="column-name">{{ column.name }}</span>
+            <span v-if="column.dataType !== 'CHAT2DB_ROW_NUMBER'" class="column-resize-handle"
+              title="拖动调整列宽，双击自动适配" @pointerdown.stop.prevent="startResize($event, column)"
+              @click.stop @dblclick.stop="fitColumn(column)" />
           </div>
         </div>
         <div v-for="entry in visibleRows" :key="entry.index" class="result-row" role="row"
@@ -249,6 +295,9 @@ export default {
 }
 .header-cell { height: 32px; line-height: 31px; font-weight: 600; display: flex; align-items: center; cursor: pointer; }
 .column-name { overflow: hidden; text-overflow: ellipsis; }
+.column-resize-handle { position: absolute; right: 0; top: 0; width: 8px; height: 100%; cursor: col-resize; touch-action: none;
+  &:hover { background: rgba(64, 158, 255, 0.2); }
+}
 .sort-icons { display: flex; flex-direction: column; margin-right: 6px;
   button { height: 12px; padding: 0; border: 0; background: transparent; color: #c0c4cc; cursor: pointer; line-height: 12px;
     &.active { color: #409eff; }

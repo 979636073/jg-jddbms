@@ -2667,7 +2667,10 @@ export default {
                 :class="{ online: data.dataSource && isDataSourceConnected(data.dataSource.id) }"
               ></span>
               <i v-else :class="resourceNodeIcon(data)" class="resource-node-icon"></i>
-              <span class="resource-node-label" :title="data.label">{{ data.label }}</span>
+              <span class="resource-node-label" :class="{ 'with-comment': data.treeNodeType === 'table' && data.comment }"
+                :title="data.label">{{ data.label }}</span>
+              <span v-if="data.treeNodeType === 'table' && data.comment" class="resource-node-comment"
+                :title="data.comment">{{ data.comment }}</span>
               <span v-if="data.treeNodeType === 'datasource'" class="database-type">
                 {{ data.dataSource && data.dataSource.type }}
               </span>
@@ -3496,6 +3499,19 @@ export default {
 .resource-table-checkbox {
   flex: 0 0 auto;
   margin-right: 6px;
+}
+.resource-node-comment {
+  margin-left: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #8591a6;
+  font-size: var(--workspace-body-font-size, 12px);
+}
+.resource-node-label.with-comment {
+  max-width: 65%;
+  flex-shrink: 0;
 }
 .resource-selection-count {
   flex: 0 0 auto;

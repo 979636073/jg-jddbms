@@ -9,6 +9,7 @@
     "build:stage": "cross-env NODE_OPTIONS=--openssl-legacy-provider vue-cli-service build --mode staging",
     "test:view-permission": "node tests/view-permission-regression.test.js",
     "test:core": "node tests/run-core-tests.js",
+    "test:browser": "node tests/sql-result-browser-qa.js",
     "preview": "node build/index.js --preview",
     "lint": "eslint --ext .js,.vue src"
   },
@@ -91,9 +92,10 @@
     "vue-template-compiler": "2.6.12"
   },
   "engines": {
-    "node": ">=8.9",
-    "npm": ">= 3.0.0"
+    "node": "24.x",
+    "npm": "11.x"
   },
+  "packageManager": "npm@11.12.1",
   "browserslist": [
     "> 1%",
     "last 2 versions"

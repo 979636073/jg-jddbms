@@ -1,5 +1,5 @@
-// Opt-in browser stress test. Uses synthetic data, not a real database response.
-// Open the local app in `agent-browser --session sqlfix` before running this file.
+// Opt-in browser regression using real Vue components and synthetic API responses.
+// Open the local app in `agent-browser --session sqlfix` before running npm run test:browser.
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
@@ -12,11 +12,26 @@ if (template.errors.length) throw new Error(template.errors.join('\n'))
 const script = source.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'const component =')
 const helper = fs.readFileSync(path.join(__dirname, '../src/utils/sqlResult.js'), 'utf8').replace(/export /g, '')
 const css = sass.renderSync({ data: source.styles[0].content }).css.toString()
+const fileSource = compiler.parseComponent(fs.readFileSync(path.join(__dirname,
+  '../src/views/main/workspace/components/renderSearchResult/filedialog.vue'), 'utf8'))
+const fileTemplate = compiler.compile(fileSource.template.content)
+if (fileTemplate.errors.length) throw new Error(fileTemplate.errors.join('\n'))
+const fileScript = fileSource.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'const FileDialog =')
 const browserScript = `
 (async () => {
   const Vue = document.querySelector('#app').__vue__.$options._base;
   ${helper}
   const requests = [];
+  const binaryRequests = [];
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=';
+  const tableServer = {
+    getBlobData: async params => { binaryRequests.push(params); return {success:true, data:params.rowIndex === 2 ? '' : png}; },
+    getTableDataBlob: async form => ({success:true, data:form.get('blobStr') ? '.png' : ''})
+  };
+  const downloadFile = async () => {};
+  ${fileScript}
+  FileDialog.render = new Function(${JSON.stringify(fileTemplate.render)});
+  FileDialog.staticRenderFns = ${JSON.stringify(fileTemplate.staticRenderFns)}.map(body => new Function(body));
   let copied = '';
   const copyText = text => { copied = text; };
   const fixture = (pageNo, pageSize, descending = false) => prepareSqlResult({
@@ -42,6 +57,7 @@ const browserScript = `
     return h('div', {style: {position:'fixed',inset:'0',zIndex:9999,background:'white',display:'flex',padding:'20px'}},
       [h(component, {props:{queryResultData:this.result}, on:{setQueryResultData: result => {this.result = result;}}})]);
   }}).$mount(host);
+  try {
   const tick = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   await tick();
   const table = app.$children[0];
@@ -74,10 +90,43 @@ const browserScript = `
   await table.changeSort(table.columns[0], false); await tick();
   ensure(table.pageNo === 1 && table.rows[0][0] === '10001', 'sorting reset failed');
   ensure(requests.every(p => p.skipCount === false && p.queryTemplate && p.sessionId === 'qa-only'), 'pagination context lost');
-  window.sqlResultQa = {app, table, requests};
+  app.result = prepareSqlResult({success:true, pageNo:1, pageSize:200, totalExact:true, fuzzyTotal:'3',
+    originalSql:'SELECT ID, NOTE, PAYLOAD FROM QA ORDER BY ID',
+    params:{sql:'SELECT ID, NOTE, PAYLOAD FROM QA ORDER BY ID', dataSourceId:42, schemaName:'QA'},
+    headerList:[{name:'行号',dataType:'CHAT2DB_ROW_NUMBER'},{name:'ID'}, {name:'NOTE'},{name:'PAYLOAD',dataType:'BLOB'}],
+    dataList:[['1','1','这是一段用于验证自动列宽的长内容','A'],['2','2','NULL',null],['3','3','空文件','A']]});
+  await tick();
+  ensure(table.columns[2].width > table.columns[1].width, 'content-based width failed');
+  const originalWidth = table.columns[2].width;
+  const handle = table.$el.querySelectorAll('.column-resize-handle')[1];
+  handle.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button:0,clientX:100}));
+  window.dispatchEvent(new PointerEvent('pointermove', {clientX:240}));
+  window.dispatchEvent(new PointerEvent('pointerup'));
+  await tick();
+  ensure(table.columns[2].width === originalWidth + 140, 'pointer resize failed');
+  ensure(table.columns[3].left === table.columns[2].left + table.columns[2].width, 'resized columns overlap');
+  handle.dispatchEvent(new MouseEvent('dblclick', {bubbles:true})); await tick();
+  ensure(table.columns[2].width === originalWidth, 'double-click autofit failed');
+  ensure(binaryRequests.length === 0, 'rendering eagerly fetched BLOB');
+  const binaryButton = table.$el.querySelector('.result-row .result-cell button');
+  ensure(binaryButton, 'BLOB view button missing');
+  binaryButton.click(); await tick();
+  const file = table.$refs.fileRef;
+  ensure(binaryRequests.length === 1 && binaryRequests[0].rowIndex === 0 && binaryRequests[0].columnIndex === 3,
+    'BLOB click locator failed: ' + JSON.stringify(binaryRequests));
+  ensure(file.dialogVisible && file.isShow && file.imageSrc === 'data:image/png;base64,' + png, 'image preview failed');
+  file.handleClose();
+  await table.showBinary(1,3);
+  ensure(binaryRequests.length === 1, 'NULL BLOB was fetched');
+  await table.showBinary(2,3); await tick();
+  ensure(binaryRequests.length === 2 && file.dialogVisible && file.blobStr === '' && !file.isShow, 'empty BLOB treated as missing');
   return {fixture:'synthetic 1000 rows x 300 columns', mountMs:Math.round(mountMs),
     maxScrollTwoFramesMs:Math.round(Math.max(...frames)), cells:cellCount(),
-    rows:table.rows.length, pageNo:table.pageNo, total:table.total, requests:requests.length, status:'PASS'};
+    requests:requests.length, binaryRequests:binaryRequests.length,
+    checks:['virtual-scroll','pagination','sorting','copy','auto-width','pointer-resize','double-click-fit','lazy-BLOB','PNG-preview','NULL','empty-BLOB'], status:'PASS'};
+  } finally {
+    app.$destroy(); app.$el.remove(); style.remove();
+  }
 })()
 `
 const result = spawnSync('agent-browser', ['--session', 'sqlfix', 'eval', '--stdin'],
@@ -85,4 +134,4 @@ const result = spawnSync('agent-browser', ['--session', 'sqlfix', 'eval', '--std
 process.stdout.write(result.stdout || '')
 process.stderr.write(result.stderr || '')
 if (result.error) throw result.error
-process.exitCode = result.status || 0
+if (result.status !== 0 || !/"status"\s*:\s*"PASS"/.test(result.stdout || '')) process.exitCode = result.status || 1

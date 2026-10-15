@@ -22,6 +22,9 @@
           <div class="profile-page__detail">
             <span>创建日期</span><strong>{{ user.createTime || '—' }}</strong>
           </div>
+          <div class="profile-page__detail">
+            <span>前端版本</span><strong>{{ buildVersion }}</strong>
+          </div>
           <router-link v-if="canManageUsers" to="/access/user" class="profile-page__manage-link">
             前往平台用户维护头像 <i class="el-icon-arrow-right" />
           </router-link>
@@ -48,6 +51,7 @@ export default {
   data() {
     return {
       user: {},
+      buildVersion: process.env.VUE_APP_BUILD_VERSION,
       roleGroup: ""
     };
   },

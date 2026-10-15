@@ -59,6 +59,11 @@ public class XssFilter implements Filter
     {
         String url = request.getServletPath();
         String method = request.getMethod();
+        // SQL 是原始文本，HTML 清洗会改写比较运算符及字符串字面量。
+        if ("/api/rdb/dml/execute".equals(url) || "/api/rdb/dml/getBlobData".equals(url))
+        {
+            return true;
+        }
         // GET DELETE 不过滤
         if (method == null || HttpMethod.GET.matches(method) || HttpMethod.DELETE.matches(method))
         {

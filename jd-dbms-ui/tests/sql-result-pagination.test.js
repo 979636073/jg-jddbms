@@ -10,8 +10,10 @@ vm.runInNewContext(fs.readFileSync(path.join(root, 'utils/sqlResult.js'), 'utf8'
 const source = compiler.parseComponent(fs.readFileSync(path.join(root, 'views/main/workspace/components/reanderSqlExecute/SqlResultTable.vue'), 'utf8'))
 assert.deepStrictEqual(compiler.compile(source.template.content).errors, [])
 const pending = []
+const resizeListeners = new Map()
 const context = { module: { exports: {} }, sqlServer: { executeSql: params => new Promise(resolve => pending.push({ params, resolve })) },
-  FileDialog: {}, prepareSqlResult: prepareContext.prepareSqlResult, copyText() {}, requestAnimationFrame() {}, cancelAnimationFrame() {} }
+  FileDialog: {}, prepareSqlResult: prepareContext.prepareSqlResult, copyText() {}, requestAnimationFrame() {}, cancelAnimationFrame() {},
+  window: { addEventListener: (name, listener) => resizeListeners.set(name, listener), removeEventListener: name => resizeListeners.delete(name) } }
 vm.runInNewContext(source.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), context)
 const component = context.module.exports
 const fixture = (pageNo = 1, pageSize = 200) => ({ success: true, pageNo, pageSize, totalExact: true, fuzzyTotal: '10001',
@@ -62,7 +64,8 @@ async function run() {
   screen.scrollTop = 20000
   screen.scrollLeft = 16000
   assert(screen.visibleRows.length <= 23, '千行结果只渲染视口和缓冲行')
-  assert(screen.visibleColumns.length <= 9, '宽表只渲染视口和缓冲列')
+  const maxVisibleColumns = Math.ceil((screen.viewportWidth + 2 * 160) / 80) + 1
+  assert(screen.visibleColumns.length <= maxVisibleColumns, '自适应窄列仍只渲染视口和缓冲列')
   assert(screen.visibleRows[0].index > 600)
   assert(screen.visibleColumns[0].index > 90)
   assert(!screen.rows.__ob__, '冻结的结果数组不得生成响应式单元格')
@@ -70,9 +73,35 @@ async function run() {
   const rendered = template.render.call(screen)
   const countCells = node => (node.data && node.data.attrs && node.data.attrs.role === 'gridcell' ? 1 : 0) +
     (node.children || []).reduce((count, child) => count + countCells(child), 0)
-  assert(countCells(rendered) < 250, '30万单元格结果的 DOM 必须保持有界')
+  assert(countCells(rendered) <= screen.visibleRows.length * maxVisibleColumns, '30万单元格结果的 DOM 必须保持有界')
   assert.strictEqual(screen.displayValue('x'.repeat(100000)).length, 200, '大字段不能直接铺满单元格 DOM')
   screen.$destroy()
+  const widths = new Vue({ ...component, propsData: { queryResultData: { ...fixture(),
+    headerList: [{ name: '行号', dataType: 'CHAT2DB_ROW_NUMBER' }, { name: 'ID' }, { name: 'DESCRIPTION' }, { name: 'PAYLOAD', dataType: 'BLOB' }],
+    dataList: [['1', '1', '这是一段较长的中文字段内容，用来检查列宽是否适配显示', 'BLOB']] } } })
+  assert(widths.columns[2].width > widths.columns[1].width, '长内容应比短 ID 列更宽')
+  assert.strictEqual(widths.columns[0].width, 64)
+  const originalWidth = widths.columns[2].width
+  const originalGridWidth = widths.gridWidth
+  widths.startResize({ button: 0, clientX: 100 }, widths.columns[2])
+  resizeListeners.get('pointermove')({ clientX: 220 })
+  assert.strictEqual(widths.columns[2].width, originalWidth + 120, '拖动应调整列宽')
+  assert.strictEqual(widths.gridWidth, originalGridWidth + 120)
+  assert.strictEqual(widths.columns[3].left, widths.columns[2].left + widths.columns[2].width, '后续列和表体应同步移动')
+  resizeListeners.get('pointermove')({ clientX: -1000 })
+  assert.strictEqual(widths.columns[2].width, 64, '手动缩窄不能低于最小列宽')
+  resizeListeners.get('pointerup')()
+  assert.strictEqual(resizeListeners.size, 0, '拖拽结束必须移除全局监听')
+  widths.fitColumn(widths.columns[2])
+  assert.strictEqual(widths.columns[2].width, originalWidth, '双击应恢复内容自适应宽度')
+  const watchState = { columnWidths: { 2: 300 }, $refs: {}, $nextTick() {} }
+  component.watch.queryResultData.handler.call(watchState, fixture(2), fixture(1))
+  assert.strictEqual(watchState.columnWidths[2], 300, '翻页应保留手动列宽')
+  component.watch.queryResultData.handler.call(watchState, { ...fixture(), params: { sql: 'SELECT * FROM OTHER' } }, fixture())
+  assert.strictEqual(Object.keys(watchState.columnWidths).length, 0, '更换查询时应按新结果重新适配')
+  widths.startResize({ button: 0, clientX: 100 }, widths.columns[2])
+  widths.$destroy()
+  assert.strictEqual(resizeListeners.size, 0, '销毁结果表必须清理拖拽监听')
   console.log('SQL 结果：精确分页、乱序/失败回退、结果隔离、双向虚拟渲染通过')
 }
 run().catch(error => { console.error(error); process.exitCode = 1 })

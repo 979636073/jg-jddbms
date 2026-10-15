@@ -13,6 +13,7 @@ node_modules.rar
 dm_tools/
 orcale_tools/
 .env.docker
+.local/
 docs/qa-blob-upload/fixtures/*.bin
 
 ######################################################################
