@@ -75,7 +75,7 @@ export default {
       this.dialogVisible = true; this.loading = true;
       const controller = new AbortController();
       this._readController = controller;
-      const active = { ...request, readId: crypto.randomUUID() };
+      const active = { ...request, readId: Date.now().toString(36) + "_" + Math.random().toString(36).slice(2) };
       this._activeRequest = active;
       try {
         const result = localBase64 === undefined ? await tableServer.previewBlob(active, controller.signal) :
@@ -106,7 +106,7 @@ export default {
     async downLoad() {
       if (this.downloadLoading) return;
       const controller = new AbortController();
-      const request = { ...this.readRequest, readId: crypto.randomUUID(), fileName: this.fromData.name + this.fromData.type };
+      const request = { ...this.readRequest, readId: Date.now().toString(36) + "_" + Math.random().toString(36).slice(2), fileName: this.fromData.name + this.fromData.type };
       this.downloadLoading = true; this.downloadedBytes = 0;
       this._readController = controller; this._activeRequest = request;
       try {

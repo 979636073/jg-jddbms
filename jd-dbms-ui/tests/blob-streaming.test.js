@@ -3,7 +3,6 @@ const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
 const compiler = require('vue-template-compiler')
-const crypto = require('crypto').webcrypto
 const fileContext = { module: { exports: {} }, atob, Response, ReadableStream,
   process: { env: { VUE_APP_BASE_API: '/dev-api' } }, getToken: () => 'test-token' }
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/utils/file.js'), 'utf8')
@@ -15,7 +14,7 @@ const jpg = Buffer.from('\xff\xd8\xff', 'latin1').toString('base64')
 const source = compiler.parseComponent(fs.readFileSync(path.join(__dirname,
   '../src/views/main/workspace/components/renderSearchResult/filedialog.vue'), 'utf8'))
 const pending = [], cancellations = []
-const context = { module: { exports: {} }, AbortController, crypto, binaryFileType,
+const context = { module: { exports: {} }, AbortController, binaryFileType,
   tableServer: { previewBlob: request => new Promise(resolve => pending.push({ request, resolve })),
     cancelBlob: request => { cancellations.push(request); return Promise.resolve({ success: true }) } } }
 vm.runInNewContext(source.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), context)
