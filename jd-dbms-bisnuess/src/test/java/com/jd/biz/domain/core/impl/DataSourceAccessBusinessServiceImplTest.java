@@ -99,18 +99,22 @@ public class DataSourceAccessBusinessServiceImplTest {
                 dataSource(DataSourceKindEnum.SHARED, 7L), DataSourceAction.SQL_EXECUTE);
     }
 
-    @Test(expected = PermissionDeniedBusinessException.class)
-    public void developerOwnerCannotReadDataWithoutGrant() throws Exception {
+    @Test
+    public void developerOwnerCanUseOwnPrivateAndSharedConnectionsWithoutSelfGrant() {
         authenticate(42L, "dbms_developer");
-        withGrant("METADATA_READ").checkActionPermission(
-                dataSource(DataSourceKindEnum.PRIVATE, 42L), DataSourceAction.DATA_READ);
+        DataSourceAccessBusinessServiceImpl service = new DataSourceAccessBusinessServiceImpl();
+        for (DataSourceKindEnum kind : new DataSourceKindEnum[]{DataSourceKindEnum.PRIVATE, DataSourceKindEnum.SHARED}) {
+            for (DataSourceAction action : DataSourceAction.values()) {
+                service.checkActionPermission(dataSource(kind, 42L), action);
+            }
+        }
     }
 
     @Test
-    public void developerOwnerCanExecuteSqlWithExplicitGrant() throws Exception {
-        authenticate(42L, "dbms_developer");
-        withGrant("METADATA_READ,SQL_EXECUTE").checkActionPermission(
-                dataSource(DataSourceKindEnum.PRIVATE, 42L), DataSourceAction.SQL_EXECUTE);
+    public void readerOwnerCanReadWithoutSelfGrant() {
+        authenticate(42L, "dbms_reader");
+        new DataSourceAccessBusinessServiceImpl().checkActionPermission(
+                dataSource(DataSourceKindEnum.PRIVATE, 42L), DataSourceAction.DATA_READ);
     }
 
     @Test
@@ -161,7 +165,10 @@ public class DataSourceAccessBusinessServiceImplTest {
         DataSourcePermissionPreview owner = service.preview(dataSource(DataSourceKindEnum.PRIVATE, 42L), 42L);
         assertEquals(Collections.singletonList("OWNER"), decision(owner, DataSourceAction.METADATA_READ).getSources());
         service = withPreview(Collections.emptyList(), DataSourceAction.DATA_READ.platformPermission());
-        assertFalse(decision(service.preview(dataSource(DataSourceKindEnum.PRIVATE, 42L), 42L), DataSourceAction.DATA_READ).isAllowed());
+        DataSourcePermissionPreview ownerWithoutGrants = service.preview(dataSource(DataSourceKindEnum.PRIVATE, 42L), 42L);
+        assertTrue(decision(ownerWithoutGrants, DataSourceAction.DATA_READ).isAllowed());
+        assertEquals(Collections.singletonList("OWNER"), decision(ownerWithoutGrants, DataSourceAction.DATA_READ).getSources());
+        assertFalse(decision(ownerWithoutGrants, DataSourceAction.SQL_EXECUTE).isAllowed());
     }
 
     @Test

@@ -78,8 +78,7 @@ public class DataSourceAccessBusinessServiceImpl implements DataSourceAccessBusi
         LoginUser user = ContextUtils.getLoginUser();
         if (Boolean.TRUE.equals(user.getAdmin())) return ActionResult.isSuccess();
         checkPlatformAction(action);
-        if (user.getId().equals(dataSource.getUserId()) && (action == DataSourceAction.DATASOURCE_MANAGE
-                || action == DataSourceAction.METADATA_READ)) return ActionResult.isSuccess();
+        if (user.getId().equals(dataSource.getUserId())) return ActionResult.isSuccess();
         if (resourceSources(dataSource, user.getId()).containsKey(action.name())) return ActionResult.isSuccess();
         throw new PermissionDeniedBusinessException();
     }
@@ -88,8 +87,10 @@ public class DataSourceAccessBusinessServiceImpl implements DataSourceAccessBusi
         Map<String, List<String>> sources = new LinkedHashMap<>();
         boolean owner = userId.equals(dataSource.getUserId());
         if (owner) {
-            sources.put(DataSourceAction.DATASOURCE_MANAGE.name(), new ArrayList<>(Collections.singletonList("OWNER")));
-            sources.put(DataSourceAction.METADATA_READ.name(), new ArrayList<>(Collections.singletonList("OWNER")));
+            for (DataSourceAction action : DataSourceAction.values()) {
+                sources.put(action.name(), Collections.singletonList("OWNER"));
+            }
+            return sources;
         }
         if (!owner && DataSourceKindEnum.PRIVATE.getCode().equals(dataSource.getKind())) return sources;
         List<DataSourceAccessDO> grants = dataSourceAccessCustomMapper.selectEffectiveGrants(
