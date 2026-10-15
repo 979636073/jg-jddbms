@@ -95,6 +95,14 @@ try {
           assert(allowed.includes(action) ? success : denied(r), user.key + '/' + kind + '/' + action, r);
           if (action === 'DATA_READ' && success && !allowed.includes('DATA_WRITE')) assert(r.data.every(x => !x.canEdit), user.key + '/' + kind + '/read-only-result', r);
         }
+        const monitorState = await api('/api/rdb/monitor/state?dataSourceId=' + id, 'GET', undefined, user.token);
+        assert(allowed.includes('MONITOR_VIEW') ? ok(monitorState) : denied(monitorState), user.key + '/' + kind + '/monitor-history', monitorState);
+        if (ok(monitorState)) assert(monitorState.data.canManage === allowed.includes('DATASOURCE_MANAGE'), user.key + '/' + kind + '/monitor-config-visibility', monitorState);
+        // Admin's existing connection is read-only in this suite; only cloned fixtures get configuration writes.
+        if (user.key !== 'admin') {
+          const configured = await api('/api/rdb/monitor/config', 'PUT', { dataSourceId: id, enabled: false, activeThreshold: 30, spaceThreshold: 85 }, user.token);
+          assert(allowed.includes('MONITOR_VIEW') && allowed.includes('DATASOURCE_MANAGE') ? ok(configured) : denied(configured), user.key + '/' + kind + '/monitor-configure', configured);
+        }
         for (const tableName of ['TEST_VIEW3', 'TEST_VIEW']) {
           const r = await api('/api/rdb/dml/execute_table', 'POST', { ...base, tableName, isView: true }, user.token);
           assert(allowed.includes('DATA_READ') ? ok(r) && r.data?.every(x => x.success && x.dataList?.length > 0) : denied(r),
@@ -291,7 +299,13 @@ try {
       const r = await sql('DROP TABLE IF EXISTS "TEST-TEST"."' + table + '"');
       if (!r.success || !r.data.every(x => x.success)) errors.push('table/' + table);
     }
-    for (const id of f.connections) if (!(await api('/api/connection/datasource/' + id, 'DELETE')).success) errors.push('connection/' + id);
+    for (const id of f.connections) {
+      for (const table of ['DB_MONITOR_CONFIG', 'DB_MONITOR_SAMPLE', 'DB_MONITOR_ALERT']) {
+        const r = await sql('DELETE FROM JDDBMS.' + table + ' WHERE DATA_SOURCE_ID=' + Number(id));
+        if (!r.success || !r.data.every(x => x.success)) errors.push('monitor/' + id);
+      }
+      if (!(await api('/api/connection/datasource/' + id, 'DELETE')).success) errors.push('connection/' + id);
+    }
     for (const user of f.users) if ((await api('/system/user/' + user.id, 'DELETE')).code !== 200) errors.push('user/' + user.id);
     for (const id of f.auxUsers) if ((await api('/system/user/' + id, 'DELETE')).code !== 200) errors.push('user/' + id);
     for (const id of f.roles) if ((await api('/system/role/' + id, 'DELETE')).code !== 200) errors.push('role/' + id);

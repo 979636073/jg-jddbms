@@ -148,3 +148,31 @@ node tests/sharing-live-qa.js
 数据库文件预览限制为 8 MiB，大文件只返回文件头并提示下载；下载直接传输二进制，支持分块写盘、传输长度校验和取消读取。控制台使用结果中的完整主键或显式 ROWID 定位，无法可靠定位时给出提示，避免重新执行 SQL 按行号读取错误文件。
 
 后端 369 项回归（50 跳过）、前端 38 项核心回归、lint 和生产构建通过；真实 DM 文件/定位/取消、全角色 464 项检查及共享授权 14 类场景通过。详细测量、复跑命令和浏览器兼容限制见 [BLOB 流式读取验收记录](../../docs/qa-query-results/blob-streaming-20261015.md)。
+
+## 第四阶段：持续监控与发布恢复（2026-10-15）
+
+数据库运行监控增加服务端持续采集、按连接持久化的阈值、历史曲线和告警触发／恢复记录。启停和配置需要监控与连接管理权限，后台每次采集重新校验配置者权限。默认不启用任何连接。验收范围、数据库升级和恢复限制见 [监控与恢复验收记录](../../docs/qa-query-results/monitor-recovery-20261015.md)。
+
+本地开发仍可使用原启动命令。正式固化本地版本时，使用已提交且工作区干净的代码创建成对的前后端发布包：
+
+```powershell
+./packaging/windows/create-release.ps1 -JavaHome 'D:/code_env/jdk-17.0.20.1+1'
+```
+
+脚本依次运行后端验证、前端核心回归／lint／生产构建，确认构建期间提交和工作区没有变化，然后在 `.local/releases/<12位提交号>` 生成 `backend.jar`、`ui/`、本地静态服务和 `release.json`。清单包含完整 Git 提交号和全部发布文件的 SHA-256。发布包不包含元数据库、密码或本地环境文件。可用 `-OutputDirectory` 指定新目录，用 `-TestUserHome` 指定测试运行目录；脚本不会覆盖旧包。
+
+启动前核实并停止现有受管进程，再选择发布包：
+
+```powershell
+./packaging/windows/stop-local.ps1
+./packaging/windows/start-local.ps1 -JavaHome 'D:/code_env/jdk-17.0.20.1+1' -ReleaseDirectory '<发布包目录>'
+./packaging/windows/status-local.ps1
+```
+
+发布模式以 Node 内置模块在 `127.0.0.1:8080` 提供生产 UI，并将 `/dev-api` 请求流式代理到本机 `28080`。后端使用独立 JAR 副本。启动会核对文件哈希并等待前后端健康；状态命令核对进程、运行 JAR、发布文件及 HTML 构建版本。开发模式只展示开发标记和 JAR 哈希，不声称源码提交等于实际 JAR 版本。
+
+进程信息保存在 `.local/run/runtime.json`，前次运行保存在 `previous-run.json`。停止脚本同时核对 PID、启动时间和命令行；没有清单或信息不符时不会结束未知服务。旧启动方式产生的进程需要首次人工核实并停止。
+
+回退时执行相同的停止／启动命令，将 `-ReleaseDirectory` 指向已验证的旧包。应用回退不恢复、不删除元数据库；本阶段新增表与上一阶段兼容。先用 `status-local.ps1` 核对前后端版本和健康，再验证登录、连接列表、表查询及 BLOB 预览。此次已实际回退第三阶段版本，再重新启动新版，并验证监控记录保留。
+
+升级前保留旧发布包、元数据库一致性备份以及当前本地配置／加密密钥。现有 `packaging/h2/export-live-metadata.ps1` 和 `import-h2.ps1` 可用于逐表导出与隔离恢复核对，适合本地演练；生产备份的一致性和密钥要求见验收记录。不要把 `target` 中任意旧 JAR 和当前前端源码组合当作已固化版本。

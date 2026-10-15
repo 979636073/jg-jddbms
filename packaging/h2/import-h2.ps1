@@ -48,8 +48,9 @@ if ($source.PSObject.Properties.Name -contains 'lobBytes') {
         $table, $column = $Matches[1], $Matches[2]
         $sql = "SELECT COALESCE(SUM(OCTET_LENGTH(`"$column`")),0) FROM `"JDDBMS`".`"$table`""
         $output = & $Java -cp $H2Jar org.h2.tools.Shell -url $url -user sa -sql $sql
-        if ($LASTEXITCODE -ne 0 -or ($output -join ' ') -notmatch '(?m)^\s*(\d+)\s*$' -or
-                [long]$Matches[1] -ne [long]$item.Value) {
+        $blobCount = [regex]::Match(($output -join "`n"), '(?m)^\s*(\d+)\s*$')
+        if ($LASTEXITCODE -ne 0 -or !$blobCount.Success -or
+                [long]$blobCount.Groups[1].Value -ne [long]$item.Value) {
             throw "H2 BLOB 长度不一致：$($item.Name)；目标库未通过验收。"
         }
     }

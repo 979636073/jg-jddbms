@@ -2,6 +2,7 @@
 param(
     [string]$JavaHome = $env:JAVA_HOME,
     [string]$ConfigFile = "$env:USERPROFILE/.codex/jddbms-local.env",
+    [string]$ReleaseDirectory,
     [switch]$CheckOnly
 )
 
@@ -13,8 +14,13 @@ if (!(Test-Path $java)) { throw '请通过 -JavaHome 指定 JDK 17 目录。' }
 if ((& $java -version 2>&1 | Out-String) -notmatch 'version "17\.') { throw '本地运行基线为 JDK 17。' }
 if ((& node --version) -notmatch '^v24\.') { throw '请使用 jd-dbms-ui/.nvmrc 指定的 Node 版本。' }
 $jar = Join-Path $root 'jd-dbms-admin/target/jd-dbms-admin.jar'
+if ($ReleaseDirectory) {
+    $ReleaseDirectory = (Resolve-Path -LiteralPath $ReleaseDirectory).Path
+    $release = & "$PSScriptRoot/verify-release.ps1" -Directory $ReleaseDirectory
+    $jar = Join-Path $ReleaseDirectory 'backend.jar'
+}
 if (!(Test-Path $jar)) { throw '缺少后端 JAR，请先执行 mvn --batch-mode verify。' }
-if (!(Test-Path "$ui/node_modules/@vue/cli-service/bin/vue-cli-service.js")) { throw '请先在 jd-dbms-ui 执行 npm ci。' }
+if (!$ReleaseDirectory -and !(Test-Path "$ui/node_modules/@vue/cli-service/bin/vue-cli-service.js")) { throw '请先在 jd-dbms-ui 执行 npm ci。' }
 
 $settings = @{}
 foreach ($file in @("$root/.env.docker", $ConfigFile)) {
@@ -45,12 +51,42 @@ $backend = Start-Process -FilePath $java -ArgumentList @('-Dfile.encoding=UTF-8'
     -WorkingDirectory $root -WindowStyle Hidden -Environment $settings -PassThru `
     -RedirectStandardOutput "$runtime/backend.out.log" -RedirectStandardError "$runtime/backend.err.log"
 try {
+    $frontendArguments = @('node_modules/@vue/cli-service/bin/vue-cli-service.js', 'serve', '--port', '8080', '--host', '127.0.0.1')
+    $frontendMarker = 'node_modules/@vue/cli-service/bin/vue-cli-service.js'
+    if ($ReleaseDirectory) {
+        $frontendMarker = Join-Path $ReleaseDirectory 'local-web-server.mjs'
+        $frontendArguments = @("`"$frontendMarker`"", "`"$ReleaseDirectory/ui`"")
+    }
     $frontend = Start-Process -FilePath (Get-Command node).Source `
-        -ArgumentList @('node_modules/@vue/cli-service/bin/vue-cli-service.js', 'serve', '--port', '8080', '--host', '127.0.0.1') `
+        -ArgumentList $frontendArguments `
         -WorkingDirectory $ui -WindowStyle Hidden -Environment @{ NODE_OPTIONS = '--openssl-legacy-provider' } -PassThru `
         -RedirectStandardOutput "$runtime/frontend.out.log" -RedirectStandardError "$runtime/frontend.err.log"
+    $manifestPath = Join-Path $runtime 'runtime.json'
+    if (Test-Path -LiteralPath $manifestPath) { Copy-Item -LiteralPath $manifestPath -Destination "$runtime/previous-run.json" -Force }
+    @{
+        mode = $(if ($ReleaseDirectory) { 'release' } else { 'development' })
+        revision = $(if ($ReleaseDirectory) { $release.revision } else { $null })
+        releaseDirectory = $ReleaseDirectory; jar = $runtimeJar
+        jarSha256 = (Get-FileHash -LiteralPath $runtimeJar -Algorithm SHA256).Hash
+        processes = @(
+            @{ pid = $backend.Id; startedAtTicks = $backend.StartTime.ToUniversalTime().Ticks; marker = $runtimeJar }
+            @{ pid = $frontend.Id; startedAtTicks = $frontend.StartTime.ToUniversalTime().Ticks; marker = $frontendMarker }
+        )
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+    $deadline = (Get-Date).AddSeconds(90)
+    do {
+        if ($backend.HasExited -or $frontend.HasExited) { throw '服务提前退出，请检查 .local/run 日志。' }
+        try {
+            $health = Invoke-RestMethod 'http://127.0.0.1:28080/captchaImage' -TimeoutSec 2
+            $page = Invoke-WebRequest 'http://127.0.0.1:8080' -TimeoutSec 2
+            if ($health.code -eq 200 -and $page.StatusCode -eq 200) { break }
+        } catch { }
+        if ((Get-Date) -gt $deadline) { throw '本地服务健康检查超时。' }
+        Start-Sleep -Milliseconds 500
+    } while ($true)
 } catch {
     Stop-Process -Id $backend.Id -ErrorAction SilentlyContinue
+    if ($frontend) { Stop-Process -Id $frontend.Id -ErrorAction SilentlyContinue }
     throw
 }
 Write-Output "后端 PID=$($backend.Id)，前端 PID=$($frontend.Id)，日志目录=$runtime"

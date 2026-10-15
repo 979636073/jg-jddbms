@@ -3,13 +3,38 @@
     <div class="monitor-heading">
       <div><h2>数据库运行监控</h2><p>按连接查看会话、阻塞和表空间；仅查询，不会结束会话。</p></div>
       <div class="monitor-actions">
-        <el-select v-model="dataSourceId" filterable placeholder="选择数据源" size="small" @change="refresh">
+        <el-select v-model="dataSourceId" filterable placeholder="选择数据源" size="small" @change="changeSource">
           <el-option v-for="item in sources" :key="item.id" :value="item.id" :label="`${item.alias || item.user} · ${item.type}`" />
         </el-select>
         <el-button size="small" :loading="loading" @click="refresh">刷新</el-button>
       </div>
     </div>
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon :closable="false" />
+    <div v-if="config" class="monitor-thresholds">
+      <strong>后台监控</strong>
+      <el-switch v-model="config.enabled" :disabled="!canManage || saving" active-text="启用" inactive-text="关闭" />
+      <label>活动会话 ≥ <el-input-number v-model="config.activeThreshold" :disabled="!canManage || saving" :min="1" :max="100000" size="mini" /></label>
+      <label>表空间使用率 ≥ <el-input-number v-model="config.spaceThreshold" :disabled="!canManage || saving" :min="1" :max="100" size="mini" /> %</label>
+      <el-button v-if="canManage" size="small" type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
+      <span>服务端每 30 秒采集；历史及已恢复告警保留 7 天。{{ canManage ? '' : '当前账号仅可查看。' }}</span>
+    </div>
+    <section v-if="config" class="monitor-section">
+      <h3>历史趋势 <small>最近 {{ history.length }} 次采集，最多 200 次</small></h3>
+      <p v-if="!history.length" class="monitor-muted">尚无后台采集记录；启用并保存后开始采集。</p>
+      <div v-show="history.length" ref="trend" class="monitor-trend" />
+      <el-alert v-if="latestError" :title="latestError" type="warning" :closable="false" show-icon />
+      <p v-if="history.length" class="monitor-muted">最近后台采集：{{ formatTime(history[0].capturedAt) }}；缺失指标在曲线上留空。</p>
+    </section>
+    <section v-if="config" class="monitor-section">
+      <h3>告警记录 <small>未恢复优先，最多 100 条；关闭采集不会将告警标记为恢复</small></h3>
+      <el-table :data="alertHistory" size="small" max-height="320" empty-text="暂无告警记录">
+        <el-table-column label="状态" width="100"><template slot-scope="scope"><el-tag size="mini" :type="scope.row.endedAt ? 'success' : 'danger'">{{ scope.row.endedAt ? '已恢复' : '未恢复' }}</el-tag></template></el-table-column>
+        <el-table-column prop="message" label="告警内容" min-width="280" />
+        <el-table-column label="触发时间" min-width="170"><template slot-scope="scope">{{ formatTime(scope.row.startedAt) }}</template></el-table-column>
+        <el-table-column label="最近触发" min-width="170"><template slot-scope="scope">{{ formatTime(scope.row.lastSeen) }}</template></el-table-column>
+        <el-table-column label="恢复时间" min-width="170"><template slot-scope="scope">{{ formatTime(scope.row.endedAt) }}</template></el-table-column>
+      </el-table>
+    </section>
     <template v-if="snapshot">
       <div class="monitor-meta">采集时间：{{ captureTime }} · 每 30 秒自动刷新</div>
       <div class="monitor-cards">
@@ -17,12 +42,6 @@
         <div><span>活动会话</span><strong>{{ display(snapshot.activeCount) }}</strong></div>
         <div><span>阻塞等待</span><strong>{{ display(snapshot.blockedCount) }}</strong></div>
         <div><span>表空间文件</span><strong>{{ snapshot.tablespaceFiles ? snapshot.tablespaceFiles.length : '—' }}</strong></div>
-      </div>
-      <div class="monitor-thresholds">
-        <strong>告警阈值</strong>
-        <label>活动会话 ≥ <el-input-number v-model="thresholds.active" :min="1" :max="100000" size="mini" @change="saveThresholds" /></label>
-        <label>表空间使用率 ≥ <el-input-number v-model="thresholds.space" :min="1" :max="100" size="mini" @change="saveThresholds" /> %</label>
-        <span>阻塞等待出现即告警；阈值保存在当前浏览器。</span>
       </div>
       <section class="monitor-section">
         <h3>当前告警 <el-tag size="mini" :type="alerts.length ? 'danger' : 'success'">{{ alerts.length }}</el-tag></h3>
@@ -56,12 +75,15 @@
 
 <script>
 import connectionServer from '@/api/main/connection'
-import { getDatabaseSnapshot } from '@/api/main/monitor'
+import * as echarts from 'echarts'
+import { getDatabaseSnapshot, getMonitorState, saveMonitorConfig } from '@/api/main/monitor'
 
 export default {
   name: 'DatabaseMonitor',
-  data() { return { sources: [], dataSourceId: null, snapshot: null, loading: false, loadError: '', timer: null, thresholds: { active: 30, space: 85 } } },
+  data() { return { sources: [], dataSourceId: null, snapshot: null, loading: false, loadError: '', timer: null, config: null, canManage: false, saving: false, history: [], alertHistory: [], requestVersion: 0, chart: null, destroyed: false } },
   computed: {
+    latestError() { return this.history.length ? this.history[0].error : '' },
+    thresholds() { return { active: this.config ? this.config.activeThreshold : 30, space: this.config ? this.config.spaceThreshold : 85 } },
     captureTime() { return this.snapshot ? new Date(this.snapshot.capturedAt).toLocaleString() : '—' },
     hasSectionErrors() { return Boolean(this.snapshot && Object.keys(this.snapshot.errors || {}).length) },
     alerts() {
@@ -78,32 +100,93 @@ export default {
   },
   async created() {
     try {
-      const saved = JSON.parse(localStorage.getItem('jddbms-monitor-thresholds') || '{}')
-      if (Number.isFinite(saved.active) && saved.active >= 1) this.thresholds.active = saved.active
-      if (Number.isFinite(saved.space) && saved.space >= 1 && saved.space <= 100) this.thresholds.space = saved.space
-    } catch (error) { /* keep defaults */ }
-    try {
       const result = await connectionServer.getList({ pageNo: 1, pageSize: 10000 })
       if (!result.success) throw new Error(result.errorMessage || '数据源加载失败')
+      if (this.destroyed) return
       this.sources = (result.data && result.data.data) || []
       if (this.sources.length) { this.dataSourceId = this.sources[0].id; await this.refresh() }
     } catch (error) { this.loadError = error.message || '数据源加载失败' }
+    if (this.destroyed) return
+    window.addEventListener('resize', this.resizeChart)
     this.timer = setInterval(() => { if (this.dataSourceId && !document.hidden) this.refresh() }, 30000)
   },
-  beforeDestroy() { clearInterval(this.timer) },
+  beforeDestroy() {
+    this.destroyed = true
+    this.requestVersion++
+    clearInterval(this.timer)
+    window.removeEventListener('resize', this.resizeChart)
+    if (this.chart) this.chart.dispose()
+  },
   methods: {
     display(value) { return value == null ? '—' : value },
-    saveThresholds() { localStorage.setItem('jddbms-monitor-thresholds', JSON.stringify(this.thresholds)) },
+    formatTime(value) { return value ? new Date(value).toLocaleString() : '—' },
+    changeSource() {
+      this.snapshot = null
+      this.config = null
+      this.canManage = false
+      this.history = []
+      this.alertHistory = []
+      if (this.chart) { this.chart.dispose(); this.chart = null }
+      this.refresh()
+    },
+    resizeChart() { if (this.chart) this.chart.resize() },
+    drawTrend() {
+      if (this.destroyed || !this.$refs.trend || !this.history.length) return
+      if (!this.chart) this.chart = echarts.init(this.$refs.trend)
+      const rows = this.history.slice().reverse()
+      this.chart.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['总会话', '活动会话', '阻塞等待', '最高表空间使用率'] },
+        grid: { left: 50, right: 55, top: 40, bottom: 55 },
+        xAxis: { type: 'category', data: rows.map(row => new Date(row.capturedAt).toLocaleTimeString()) },
+        yAxis: [{ type: 'value', minInterval: 1, min: 0 }, { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%' } }],
+        dataZoom: [{ type: 'inside' }, { type: 'slider', height: 18 }],
+        series: [
+          ['总会话', 'sessionCount'], ['活动会话', 'activeCount'], ['阻塞等待', 'blockedCount'], ['最高表空间使用率', 'spacePercent']
+        ].map(([name, key], index) => ({ name, type: 'line', showSymbol: rows.length < 20, connectNulls: false, yAxisIndex: index === 3 ? 1 : 0, data: rows.map(row => row[key] == null ? null : row[key]) }))
+      }, true)
+      this.chart.resize()
+    },
+    async saveConfig() {
+      if (!this.config || !this.canManage || this.saving) return
+      const id = this.dataSourceId
+      this.saving = true
+      try {
+        const result = await saveMonitorConfig({ dataSourceId: id, enabled: this.config.enabled, activeThreshold: this.config.activeThreshold, spaceThreshold: this.config.spaceThreshold })
+        if (this.destroyed || id !== this.dataSourceId) return
+        if (!result.success) throw new Error(result.errorMessage || '配置保存失败')
+        this.config = result.data
+        this.$message.success('监控配置已保存')
+        await this.refresh()
+      } catch (error) { if (!this.destroyed && id === this.dataSourceId) this.$message.error(error.message || '配置保存失败') }
+      finally { if (!this.destroyed) this.saving = false }
+    },
     async refresh() {
-      if (!this.dataSourceId || this.loading) return
+      if (!this.dataSourceId) return
+      const id = this.dataSourceId
+      const version = ++this.requestVersion
+      const current = () => !this.destroyed && version === this.requestVersion && id === this.dataSourceId
       this.loading = true
       this.loadError = ''
-      try {
-        const result = await getDatabaseSnapshot(this.dataSourceId)
-        if (!result.success) throw new Error(result.errorMessage || '监控采集失败')
-        this.snapshot = result.data
-      } catch (error) { this.loadError = error.message || '监控采集失败' }
-      finally { this.loading = false }
+      // Fetch independently so an unavailable live database does not hide stored history.
+      await Promise.all([
+        getMonitorState(id).then(result => {
+          if (!current()) return
+          if (!result.success) throw new Error(result.errorMessage || '监控历史加载失败')
+          const state = result.data
+          if (!this.config || this.config.revision !== state.config.revision) this.config = state.config
+          this.canManage = state.canManage
+          this.history = state.history
+          this.alertHistory = state.alerts
+          this.$nextTick(this.drawTrend)
+        }).catch(error => { if (current()) this.loadError = error.message || '监控历史加载失败' }),
+        getDatabaseSnapshot(id).then(result => {
+          if (!current()) return
+          if (!result.success) throw new Error(result.errorMessage || '实时采集失败')
+          this.snapshot = result.data
+        }).catch(error => { if (current()) { this.snapshot = null; this.loadError = error.message || '实时采集失败' } })
+      ])
+      if (current()) this.loading = false
     }
   }
 }
@@ -118,6 +201,7 @@ export default {
 .monitor-cards > div, .monitor-section, .monitor-thresholds { border: 1px solid #e4e7ed; border-radius: 6px; background: #fff; padding: 15px; }
 .monitor-cards span { display: block; color: #606266; font-size: 13px; } .monitor-cards strong { display: block; margin-top: 8px; font-size: 24px; }
 .monitor-thresholds { margin-top: 14px; font-size: 13px; } .monitor-thresholds label { display: flex; align-items: center; gap: 5px; } .monitor-thresholds span { color: #909399; }
+.monitor-trend { width: 100%; height: 300px; }
 .monitor-section { margin-top: 14px; } .monitor-section h3 { margin: 0 0 12px; } .monitor-section h3 small { color: #909399; font-weight: normal; } .monitor-alert + .monitor-alert { margin-top: 8px; }
 @media(max-width: 800px) { .monitor-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .monitor-actions .el-select { width: 200px; } }
 </style>
