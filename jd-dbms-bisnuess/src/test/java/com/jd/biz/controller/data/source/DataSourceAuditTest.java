@@ -26,6 +26,19 @@ public class DataSourceAuditTest {
         }
     }
 
+    @Test
+    public void sharingChangesAuditSuccessAndFailureThroughTheExistingAspect() {
+        for (Method method : DataSourceSharingController.class.getDeclaredMethods()) {
+            if (java.util.Arrays.asList("grantUser", "grantTeam", "revokeUser", "revokeTeam").contains(method.getName())) {
+                Log log = method.getAnnotation(Log.class);
+                assertNotNull(method.getName(), log);
+                assertEquals(BusinessType.GRANT, log.businessType());
+                assertTrue(log.isSaveRequestData());
+                assertFalse(log.isSaveResponseData());
+            }
+        }
+    }
+
     private void assertAudit(String name, BusinessType type, boolean saveRequest) {
         Method method = java.util.Arrays.stream(DataSourceController.class.getDeclaredMethods())
                 .filter(item -> name.equals(item.getName())).findFirst().orElseThrow(AssertionError::new);

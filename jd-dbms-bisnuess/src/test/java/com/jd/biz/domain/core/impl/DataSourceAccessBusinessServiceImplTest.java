@@ -4,6 +4,9 @@ import com.jd.biz.domain.api.enums.DataSourceKindEnum;
 import com.jd.biz.domain.api.enums.DataSourceAction;
 import com.jd.biz.domain.api.model.DataSource;
 import com.jd.biz.domain.api.model.DataSourceAccess;
+import com.jd.biz.domain.api.model.DataSourcePermissionPreview;
+import com.jd.system.mapper.SysUserMapper;
+import com.jd.system.service.ISysMenuService;
 import com.jd.biz.domain.api.service.DataSourceAccessService;
 import com.jd.biz.domain.repository.mapper.DataSourceAccessCustomMapper;
 import com.jd.biz.domain.repository.entity.DataSourceAccessDO;
@@ -23,6 +26,10 @@ import java.util.Collections;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.Assert.*;
 
 public class DataSourceAccessBusinessServiceImplTest {
 
@@ -111,6 +118,76 @@ public class DataSourceAccessBusinessServiceImplTest {
         authenticate(42L, "company_analyst", DataSourceAction.DATA_READ.platformPermission());
         withGrant("METADATA_READ,DATA_READ").checkActionPermission(
                 dataSource(DataSourceKindEnum.SHARED, 7L), DataSourceAction.DATA_READ);
+    }
+
+    @Test
+    public void previewMatchesEnforcementAndRevocationWithoutAnotherLogin() throws Exception {
+        authenticate(42L, "dbms_developer");
+        List<DataSourceAccessDO> grants = new ArrayList<>();
+        DataSourceAccessDO direct = new DataSourceAccessDO();
+        direct.setAccessObjectType("USER"); direct.setAccessObjectId(42L);
+        direct.setPermissionCodes("METADATA_READ,DATA_READ"); grants.add(direct);
+        DataSourceAccessDO team = new DataSourceAccessDO();
+        team.setAccessObjectType("TEAM"); team.setAccessObjectId(9L);
+        team.setPermissionCodes("DATA_WRITE"); grants.add(team);
+        DataSourceAccessBusinessServiceImpl service = withPreview(grants,
+                DataSourceAction.METADATA_READ.platformPermission(), DataSourceAction.DATA_READ.platformPermission(),
+                DataSourceAction.DATA_WRITE.platformPermission());
+        DataSource source = dataSource(DataSourceKindEnum.SHARED, 7L);
+        for (DataSourceAction action : DataSourceAction.values()) {
+            boolean allowed = decision(service.preview(source, 42L), action).isAllowed();
+            try {
+                service.checkActionPermission(source, action);
+                assertTrue(action.name(), allowed);
+            } catch (PermissionDeniedBusinessException expected) { assertFalse(action.name(), allowed); }
+        }
+        assertEquals(Collections.singletonList("TEAM:9"), decision(service.preview(source, 42L), DataSourceAction.DATA_WRITE).getSources());
+        grants.remove(team);
+        assertFalse(decision(service.preview(source, 42L), DataSourceAction.DATA_WRITE).isAllowed());
+        try { service.checkActionPermission(source, DataSourceAction.DATA_WRITE); fail(); }
+        catch (PermissionDeniedBusinessException expected) { }
+        grants.clear();
+        assertFalse(decision(service.preview(source, 42L), DataSourceAction.DATA_READ).isAllowed());
+    }
+
+    @Test
+    public void previewExplainsMissingRolePrivateConnectionAndOwnerLimits() throws Exception {
+        DataSourceAccessDO grant = new DataSourceAccessDO();
+        grant.setPermissionCodes("DATA_READ,SQL_EXECUTE");
+        DataSourceAccessBusinessServiceImpl service = withPreview(Collections.singletonList(grant),
+                DataSourceAction.METADATA_READ.platformPermission(), DataSourceAction.DATA_READ.platformPermission());
+        assertEquals("平台角色未允许此操作", decision(service.preview(dataSource(DataSourceKindEnum.SHARED, 7L), 42L), DataSourceAction.SQL_EXECUTE).getReason());
+        assertFalse(decision(service.preview(dataSource(DataSourceKindEnum.PRIVATE, 7L), 42L), DataSourceAction.DATA_READ).isAllowed());
+        DataSourcePermissionPreview owner = service.preview(dataSource(DataSourceKindEnum.PRIVATE, 42L), 42L);
+        assertEquals(Collections.singletonList("OWNER"), decision(owner, DataSourceAction.METADATA_READ).getSources());
+        service = withPreview(Collections.emptyList(), DataSourceAction.DATA_READ.platformPermission());
+        assertFalse(decision(service.preview(dataSource(DataSourceKindEnum.PRIVATE, 42L), 42L), DataSourceAction.DATA_READ).isAllowed());
+    }
+
+    @Test
+    public void disabledUserHasNoEffectiveActionsEvenWithGrants() throws Exception {
+        DataSourceAccessBusinessServiceImpl service = withPreview(Collections.emptyList(),
+                DataSourceAction.METADATA_READ.platformPermission());
+        SysUser user = new SysUser(); user.setUserId(42L); user.setStatus("1"); user.setDelFlag("0");
+        setField(service, "sysUserMapper", proxy(SysUserMapper.class, user));
+        DataSourcePermissionPreview preview = service.preview(dataSource(DataSourceKindEnum.PRIVATE, 42L), 42L);
+        assertFalse(preview.isActive());
+        for (DataSourcePermissionPreview.ActionPermission action : preview.getActions()) {
+            assertFalse(action.isAllowed()); assertEquals("账号已停用或删除", action.getReason());
+        }
+    }
+
+    private static DataSourceAccessBusinessServiceImpl withPreview(List<DataSourceAccessDO> grants, String... permissions) throws Exception {
+        DataSourceAccessBusinessServiceImpl service = new DataSourceAccessBusinessServiceImpl();
+        SysUser user = new SysUser(); user.setUserId(42L); user.setUserName("reader"); user.setStatus("0"); user.setDelFlag("0");
+        setField(service, "sysUserMapper", proxy(SysUserMapper.class, user));
+        setField(service, "menuService", proxy(ISysMenuService.class, new HashSet<>(Arrays.asList(permissions))));
+        setField(service, "dataSourceAccessCustomMapper", proxy(DataSourceAccessCustomMapper.class, grants));
+        return service;
+    }
+
+    private static DataSourcePermissionPreview.ActionPermission decision(DataSourcePermissionPreview preview, DataSourceAction action) {
+        return preview.getActions().stream().filter(item -> action.name().equals(item.getCode())).findFirst().get();
     }
 
     private static DataSourceAccessBusinessServiceImpl withGrant(String codes) throws Exception {

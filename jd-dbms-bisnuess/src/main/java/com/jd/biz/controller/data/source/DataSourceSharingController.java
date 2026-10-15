@@ -2,6 +2,9 @@ package com.jd.biz.controller.data.source;
 
 import com.jd.biz.domain.api.enums.DataSourceAction;
 import com.jd.biz.domain.api.model.DataSource;
+import com.jd.biz.domain.api.model.DataSourcePermissionPreview;
+import com.jd.common.annotation.Log;
+import com.jd.common.enums.BusinessType;
 import com.jd.biz.domain.api.service.DataSourceAccessBusinessService;
 import com.jd.biz.domain.core.converter.DataSourceConverter;
 import com.jd.biz.domain.repository.entity.DataSourceDO;
@@ -65,6 +68,30 @@ public class DataSourceSharingController {
         return DataResult.of(result);
     }
 
+    @GetMapping("/effective/{userId}")
+    public DataResult<DataSourcePermissionPreview> effective(@PathVariable Long id, @PathVariable Long userId) {
+        return DataResult.of(accessService.preview(managed(id), userId));
+    }
+
+    @GetMapping("/audit")
+    public DataResult<List<Map<String, Object>>> audit(@PathVariable Long id) {
+        managed(id);
+        return DataResult.of(jdbc.query("SELECT OPER_ID, OPER_NAME, TITLE, OPER_URL, OPER_PARAM, STATUS, ERROR_MSG, OPER_TIME "
+                        + "FROM SYS_OPER_LOG WHERE OPER_URL LIKE ? ORDER BY OPER_ID DESC FETCH FIRST 100 ROWS ONLY",
+                (rs, row) -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", rs.getLong(1));
+                    item.put("operator", rs.getString(2));
+                    item.put("action", rs.getString(3));
+                    item.put("url", rs.getString(4));
+                    item.put("params", rs.getString(5));
+                    item.put("success", rs.getInt(6) == 0);
+                    item.put("error", rs.getString(7));
+                    item.put("time", rs.getTimestamp(8));
+                    return item;
+                }, "/api/connection/datasource/sharing/" + id + "/%"));
+    }
+
     @GetMapping("/users")
     public DataResult<List<Map<String, Object>>> users(@PathVariable Long id, @RequestParam String keyword) {
         managed(id);
@@ -105,12 +132,14 @@ public class DataSourceSharingController {
     }
 
     @PostMapping("/users")
+    @Log(title = "数据源用户授权", businessType = BusinessType.GRANT, isSaveResponseData = false)
     @Transactional
     public ActionResult grantUser(@PathVariable Long id, @RequestBody GrantRequest request) {
         return grant(id, "USER", request.getUserId(), request.getPermissionCodes());
     }
 
     @PostMapping("/teams")
+    @Log(title = "数据源团队授权", businessType = BusinessType.GRANT, isSaveResponseData = false)
     @Transactional
     public ActionResult grantTeam(@PathVariable Long id, @RequestBody GrantRequest request) {
         return grant(id, "TEAM", request.getTeamId(), request.getPermissionCodes());
@@ -143,11 +172,13 @@ public class DataSourceSharingController {
     }
 
     @DeleteMapping("/users/{userId}")
+    @Log(title = "数据源用户撤权", businessType = BusinessType.GRANT, isSaveResponseData = false)
     public ActionResult revokeUser(@PathVariable Long id, @PathVariable Long userId) {
         return revoke(id, "USER", userId);
     }
 
     @DeleteMapping("/teams/{teamId}")
+    @Log(title = "数据源团队撤权", businessType = BusinessType.GRANT, isSaveResponseData = false)
     public ActionResult revokeTeam(@PathVariable Long id, @PathVariable Long teamId) {
         return revoke(id, "TEAM", teamId);
     }

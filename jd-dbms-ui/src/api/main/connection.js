@@ -141,6 +141,12 @@ function grantSharingTeam(id, teamId, permissionCodes) {
 function revokeSharingTeam(id, teamId) {
   return request({ url: `/api/connection/datasource/sharing/${id}/teams/${teamId}`, method: 'delete' })
 }
+function getEffectivePermissions(id, userId) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/effective/${userId}`, method: 'get' })
+}
+function getSharingAudit(id) {
+  return request({ url: `/api/connection/datasource/sharing/${id}/audit`, method: 'get' })
+}
 
 export default {
   closeDataSource,
@@ -164,5 +170,7 @@ export default {
   searchSharingTeams,
   grantSharingTeam,
   revokeSharingTeam,
+  getEffectivePermissions,
+  getSharingAudit,
   deleteDataSource
 }

@@ -78,7 +78,8 @@ public class DataSourceSharingControllerTest {
                 () -> controller.list(42L), () -> controller.users(42L, "admin"),
                 () -> controller.teams(42L, "team"), () -> controller.grantUser(42L, request),
                 () -> controller.grantTeam(42L, request), () -> controller.revokeUser(42L, 2L),
-                () -> controller.revokeTeam(42L, 2L)
+                () -> controller.revokeTeam(42L, 2L),
+                () -> controller.effective(42L, 2L), () -> controller.audit(42L)
         };
         for (Runnable operation : operations) {
             try {
@@ -87,5 +88,18 @@ public class DataSourceSharingControllerTest {
             } catch (PermissionDeniedBusinessException expected) { }
         }
         assertEquals(0, queries);
+    }
+
+    @Test
+    public void auditIsRestrictedToTheExactConnectionAndBounded() {
+        ReflectionTestUtils.setField(controller, "jdbc", new JdbcTemplate() {
+            @Override
+            public <T> List<T> query(String sql, RowMapper<T> mapper, Object... args) {
+                assertTrue(sql.contains("FETCH FIRST 100 ROWS ONLY"));
+                assertEquals("/api/connection/datasource/sharing/42/%", args[0]);
+                return Collections.emptyList();
+            }
+        });
+        assertTrue(controller.audit(42L).getSuccess());
     }
 }
