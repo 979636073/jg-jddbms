@@ -122,6 +122,15 @@ async function run() {
   searchState.resourceFilter = ''
   searchState.handleResourceFilter('')
   assert(!sourceA.expanded && sourceB.expanded, '清空搜索必须恢复搜索前各数据源的展开状态')
+  searchState.resourceSearchLoading = false
+  await searchState.searchResourceTables('旧搜索', searchState.resourceSearchVersion - 1)
+  assert.strictEqual(searchState.resourceSearchLoading, false, '已取消的防抖任务不能重新打开加载状态')
+  searchState._resourceExpansionBeforeSearch = new Set(['b'])
+  searchState.resourceSearchLoading = true
+  sourceA.expanded = true
+  context.module.exports.watch['$route.query.dataSourceId'].call(searchState, 2)
+  assert(!sourceA.expanded && sourceB.expanded, '切换其他数据源的已打开页签也应恢复原展开状态')
+  assert.strictEqual(searchState.resourceSearchLoading, false)
   tree.$destroy()
 
   const node = state.createObjectNode(groups.find(group => group.groupType === 'materializedViews'),

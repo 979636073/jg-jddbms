@@ -232,7 +232,13 @@ export default {
   },
   watch: {
     "$route.query.dataSourceId"(id) {
-      if (id && this._resourceExpansionBeforeSearch) this.restoreResourceExpansion(id);
+      if (id && this._resourceExpansionBeforeSearch) {
+        clearTimeout(this.resourceSearchTimer);
+        this._searchSelectedDataSourceId = id;
+        this.resourceSearchVersion = (this.resourceSearchVersion || 0) + 1;
+        this.resourceSearchLoading = false;
+        this.restoreResourceExpansion(id);
+      }
     },
     databaseName(val) {
       this.$refs.tree.filter(val);
@@ -723,6 +729,7 @@ export default {
     async handleResourceNodeClick(data, node) {
       const dataSource = data.dataSource;
       if (this._resourceExpansionBeforeSearch && dataSource && ["table", "view", "function", "processdure", "trigger"].includes(data.treeNodeType)) {
+        clearTimeout(this.resourceSearchTimer);
         this._searchSelectedDataSourceId = dataSource.id;
         this.resourceSearchVersion = (this.resourceSearchVersion || 0) + 1;
         this.resourceSearchLoading = false;
@@ -817,6 +824,7 @@ export default {
       });
     },
     async searchResourceTables(value, version) {
+      if (version !== this.resourceSearchVersion) return;
       this.resourceSearchLoading = true;
       const expansionBeforeSearch = this._resourceExpansionBeforeSearch;
       const current = () => version === this.resourceSearchVersion && String(this.resourceFilter).trim() === String(value).trim();
