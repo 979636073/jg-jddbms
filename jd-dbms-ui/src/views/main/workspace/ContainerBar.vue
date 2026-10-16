@@ -1,7 +1,12 @@
 <script>
 const renderSqlExecute = () => import("./components/reanderSqlExecute/index.vue");
-const renderTableEditor = () => import("./components/renderTableEditor/index.vue");
-const renderViewEditor = () => import("./components/renderViewEditor/index.vue");
+const ObjectLoading = {
+  render(h) {
+    return h("div", { class: "object-component-loading", attrs: { role: "status" } }, "正在渲染数据，请稍候…");
+  }
+};
+const renderTableEditor = () => ({ component: import("./components/renderTableEditor/index.vue"), loading: ObjectLoading, delay: 0 });
+const renderViewEditor = () => ({ component: import("./components/renderViewEditor/index.vue"), loading: ObjectLoading, delay: 0 });
 const renderUserEditor = () => import("./components/renderUserEditor/index.vue");
 const renderTableSpaceEditor = () => import("./components/renderTableSpaceEditor/index.vue");
 const DataSourceConfig = () => import("./components/DataSource/index.vue");
@@ -421,6 +426,10 @@ export default {
 </template>
 
 <style scoped lang="scss">
+.object-component-loading {
+  padding: 32px;
+  color: #606266;
+}
 .monaco_editor {
   width: 100%;
   height: 100%;

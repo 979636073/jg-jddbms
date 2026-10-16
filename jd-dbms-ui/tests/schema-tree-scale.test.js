@@ -72,9 +72,10 @@ async function run() {
   const schema = { key: 'schema', label: 'APP', leaf: false }
   const root = { key: 'datasource-13', label: 'QA', leaf: false }
   let delayedResolve
+  let filterState
   const tree = new (Vue.extend(Tree))({ propsData: {
     nodeKey: 'key', lazy: true, props: { isLeaf: 'leaf', label: 'label' },
-    filterNodeMethod: methods.resourceFilterNode,
+    filterNodeMethod: (value, data, node) => methods.resourceFilterNode.call(filterState, value, data, node),
     load(node, resolve) {
       if (node.level === 0) resolve([root])
       else if (node.data === root) resolve([schema])
@@ -85,7 +86,7 @@ async function run() {
   tree.getNode(root.key).expand()
   tree.getNode(schema.key).expand()
   tree.getNode(tables.key).expand()
-  const filterState = { ...methods, resourceFilter: 'T_10001', databaseTree: [root],
+  filterState = { ...methods, resourceFilter: 'T_10001', databaseTree: [root],
     $refs: { resourceTree: tree } }
   filterState.handleResourceFilter(filterState.resourceFilter)
   delayedResolve(Array.from({ length: 10001 }, (_, i) => i === 10000 ? leaf :
@@ -96,7 +97,8 @@ async function run() {
   const original = tree.getNode('last')
   tree.getNode(schema.key).collapse()
   filterState.handleResourceFilter('T_10001')
-  assert(tree.getNode(schema.key).expanded, '已加载对象的父节点应直接展开，无额外请求')
+  assert(!tree.getNode(schema.key).expanded, '搜索不得展开用户收起的模式')
+  assert(!tree.getNode('last').visible, '已加载但收起的模式下的对象也不能参与搜索')
   tree.getNode(root.key).collapse()
   filterState.applyResourceFilter('T_10001', false)
   assert(!tree.getNode(root.key).expanded, '接口返回重应用过滤时不能重新打开用户收起的目录')
@@ -109,28 +111,22 @@ async function run() {
   const commentNode = { label: 'T_10001', comment: '图片附件测试' }
   assert(methods.resourceFilterNode('图片', commentNode, { data: commentNode }))
   assert(!methods.resourceFilterNode('不匹配', commentNode, { data: commentNode }))
-  const sourceA = { key: 'a', data: { dataSource: { id: 1 } }, expanded: false, loaded: true, visible: true, childNodes: [] }
-  const sourceB = { key: 'b', data: { dataSource: { id: 2 } }, expanded: true, loaded: true, visible: true, childNodes: [] }
-  const nodes = { a: sourceA, b: sourceB }
-  const searchState = { ...methods, resourceFilter: '图片', databaseTree: [{ key: 'a' }, { key: 'b' }],
-    $refs: { resourceTree: { getNode: key => nodes[key], filter() { sourceA.expanded = sourceB.expanded = true } } } }
-  searchState.handleResourceFilter('图片')
-  assert(sourceA.expanded, '搜索可临时展开原来关闭的数据源')
-  searchState._searchSelectedDataSourceId = 2
-  searchState.applyResourceFilter('图片')
-  assert(!sourceA.expanded, '选择其他数据源后，重应用过滤不能重新展开搜索数据源')
-  searchState.resourceFilter = ''
-  searchState.handleResourceFilter('')
-  assert(!sourceA.expanded && sourceB.expanded, '清空搜索必须恢复搜索前各数据源的展开状态')
-  searchState.resourceSearchLoading = false
-  await searchState.searchResourceTables('旧搜索', searchState.resourceSearchVersion - 1)
-  assert.strictEqual(searchState.resourceSearchLoading, false, '已取消的防抖任务不能重新打开加载状态')
-  searchState._resourceExpansionBeforeSearch = new Set(['b'])
-  searchState.resourceSearchLoading = true
-  sourceA.expanded = true
-  context.module.exports.watch['$route.query.dataSourceId'].call(searchState, 2)
-  assert(!sourceA.expanded && sourceB.expanded, '切换其他数据源的已打开页签也应恢复原展开状态')
-  assert.strictEqual(searchState.resourceSearchLoading, false)
+  let searchRequests = 0
+  context.tableServer.getTreeTableList = () => { searchRequests++; throw new Error('搜索不得调用接口') }
+  context.connectionServer.getDatabaseList = () => { searchRequests++; throw new Error('搜索不得加载数据库') }
+  const before = filterState.resourceNodes().map(node => [node.key, node.expanded])
+  filterState.resourceFilter = '图片'
+  filterState.handleResourceFilter('图片')
+  await new Promise(resolve => setTimeout(resolve, 350))
+  assert.strictEqual(searchRequests, 0, '搜索只能过滤已展开的节点，不得发起元数据请求')
+  assert.deepStrictEqual(filterState.resourceNodes().map(node => [node.key, node.expanded]), before)
+  filterState.handleResourceFilter('')
+  tree.getNode(root.key).expand()
+  tree.getNode(schema.key).expand()
+  filterState.handleResourceFilter('T_10001')
+  assert(tree.getNode('last').visible, '用户主动展开后已加载表可以再次参与搜索')
+  assert(tree.getNode(schema.key).expanded)
+  filterState.handleResourceFilter('')
   tree.$destroy()
 
   const node = state.createObjectNode(groups.find(group => group.groupType === 'materializedViews'),

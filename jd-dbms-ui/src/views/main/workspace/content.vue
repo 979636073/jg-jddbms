@@ -2,7 +2,6 @@
     <el-main class="bodyBox" v-loading="loading" element-loading-text="正在打开对象，请稍候…">
       <div v-if="loading" class="object-loading-status" role="status">正在打开对象，请稍候…</div>
       <ContainerBar
-        v-show="!loading"
         @tableRefresh="tableRefresh"
         @updateViewNameTwo="updateViewNameTwo"
         @restoreOverview="restoreOverview"
@@ -155,6 +154,7 @@ export default {
 
 <style lang='scss' scoped>
 .bodyBox {
+  position: relative;
   flex: 1;
   display: flex;
   min-width: 0;
@@ -162,6 +162,7 @@ export default {
   height: 100%;
 }
 .object-loading-status {
+  position: absolute;
   width: 100%;
   padding: 32px;
   color: #606266;

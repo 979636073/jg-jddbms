@@ -50,6 +50,8 @@ public class ResourceTreeMetadataTest {
         assertTrue(query.sql.contains("SYS.ALL_OBJECTS"));
         assertFalse(query.sql.toUpperCase().contains("ALL_MVIEWS"));
         assertTrue(query.sql.contains("'VIEW', 'MATERIALIZED VIEW'"));
+        assertTrue(query.sql.contains("O.ID = A.OBJECT_ID"));
+        assertTrue(query.sql.contains("O.INFO1 & 512"));
         assertEquals("MATERIALIZED VIEW", views.get(0).getTableDetails().getType());
     }
 

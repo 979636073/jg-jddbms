@@ -123,7 +123,6 @@ export default {
       databaseTree: [],
       databaseMaps: new Map(),
       resourceFilter: "",
-      resourceSearchLoading: false,
       resourceTreeLoading: false,
       resourceChangeQueue: {},
       resourceChangeVersions: {},
@@ -231,15 +230,6 @@ export default {
     },
   },
   watch: {
-    "$route.query.dataSourceId"(id) {
-      if (id && this._resourceExpansionBeforeSearch) {
-        clearTimeout(this.resourceSearchTimer);
-        this._searchSelectedDataSourceId = id;
-        this.resourceSearchVersion = (this.resourceSearchVersion || 0) + 1;
-        this.resourceSearchLoading = false;
-        this.restoreResourceExpansion(id);
-      }
-    },
     databaseName(val) {
       this.$refs.tree.filter(val);
     },
@@ -278,8 +268,6 @@ export default {
     this.$EventBus.$off("refreshDataSourceTree", this.initializeResourceTree);
     this.$EventBus.$off("dataSourceConnected", this.handleDataSourceConnected);
     clearTimeout(this.tableSearchTimer);
-    clearTimeout(this.resourceSearchTimer);
-    this.resourceSearchVersion = (this.resourceSearchVersion || 0) + 1;
     clearTimeout(this.resourceChangeTimer);
   },
   methods: {
@@ -728,13 +716,6 @@ export default {
     },
     async handleResourceNodeClick(data, node) {
       const dataSource = data.dataSource;
-      if (this._resourceExpansionBeforeSearch && dataSource && ["table", "view", "function", "processdure", "trigger"].includes(data.treeNodeType)) {
-        clearTimeout(this.resourceSearchTimer);
-        this._searchSelectedDataSourceId = dataSource.id;
-        this.resourceSearchVersion = (this.resourceSearchVersion || 0) + 1;
-        this.resourceSearchLoading = false;
-        this.restoreResourceExpansion(dataSource.id);
-      }
       if (data.treeNodeType === "datasource" && !this.isDataSourceConnected(dataSource.id)) {
         this.openDataSourceManager(dataSource, "connect");
         return;
@@ -795,20 +776,7 @@ export default {
       }
     },
     handleResourceFilter(value) {
-      clearTimeout(this.resourceSearchTimer);
-      this._searchSelectedDataSourceId = null;
-      const version = this.resourceSearchVersion = (this.resourceSearchVersion || 0) + 1;
-      if (String(value || "").trim() && !this._resourceExpansionBeforeSearch) {
-        this._resourceExpansionBeforeSearch = new Set(this.resourceNodes().filter(node => node.expanded).map(node => node.key));
-      }
       this.applyResourceFilter(value);
-      if (!String(value || "").trim()) {
-        this.restoreResourceExpansion();
-        this._resourceExpansionBeforeSearch = null;
-        this.resourceSearchLoading = false;
-        return;
-      }
-      this.resourceSearchTimer = setTimeout(() => this.searchResourceTables(value, version), 300);
     },
     resourceNodes() {
       const nodes = [];
@@ -816,91 +784,22 @@ export default {
       this.databaseTree.forEach(root => visit(this.$refs.resourceTree?.getNode(root.key)));
       return nodes;
     },
-    restoreResourceExpansion(keepDataSourceId) {
-      if (!this._resourceExpansionBeforeSearch) return;
-      this.resourceNodes().forEach(node => {
-        if (keepDataSourceId != null && String(node.data?.dataSource?.id) === String(keepDataSourceId)) return;
-        node.expanded = this._resourceExpansionBeforeSearch.has(node.key);
-      });
-    },
-    async searchResourceTables(value, version) {
-      if (version !== this.resourceSearchVersion) return;
-      this.resourceSearchLoading = true;
-      const expansionBeforeSearch = this._resourceExpansionBeforeSearch;
-      const current = () => version === this.resourceSearchVersion && String(this.resourceFilter).trim() === String(value).trim();
-      try {
-        for (const source of this.databaseTree) {
-          if (!current()) return;
-          if (!this.isDataSourceConnected(source.dataSource.id)) continue;
-          const root = this.$refs.resourceTree.getNode(source.key);
-          const databases = source.dataSource.supportDatabase
-            ? (await connectionServer.getDatabaseList({ dataSourceId: source.dataSource.id })).data || [] : [{ name: "" }];
-          for (const database of databases) {
-            if (!current()) return;
-            const res = await tableServer.getTreeTableList({ dataSourceId: source.dataSource.id,
-              databaseName: database.name, searchKey: value });
-            if (!current()) return;
-            if (!res?.success) throw new Error(res?.errorMessage || "搜索表失败");
-            const matches = res.data?.data || [];
-            if (!matches.length) continue;
-            await this.expandResourceNode(root);
-            if (!current()) return;
-            const hierarchy = root.childNodes.find(node => ["schemaCollection", "databaseCollection"].includes(node.data.treeNodeType));
-            await this.expandResourceNode(hierarchy);
-            if (!current()) return;
-            let containers = hierarchy;
-            if (source.dataSource.supportDatabase) {
-              containers = hierarchy.childNodes.find(node => node.data.label === database.name);
-              await this.expandResourceNode(containers);
-              if (!current()) return;
-            }
-            const schemas = [...new Set(matches.map(item => item.schemaName || item.tableDetails?.schema))];
-            for (const schema of schemas) {
-              const parent = source.dataSource.supportSchema
-                ? containers?.childNodes.find(node => node.data.label === schema) : containers;
-              await this.expandResourceNode(parent);
-              if (!current()) return;
-              const group = parent?.childNodes.find(node => node.data.groupType === "tables");
-              await this.expandResourceNode(group);
-              if (!current()) return;
-            }
-            this.applyResourceFilter(value);
-          }
-        }
-      } catch (error) {
-        if (current()) this.$message.error(error.message || "搜索表失败，请重试");
-      } finally {
-        if (version === this.resourceSearchVersion) this.resourceSearchLoading = false;
-        if (!current() && expansionBeforeSearch && !this._resourceExpansionBeforeSearch) {
-          this.resourceNodes().forEach(node => { node.expanded = expansionBeforeSearch.has(node.key); });
-        } else if (this._searchSelectedDataSourceId != null) {
-          this.restoreResourceExpansion(this._searchSelectedDataSourceId);
-        }
-      }
-    },
-    applyResourceFilter(value, expandMatches = true) {
+    applyResourceFilter(value) {
       const tree = this.$refs.resourceTree;
       if (!tree) return;
-      if (!String(value || "").trim() && !this._resourceExpansionBeforeSearch && !expandMatches) return;
+      const nodes = this.resourceNodes();
+      const expanded = new Set(nodes.filter(node => node.expanded).map(node => node.key));
+      this._resourceFilterExpanded = expanded;
       tree.filter(value);
-      const keyword = String(value || "").trim().toLowerCase();
-      if (!keyword || !expandMatches) {
-        if (this._searchSelectedDataSourceId != null) this.restoreResourceExpansion(this._searchSelectedDataSourceId);
-        return;
-      }
-      const visit = node => {
-        if (!node) return;
-        if (node.loaded && node.visible && node.childNodes?.some(child => child.visible)) {
-          node.expanded = true;
-        }
-        (node.childNodes || []).forEach(visit);
-      };
-      this.databaseTree.forEach(root => visit(tree.getNode(root.key)));
-      if (this._searchSelectedDataSourceId != null) this.restoreResourceExpansion(this._searchSelectedDataSourceId);
+      // Tree filtering expands matching ancestors internally; retain the user's expansion state.
+      nodes.forEach(node => { node.expanded = expanded.has(node.key); });
     },
     resourceFilterNode(value, data, node) {
       const keyword = String(value || "").trim().toLowerCase();
       if (!keyword) return true;
+      for (let parent = node?.parent; parent?.data && parent.level !== 0; parent = parent.parent) {
+        if (!(this._resourceFilterExpanded ? this._resourceFilterExpanded.has(parent.key) : parent.expanded)) return false;
+      }
       while (node?.data) {
         if ([node.data.label, node.data.comment, node.data.tableDetails?.comment]
           .some(text => String(text || "").toLowerCase().includes(keyword))) return true;
@@ -2736,7 +2635,6 @@ export default {
         placeholder="搜索库/表/注释/用户..."
         @input="handleResourceFilter"
       />
-      <div v-if="resourceSearchLoading" class="resource-search-status" role="status">正在搜索已连接数据源…</div>
       <div class="resource-tree-scrollbar" v-loading="resourceTreeLoading">
         <vue-easy-tree
           ref="resourceTree"
@@ -2753,6 +2651,8 @@ export default {
           :expand-on-click-node="false"
           @node-click="handleResourceNodeClick"
           @node-contextmenu="handleResourceContextMenu"
+          @node-expand="applyResourceFilter(resourceFilter)"
+          @node-collapse="applyResourceFilter(resourceFilter)"
         >
           <span slot-scope="{ node, data }" class="resource-node"
             :class="{ 'resource-node-datasource': data.treeNodeType === 'datasource' }">

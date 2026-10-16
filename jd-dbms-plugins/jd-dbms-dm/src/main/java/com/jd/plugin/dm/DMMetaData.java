@@ -331,10 +331,11 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     public Procedure procedure(Connection connection, @NotEmpty String databaseName, String schemaName,
                                String procedureName) {
         String sql = buildProcedureDetailSql(schemaName, procedureName);
-        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+        Procedure detail = SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             StringBuilder sb = new StringBuilder();
             while (resultSet.next()) {
-                sb.append(resultSet.getString("TEXT") + "\n");
+                String text = resultSet.getString("TEXT");
+                if (text != null) sb.append(text).append('\n');
             }
             Procedure procedure = new Procedure();
             procedure.setDatabaseName(databaseName);
@@ -343,6 +344,20 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
             procedure.setProcedureBody(sb.toString());
             return procedure;
         });
+        if (StringUtils.isBlank(detail.getProcedureBody())) {
+            String ddl = SQLExecutor.getInstance().execute(connection, buildProcedureDdlSql(schemaName, procedureName),
+                    resultSet -> resultSet.next() ? resultSet.getString("DDL") : null);
+            if (StringUtils.isBlank(ddl)) {
+                throw new BusinessException("未读取到存储过程定义，请确认对象存在、未加密且当前数据库账号具有定义读取权限");
+            }
+            detail.setProcedureBody(ddl);
+        }
+        return detail;
+    }
+
+    static String buildProcedureDdlSql(String schemaName, String procedureName) {
+        return "SELECT DBMS_METADATA.GET_DDL('PROCEDURE', '" + sqlLiteral(procedureName)
+                + "', '" + sqlLiteral(schemaName) + "') AS DDL FROM DUAL";
     }
 
     static String buildProcedureDetailSql(String schemaName, String procedureName) {
@@ -1446,9 +1461,11 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     }
 
 
-    private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type " +
-            "from SYS.ALL_OBJECTS where owner = '%s' " +
-            "and object_type IN ('VIEW', 'MATERIALIZED VIEW') order by object_name";
+    private static String SELECT_TABLE_VIEW_SQL = "select A.object_name, A.owner, A.status, A.created, A.last_ddl_time, " +
+            "case when A.object_type = 'MATERIALIZED VIEW' or (O.INFO1 & 512) <> 0 " +
+            "then 'MATERIALIZED VIEW' else 'VIEW' end as object_type " +
+            "from SYS.ALL_OBJECTS A left join SYS.SYSOBJECTS O on O.ID = A.OBJECT_ID and O.SUBTYPE$ = 'VIEW' " +
+            "where A.owner = '%s' and A.object_type IN ('VIEW', 'MATERIALIZED VIEW') order by A.object_name";
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {

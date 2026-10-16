@@ -57,9 +57,9 @@ public class IDriverManagerTest {
     public void shouldBoundOracleConnectAndAvoidLoadingLobContents() {
         Properties properties = new Properties();
         IDriverManager.applyConnectionDefaults("jdbc:oracle:thin:@localhost:1521/orcl", properties);
-        assertEquals("5000", properties.getProperty("oracle.net.CONNECT_TIMEOUT"));
-        assertEquals("5000", properties.getProperty("oracle.net.OUTBOUND_CONNECT_TIMEOUT"));
-        assertEquals("5", properties.getProperty("oracle.jdbc.loginTimeout"));
+        assertEquals("15000", properties.getProperty("oracle.net.CONNECT_TIMEOUT"));
+        assertEquals("15000", properties.getProperty("oracle.net.OUTBOUND_CONNECT_TIMEOUT"));
+        assertEquals("15", properties.getProperty("oracle.jdbc.loginTimeout"));
         assertEquals("0", properties.getProperty("oracle.jdbc.defaultLobPrefetchSize"));
         properties.setProperty("oracle.net.CONNECT_TIMEOUT", "12000");
         IDriverManager.applyConnectionDefaults("jdbc:oracle:thin:@localhost:1521/orcl", properties);
@@ -71,7 +71,7 @@ public class IDriverManagerTest {
         for (String driver : new String[]{"dm", "mysql", "postgresql", "kingbase8"}) {
             Properties properties = new Properties();
             IDriverManager.applyConnectionDefaults("jdbc:" + driver + "://localhost/test", properties);
-            assertEquals(driver.equals("dm") || driver.equals("mysql") ? "5000" : "5", properties.getProperty("connectTimeout"));
+            assertEquals(driver.equals("dm") || driver.equals("mysql") ? "15000" : "15", properties.getProperty("connectTimeout"));
         }
     }
 }
