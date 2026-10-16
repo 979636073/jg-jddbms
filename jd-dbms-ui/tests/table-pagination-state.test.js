@@ -64,6 +64,29 @@ async function run() {
   pending[5].resolve(response(1))
   await Promise.resolve()
   assert(source.template.content.includes("'sizes, prev, slot, next'"), '未知总数不能展示假总页数或末页跳转')
+  let finishCount
+  let countCalls = 0
+  context.sqlServer.countTable = () => { countCalls++; return new Promise(resolve => { finishCount = resolve }) }
+  const result = { params: { dataSourceId: 1, tableName: 'BLOBS', schemaName: 'APP' }, dataList: [['ready']] }
+  state.queryResultData = result
+  state._tableCountKey = null
+  state.pageSql = 'ID > 1'
+  const backgroundCount = state.loadTableCount(result)
+  assert.strictEqual(result.dataList[0][0], 'ready', '计数未返回时首屏数据已经可用')
+  assert.strictEqual(state.countLoading, true)
+  await state.loadTableCount(result)
+  assert.strictEqual(countCalls, 1, '深层数据变化不应重复计数')
+  finishCount(10001); await backgroundCount
+  assert.strictEqual(state.countedTotal, 10001)
+  state._tableCountKey = null
+  const staleCount = state.loadTableCount(result)
+  state.queryResultData = { params: { tableName: 'OTHER' } }
+  finishCount(99); await staleCount
+  assert.strictEqual(state.countedTotal, null, '旧表迟到的计数不能覆盖新表')
+  context.sqlServer.countTable = async () => { throw new Error('timeout') }
+  state._tableCountKey = null
+  await state.loadTableCount(state.queryResultData)
+  assert.strictEqual(state.countLoading, false, '后台计数失败不能阻塞页面')
   console.log('表数据分页：乱序响应、排序重置、精确计数与失败回退通过')
 }
 run().catch(error => { console.error(error); process.exitCode = 1 })

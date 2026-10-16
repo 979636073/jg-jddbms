@@ -21,6 +21,10 @@ public class TableVO {
      */
     private String name;
 
+    private String schemaName;
+
+    private String databaseName;
+
     /**
      * 表描述
      */

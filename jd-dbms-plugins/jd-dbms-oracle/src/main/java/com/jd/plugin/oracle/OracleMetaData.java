@@ -54,6 +54,11 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
+    public List<Table> searchTables(Connection connection, String databaseName, String schemaName, String keyword) {
+        return searchCatalogTables(connection, databaseName, schemaName, keyword);
+    }
+
+    @Override
     public String showViewSql(String databaseName, String schemaName, String viewName, String viewSql, List<TableColumn> columnList) {
         String str = "CREATE OR REPLACE VIEW " + format(schemaName) + "." + format(viewName) + " AS \n\t" + viewSql + ";\n";
         for (TableColumn column : columnList) {
@@ -82,7 +87,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
 
     private static String SELECT_TABLE_SQL = "SELECT A.OWNER, A.TABLE_NAME, B.COMMENTS " +
             "FROM ALL_TABLES A LEFT JOIN ALL_TAB_COMMENTS B ON  A.OWNER = B.OWNER  AND A.TABLE_NAME = B.TABLE_NAME\n" +
-             "where A.OWNER = '%s' AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS M WHERE M.OWNER = A.OWNER AND M.MVIEW_NAME = A.TABLE_NAME) ";
+             "where A.OWNER = '%s' AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS M WHERE M.OBJECT_TYPE = 'MATERIALIZED VIEW' AND M.OWNER = A.OWNER AND M.OBJECT_NAME = A.TABLE_NAME) ";
 
     @Override
     public PageResult<Table> tableDetailsPage(Connection connection, String databaseName, String schemaName,
@@ -90,15 +95,15 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
         String pattern = StringUtils.isBlank(searchKey) ? null : searchKey.trim().toUpperCase(Locale.ROOT);
         String from = " FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER " +
                 "AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' " +
-                "WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS m " +
-                "WHERE m.OWNER = t.OWNER AND m.MVIEW_NAME = t.TABLE_NAME)" +
+                "WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m " +
+                "WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME)" +
                 (pattern == null ? "" : " AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 " +
                         "OR INSTR(UPPER(c.COMMENTS), ?) > 0)");
         try {
             long total;
             String countSql = pattern == null
                     ? "SELECT COUNT(*) FROM ALL_TABLES t WHERE t.OWNER = ? AND NOT EXISTS " +
-                    "(SELECT 1 FROM ALL_MVIEWS m WHERE m.OWNER = t.OWNER AND m.MVIEW_NAME = t.TABLE_NAME)"
+                    "(SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME)"
                     : "SELECT COUNT(*)" + from;
             try (PreparedStatement count = connection.prepareStatement(countSql)) {
                 bindTablePageFilter(count, schemaName, pattern);
@@ -1056,7 +1061,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             "        t.num_rows       \n" +
             "from\n" +
             "        all_tables t\n" +
-            "where t.owner = '%s' AND NOT EXISTS (SELECT 1 FROM ALL_MVIEWS m WHERE m.owner = t.owner AND m.mview_name = t.table_name) order by t.table_name ASC";
+            "where t.owner = '%s' AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.owner = t.owner AND m.OBJECT_NAME = t.table_name) order by t.table_name ASC";
 
 
     @Override
@@ -1116,15 +1121,13 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
     }
 
     private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type " +
-            "from ALL_OBJECTS where owner = '%s' and object_type = 'VIEW' " +
-            "union all select m.mview_name, m.owner, o.status, o.created, o.last_ddl_time, 'MATERIALIZED VIEW' " +
-            "from ALL_MVIEWS m left join ALL_OBJECTS o on o.owner = m.owner and o.object_name = m.mview_name " +
-            "and o.object_type = 'MATERIALIZED VIEW' where m.owner = '%s' order by object_name";
+            "from SYS.ALL_OBJECTS where owner = '%s' " +
+            "and object_type IN ('VIEW', 'MATERIALIZED VIEW') order by object_name";
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {
         List<Table> tableSpaces = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, schemaName.replace("'", "''"), schemaName.replace("'", "''")), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, schemaName.replace("'", "''")), resultSet -> {
             while (resultSet.next()) {
                 Table tableSpace = new Table();
                 TableDetails tableDetails = new TableDetails();

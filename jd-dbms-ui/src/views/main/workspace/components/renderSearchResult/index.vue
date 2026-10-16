@@ -117,6 +117,8 @@ export default {
       }
     };
     return {
+      countedTotal: null,
+      countLoading: false,
       selections: [],
       sort: {
         order: "",
@@ -301,6 +303,10 @@ export default {
       handler(newVal, oldVal) {
         console.log(newVal, "变换值");
         if (newVal != oldVal) {
+          this._tableCountKey = null;
+          this.countedTotal = null;
+          this.countLoading = false;
+          this._tableCountRequestId = (this._tableCountRequestId || 0) + 1;
           this.sortObj = {}; // 清空排序入参
           this.sortParams = {}; // 存储筛选的对象 针对导出时候的传参 切换清空 防止切换表的时候影响
           this.isColor = false; // 切换表高级查询取消背景高亮
@@ -371,6 +377,9 @@ export default {
           this.sqlInfo = [];
         }
         this.total = Number(newVal?.fuzzyTotal || 0);
+        if (newVal?.totalExact === false && newVal.params?.tableName && !newVal.params?.consoleId) {
+          this.loadTableCount(newVal);
+        }
         this.$nextTick(() => {
           this.$refs.ref_table.clearSort();
           this.pageLoading = false;
@@ -425,6 +434,23 @@ export default {
     window.removeEventListener("keyup", this.handleKeyUp);
   },
   methods: {
+    async loadTableCount(result) {
+      const params = { ...result.params, filterSql: this.pageSql || "" };
+      const key = JSON.stringify([params.dataSourceId, params.databaseName, params.schemaName, params.tableName, params.filterSql]);
+      if (this._tableCountKey === key) return;
+      this._tableCountKey = key;
+      const requestId = this._tableCountRequestId = (this._tableCountRequestId || 0) + 1;
+      this.countedTotal = null;
+      this.countLoading = true;
+      try {
+        const total = await sqlServer.countTable(params);
+        if (requestId === this._tableCountRequestId && this._tableCountKey === key && result === this.queryResultData && Number.isFinite(total)) this.countedTotal = total;
+      } catch (error) {
+        // Data remains usable; the existing exact-count button permits a retry.
+      } finally {
+        if (requestId === this._tableCountRequestId) this.countLoading = false;
+      }
+    },
     async showMaterializedDdl() {
       this.materializedDdlLoading = true;
       try {
@@ -2646,6 +2672,13 @@ export default {
       if (ref) {
         this.queryParams.pageNum = 1;
       }
+      if (refreshMetadata || exactCount || this.pageSql !== this._countFilterSql) {
+        this._tableCountKey = null;
+        this.countedTotal = null;
+        this.countLoading = false;
+        this._tableCountRequestId = (this._tableCountRequestId || 0) + 1;
+        this._countFilterSql = this.pageSql;
+      }
       const params = {
         ...this.queryResultData.params,
         pageNo: this.queryParams.pageNum,
@@ -3290,14 +3323,14 @@ export default {
         :current-page="queryParams.pageNum"
         :page-sizes="[10, 50, 100, 200, 500, 1000]"
         :page-size="queryParams.pageSize"
-        :layout="queryResultData.totalExact === false ? 'sizes, prev, slot, next' : 'total, sizes, prev, pager, next, jumper'"
-        :total="total"
+        :layout="queryResultData.totalExact === false && countedTotal === null ? 'sizes, prev, slot, next' : 'total, sizes, prev, pager, next, jumper'"
+        :total="countedTotal === null ? total : countedTotal"
         :disabled="isDialogLoading"
       >
-        <span v-if="queryResultData.totalExact === false" class="el-pagination__total">第 {{ queryParams.pageNum }} 页</span>
+        <span v-if="queryResultData.totalExact === false && countedTotal === null" class="el-pagination__total">第 {{ queryParams.pageNum }} 页</span>
       </el-pagination>
-      <el-button v-if="queryResultData.totalExact === false" type="text" size="mini"
-        :loading="isDialogLoading" @click="advancedQuery(false, true)">统计总行数</el-button>
+      <el-button v-if="queryResultData.totalExact === false && countedTotal === null" type="text" size="mini"
+        :loading="isDialogLoading || countLoading" @click="advancedQuery(false, true)">统计总行数</el-button>
     </div>
 
     <SqlPreview ref="sqlPreview" title="SQL预览">

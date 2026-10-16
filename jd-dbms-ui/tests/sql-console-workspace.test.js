@@ -7,7 +7,7 @@ const root = path.join(__dirname, '../src')
 function load(relative, mocks) {
   const descriptor = compiler.parseComponent(fs.readFileSync(path.join(root, relative), 'utf8'))
   assert.deepStrictEqual(compiler.compile(descriptor.template.content).errors, [])
-  const context = { module: { exports: {} }, ...mocks }
+  const context = { module: { exports: {} }, setTimeout, clearTimeout, ...mocks }
   vm.runInNewContext(descriptor.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), context)
   return context.module.exports
 }
@@ -104,11 +104,12 @@ async function main() {
 
   let provider, tokenizer
   const metadataRequests = []
+  const tableServer = { getTreeTableList: async params => { metadataRequests.push(params); return { success: true, data: { data: [{ name: 'T' }] } } },
+    getAllFieldByTable: async params => { metadataRequests.push(params); return { success: true, data: [{ name: 'REAL_COLUMN' }] } } }
   const editorComponent = load('components/MonacoEditor/index.vue', {
     monaco: { languages: { register() {}, setLanguageConfiguration() {}, setMonarchTokensProvider(language, item) { tokenizer = item }, registerCompletionItemProvider(language, item) { provider = item; return { dispose() {} } }, CompletionItemKind: {} } }, conf: {},
     language: { keywords: ['SELECT'], operators: [], builtinFunctions: [], builtinVariables: [], tokenizer: { strings: [] } }, sqlAtCursor,
-    tableServer: { getTableList: async params => { metadataRequests.push(params); return { success: true, data: { data: [{ name: 'T' }] } } },
-      getAllFieldByTable: async params => { metadataRequests.push(params); return { success: true, data: [{ name: 'REAL_COLUMN' }] } } },
+    tableServer,
   })
   assert(tokenizer.tokenizer.strings[0][0].test("q'["), 'q 引用需要独立着色，不能污染后续语句')
   assert(tokenizer.tokenizer.oracleBracketString[0][0].test("]'"))
@@ -125,6 +126,20 @@ async function main() {
   editorState.queryContext = { dataSourceId: 9, schemaName: 'APP' }
   await editorState.getParamSuggest('APP', 'T')
   assert.strictEqual(metadataRequests[1].dataSourceId, 9, '不同连接不能串用元数据缓存')
+  let resolveTables
+  let tableRequests = 0
+  editorState.tableCache = {}
+  tableServer.getTreeTableList = () => { tableRequests++; return new Promise(resolve => { resolveTables = resolve }) }
+  const caching = { queryContext: { dataSourceId: 9 }, tableCache: {} }
+  const getTables = editorComponent.methods.getTableSuggest
+  const firstTables = getTables.call(caching, 'APP')
+  const secondTables = getTables.call(caching, 'APP')
+  assert.strictEqual(tableRequests, 1)
+  resolveTables({ success: true, data: { data: [{ name: 'T' }] } })
+  await Promise.all([firstTables, secondTables])
+  const beforeCancelled = metadataRequests.length
+  await provider.provideCompletionItems(model, { lineNumber: 1 }, {}, { isCancellationRequested: true })
+  assert.strictEqual(metadataRequests.length, beforeCancelled, '取消的补全不应再访问数据库')
 
   const sideBar = load('views/main/workspace/SideBar.vue', { connectionServer: {}, sqlServer: {}, viewServer: {}, tableServer: {}, userServer: {}, tableSpaceServer: {},
     SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {}, database: {} })

@@ -93,6 +93,14 @@ public interface MetaData {
         return null;
     }
 
+    default List<Table> searchTables(Connection connection, String databaseName, String schemaName, String keyword) {
+        String search = keyword.trim().toLowerCase(java.util.Locale.ROOT);
+        return tables(connection, databaseName, schemaName, null).stream().filter(table ->
+                (table.getName() + " " + java.util.Objects.toString(table.getComment(), ""))
+                        .toLowerCase(java.util.Locale.ROOT).contains(search))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     /**
      * Querying view information.
      *

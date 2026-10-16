@@ -205,7 +205,7 @@ export default {
         hasNextPage: true,
         pageNo: 1,
         pageSize: 200,
-        skipCount: false,
+        skipCount: true,
         schemaName: item.schema,
         sql: this.dataInfo.dataSource.type === "ORACLE"
           ? `select t.*, t.rowid as "ROWID" from "${item.schema}"."${item.name}" t`
@@ -216,7 +216,7 @@ export default {
         total: 0,
         type: this.dataInfo.dataSource.type,
       };
-      sqlServer.executeSql(send).then((res) => {
+      sqlServer.viewTable(send).then((res) => {
         if (res.data[0]?.success) {
           this.$store.dispatch("workspaceData/setDataCurrentData", {
             pageId: this.pageId,

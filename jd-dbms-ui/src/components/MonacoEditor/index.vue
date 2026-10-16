@@ -50,11 +50,6 @@ export default {
   },
   data() {
     return {
-      editor: null,
-      suggestion: null,
-      formatProvider: null,
-      tableCache: {},
-      columnCache: {},
       ownerPageId: this.$route.params.id
     };
   },
@@ -86,6 +81,14 @@ export default {
       return this.$store.state.workspaceData.dataInfo;
     }
   },
+  created() {
+    // Monaco objects and metadata promises must not be traversed by Vue's observer.
+    this.editor = null;
+    this.suggestion = null;
+    this.formatProvider = null;
+    this.tableCache = {};
+    this.columnCache = {};
+  },
   mounted() {
     this.initEditor();
     // document.addEventListener("mousedown", this.mouseDownEditor);
@@ -93,7 +96,9 @@ export default {
   beforeDestroy() {
     if (this.editor) {
       this.clearMistake();
+      const model = this.editor.getModel();
       this.editor.dispose();
+      if (model) model.dispose();
       if (this.suggestion) {
         this.suggestion.dispose();
       }
@@ -178,6 +183,8 @@ export default {
         triggerCharacters: [".", " ", ","],
         provideCompletionItems: async (model, position, completionContext, token) => {
           if (model !== this.editor.getModel()) return { suggestions: [] };
+          await new Promise(resolve => setTimeout(resolve, 150));
+          if (token.isCancellationRequested || !this.editor || model !== this.editor.getModel()) return { suggestions: [] };
           const word = model.getWordUntilPosition(position);
           const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
             startColumn: word.startColumn, endColumn: word.endColumn };
@@ -185,8 +192,13 @@ export default {
             return { suggestions: this.columnList.map(item => ({ label: item, insertText: item,
               kind: monaco.languages.CompletionItemKind.Field, range })) };
           }
-          const before = model.getValue().slice(0, model.getOffsetAt(position));
-          const statement = sqlAtCursor(model.getValue(), model.getOffsetAt(position));
+          const fullText = model.getValue();
+          const offset = model.getOffsetAt(position);
+          // Completion needs nearby SQL only; execution still uses the complete script parser.
+          const start = Math.max(0, offset - 10000);
+          const contextSql = fullText.slice(start, offset + 10000);
+          const before = contextSql.slice(0, offset - start);
+          const statement = sqlAtCursor(contextSql, offset - start);
           const normalizeName = name => name.startsWith('"') ? name.slice(1, -1) :
             /^(ORACLE|DM)$/i.test(this.queryContext.databaseType || this.queryContext.type || '') ? name.toUpperCase() : name;
           const identifier = '(?:"[^"]+"|[a-zA-Z_][\\w$#]*)';
@@ -275,16 +287,14 @@ export default {
           pageNo: 1,
           pageSize: 1000
         };
-        let res = await tableServer.getTableList(send);
-        if (!res.success) return [];
-        this.tableCache[key] = res.data.data || [];
+        this.tableCache[key] = tableServer.getTreeTableList(send).then(res => {
+          if (!res.success) throw new Error(res.errorMessage || "读取表名失败");
+          return (res.data.data || []).map(item => ({ label: item.name,
+            kind: monaco.languages.CompletionItemKind.Constant,
+            insertText: '"' + item.name + '"', detail: "表" }));
+        }).catch(error => { delete this.tableCache[key]; throw error; });
       }
-      return this.tableCache[key].map(item => ({
-        label: item.name,
-        kind: monaco.languages.CompletionItemKind.Constant,
-        insertText: '"' + item.name + '"',
-        detail: "表"
-      }));
+      return this.tableCache[key];
     },
     // 字段名
     async getParamSuggest(schemaName, tableName) {
@@ -303,18 +313,14 @@ export default {
                 ? tableName.slice(1, tableName.length - 1)
                 : tableName
           };
-          let res = await tableServer.getAllFieldByTable(send);
-          if (!res.success) return [];
-          this.columnCache[key] = res.data || [];
+          this.columnCache[key] = tableServer.getAllFieldByTable(send).then(res => {
+            if (!res.success) throw new Error(res.errorMessage || "读取字段失败");
+            return (res.data || []).map(column => ({ label: column.name,
+              kind: monaco.languages.CompletionItemKind.Field,
+              insertText: '"' + column.name + '"', detail: "字段名" }));
+          }).catch(error => { delete this.columnCache[key]; throw error; });
       }
-      // 将自定义字段列表转换为代码提示的格式
-      const suggestions = this.columnCache[key].map(column => ({
-        label: column.name,
-        kind: monaco.languages.CompletionItemKind.Field, // 表示字段类型
-        insertText: '"' + column.name + '"',
-        detail: "字段名"
-      }));
-      return suggestions;
+      return this.columnCache[key];
     },
     // 数据库名
     getDBSuggest() {

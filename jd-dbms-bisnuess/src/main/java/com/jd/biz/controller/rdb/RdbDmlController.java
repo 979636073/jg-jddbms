@@ -333,6 +333,16 @@ public class RdbDmlController {
         String table = Chat2DBContext.getMetaData().getMetaDataName(request.getDatabaseName(),
                 request.getSchemaName(), request.getTableName());
         param.setSql(tableReadSql(request, table, Chat2DBContext.getConnectInfo().getDbType()));
+        if (Boolean.TRUE.equals(request.getCountOnly())) {
+            param.setPageNo(1);
+            param.setPageSize(1);
+            param.setPageSizeAll(false);
+            param.setSkipCount(true);
+            param.setIsColumn(false);
+            param.setOrderByColumn(null);
+            param.setIsAsc(null);
+            param.setQueryTimeoutSeconds(15);
+        }
         ListResult<ExecuteResultVO> result = dlTemplateService.execute(param).map(rdbWebConverter::dto2vo);
         try {
             dataSourceAccessBusinessService.checkActionPermission(dataSourceService.queryById(request.getDataSourceId()).getData(),
@@ -345,7 +355,9 @@ public class RdbDmlController {
 
     static String tableReadSql(DmlTableRequest request, String table, String dbType) {
         String columns = "t.*";
-        if (!Boolean.TRUE.equals(request.getIsView())) {
+        if (Boolean.TRUE.equals(request.getCountOnly())) {
+            columns = "COUNT(*) AS TOTAL";
+        } else if (!Boolean.TRUE.equals(request.getIsView())) {
             if ("DM".equals(dbType)) columns = "t.*, t.rowid";
             else if ("ORACLE".equals(dbType)) columns = "t.*, t.rowid AS \"ROWID\"";
         }

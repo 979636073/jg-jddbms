@@ -114,6 +114,10 @@ public class SQLExecutor implements CommandExecutor {
         log.debug("Executing SQL (length={})", StringUtils.length(sql));
         try (Statement stmt = connection.createStatement();) {
             configureStatement(stmt, queryTimeoutSeconds);
+            if (Chat2DBContext.getConnectInfo() != null
+                    && "ORACLE".equalsIgnoreCase(Chat2DBContext.getConnectInfo().getDbType())) {
+                stmt.setFetchSize(200);
+            }
             boolean query = stmt.execute(sql);
             // Represents the query
             if (query) {
@@ -418,7 +422,7 @@ public class SQLExecutor implements CommandExecutor {
         ExecuteResult executeResult = ExecuteResult.builder().sql(sql).success(Boolean.TRUE).build();
 //        log.info("之前事务提交状态==> {},", connection.getAutoCommit());
         try (Statement stmt = connection.createStatement()) {
-            stmt.setFetchSize(EasyToolsConstant.MAX_PAGE_SIZE);
+            stmt.setFetchSize(count == null ? 100 : Math.max(1, Math.min(count, 200)));
             configureStatement(stmt, queryTimeoutSeconds);
             if (offset != null && count != null) {
                 stmt.setMaxRows(offset + count);

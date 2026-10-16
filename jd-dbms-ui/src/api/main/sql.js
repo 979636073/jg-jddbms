@@ -130,6 +130,13 @@ function viewTable(data) {
   })
 }
 
+async function countTable(data) {
+  const response = await viewTable({ ...data, countOnly: true, skipCount: true });
+  const result = response?.data?.[0];
+  if (!response?.success || !result?.success) throw new Error(result?.message || response?.errorMessage || '统计总数失败');
+  return Number(result.dataList[0][1]);
+}
+
 /** 获取库的所有表 */
 function getAllTableList(data) {
   return request({
@@ -775,6 +782,7 @@ export default {
   executeSql,
   executeJDBCSql,
   viewTable,
+  countTable,
   getAllTableList,
   getAllFieldByTable,
   executeUpdateDataSql,

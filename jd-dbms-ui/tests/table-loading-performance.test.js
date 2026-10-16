@@ -38,9 +38,9 @@ async function run() {
   finish({ success: true, data: { data: [] } })
   await afterFinish
 
-  assert(sideBarSource.includes('skipCount: false'), '打开表数据应返回精确总行数与完整页码')
+  assert(sideBarSource.includes('skipCount: true'), '打开表首屏不能等待全表计数')
   const overviewSource = fs.readFileSync(path.join(__dirname, '../src/views/main/workspace/components/mainListView/tableViewList.vue'), 'utf8')
-  assert(overviewSource.includes('skipCount: false'), '从总览打开表数据也应返回精确总行数')
+  assert(overviewSource.includes('skipCount: true'), '从总览打开表也不能等待全表计数')
 
   const editorFile = path.join(__dirname, '../src/views/main/workspace/components/renderTableEditor/index.vue')
   const editorScript = fs.readFileSync(editorFile, 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1]

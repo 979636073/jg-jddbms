@@ -136,6 +136,28 @@ public class SQLExecutorPolicyTest {
     }
 
     @Test
+    public void oracleCatalogShouldFetchRowsInBatches() {
+        AtomicInteger fetchSize = new AtomicInteger();
+        Statement statement = proxy(Statement.class, (method, args) -> {
+            if ("setFetchSize".equals(method)) fetchSize.set((Integer) args[0]);
+            if ("execute".equals(method)) return true;
+            if ("getResultSet".equals(method)) return proxy(ResultSet.class, (m, a) -> null);
+            return null;
+        });
+        Connection connection = proxy(Connection.class, (method, args) -> "createStatement".equals(method) ? statement : null);
+        ConnectInfo info = new ConnectInfo();
+        info.setDbType("ORACLE");
+        info.setDriverConfig(new com.jd.spi.config.DriverConfig());
+        Chat2DBContext.putContext(info);
+        try {
+            SQLExecutor.getInstance().execute(connection, "SELECT * FROM SYS.ALL_OBJECTS", rs -> "OK");
+            assertEquals(200, fetchSize.get());
+        } finally {
+            Chat2DBContext.detachContext();
+        }
+    }
+
+    @Test
     public void shouldStopAfterReturnedFailureWhenErrorExecutionIsDisabled() {
         Command command = new Command();
         command.setIsErrorExecute(true);

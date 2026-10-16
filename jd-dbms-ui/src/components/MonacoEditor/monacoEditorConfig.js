@@ -45,6 +45,7 @@ export const editorDefaultOptions = {
   autoIndex: true,
   language: 'sql', // 语言类型
   tabCompletion: 'on',
+  quickSuggestionsDelay: 200,
   cursorSmoothCaretAnimation: true,
   formatOnPaste: true,
   mouseWheelZoom: true,

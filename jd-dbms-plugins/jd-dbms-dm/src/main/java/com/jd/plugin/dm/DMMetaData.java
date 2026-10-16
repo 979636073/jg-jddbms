@@ -57,6 +57,11 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
+    public List<Table> searchTables(Connection connection, String databaseName, String schemaName, String keyword) {
+        return searchCatalogTables(connection, databaseName, schemaName, keyword);
+    }
+
+    @Override
     public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName) {
         String sql = "SELECT t.TABLE_NAME, c.COMMENTS FROM ALL_TABLES t " +
                 "LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME " +
@@ -1442,17 +1447,13 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
 
 
     private static String SELECT_TABLE_VIEW_SQL = "select object_name, owner, status, created, last_ddl_time, object_type " +
-            "from sys.all_objects where object_type = 'VIEW' and owner = '%s' " +
-            "union all select m.mview_name, s.name, o.status, o.created, o.last_ddl_time, 'MATERIALIZED VIEW' " +
-            "from ALL_MVIEWS m join sys.sysobjects s on s.id = m.schid and s.type$ = 'SCH' " +
-            "left join sys.all_objects o on o.owner = s.name " +
-            "and o.object_name = m.mview_name and o.object_type = 'MATERIALIZED VIEW' where s.name = '%s' " +
-            "order by object_name";
+            "from SYS.ALL_OBJECTS where owner = '%s' " +
+            "and object_type IN ('VIEW', 'MATERIALIZED VIEW') order by object_name";
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {
         List<Table> tableSpaces = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, sqlLiteral(schemaName), sqlLiteral(schemaName)), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, sqlLiteral(schemaName)), resultSet -> {
             while (resultSet.next()) {
                 Table tableSpace = new Table();
                 TableDetails tableDetails = new TableDetails();

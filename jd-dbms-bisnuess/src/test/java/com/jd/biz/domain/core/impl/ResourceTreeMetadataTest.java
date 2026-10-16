@@ -42,14 +42,14 @@ public class ResourceTreeMetadataTest {
     }
 
     @Test
-    public void dmMaterializedViewsShouldResolveSchemaBySchid() {
+    public void dmMaterializedViewsShouldNotRequireAllMviews() {
         Query query = new Query();
         List<Table> views = new DMMetaData().tableViews(query.connection(), "DM", "APP'QA");
         assertEquals(1, query.executions);
-        assertTrue(query.sql.contains("s.id = m.schid"));
-        assertTrue(query.sql.contains("s.name = 'APP''QA'"));
-        assertFalse(query.sql.contains("m.owner"));
-        assertTrue(query.sql.contains("left join sys.all_objects"));
+        assertTrue(query.sql.contains("owner = 'APP''QA'"));
+        assertTrue(query.sql.contains("SYS.ALL_OBJECTS"));
+        assertFalse(query.sql.toUpperCase().contains("ALL_MVIEWS"));
+        assertTrue(query.sql.contains("'VIEW', 'MATERIALIZED VIEW'"));
         assertEquals("MATERIALIZED VIEW", views.get(0).getTableDetails().getType());
     }
 
@@ -58,10 +58,25 @@ public class ResourceTreeMetadataTest {
         Query query = new Query();
         List<Table> views = new OracleMetaData().tableViews(query.connection(), "ORCL", "APP'QA");
         assertEquals(1, query.executions);
-        assertTrue(query.sql.contains("ALL_MVIEWS m left join ALL_OBJECTS"));
-        assertTrue(query.sql.contains("m.owner = 'APP''QA'"));
-        assertTrue(query.sql.contains("union all"));
+        assertTrue(query.sql.contains("SYS.ALL_OBJECTS"));
+        assertTrue(query.sql.contains("owner = 'APP''QA'"));
+        assertFalse(query.sql.toUpperCase().contains("ALL_MVIEWS"));
         assertEquals("MATERIALIZED VIEW", views.get(0).getTableDetails().getType());
+    }
+
+    @Test
+    public void commentSearchShouldBindLiteralAndRetainSchemaForLazyExpansion() {
+        for (com.jd.spi.MetaData metadata : new com.jd.spi.MetaData[]{new DMMetaData(), new OracleMetaData()}) {
+            Query query = new Query();
+            List<Table> tables = metadata.searchTables(query.connection(), "DB", null, "图片'%_");
+            assertEquals(1, query.executions);
+            assertEquals("图片'%_", query.parameters.get(0));
+            assertTrue(query.sql.contains("UPPER(COMMENTS)"));
+            assertFalse(query.sql.contains("图片"));
+            assertEquals("OBJECT_1", tables.get(0).getSchemaName());
+            assertEquals("DB", tables.get(0).getDatabaseName());
+            assertEquals("comment", tables.get(0).getComment());
+        }
     }
 
     private static class Query {

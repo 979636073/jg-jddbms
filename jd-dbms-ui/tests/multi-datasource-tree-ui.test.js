@@ -26,7 +26,7 @@ const { component: sideBar, source: sideBarSource } = loadComponent(sideBarFile,
 const descriptor = compiler.parseComponent(sideBarSource)
 const template = compiler.compile(descriptor.template.content)
 assert.deepStrictEqual(template.errors, [], '多数据源树模板应可编译')
-assert(sideBarSource.includes('placeholder="搜索过滤库/表/用户..."'), '左树应提供统一资源搜索入口')
+assert(sideBarSource.includes('placeholder="搜索库/表/注释/用户..."'), '左树应提供包含注释的统一资源搜索入口')
 assert(sideBarSource.includes(':load="loadResourceNode"'), '左树应按层级懒加载')
 assert(sideBarSource.includes('@node-contextmenu="handleResourceContextMenu"'), '表节点应保留数据模板、复制和新窗口菜单')
 assert(sideBarSource.includes('connection-status'), '数据源根节点应显示连接状态')

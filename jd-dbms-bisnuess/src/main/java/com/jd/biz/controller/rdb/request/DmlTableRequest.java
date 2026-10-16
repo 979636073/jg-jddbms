@@ -64,6 +64,8 @@ public class DmlTableRequest extends DataSourceBaseRequest implements DataSource
 
     private Boolean skipCount = false;
 
+    private Boolean countOnly = false;
+
     private Boolean refresh = false;
 
 }

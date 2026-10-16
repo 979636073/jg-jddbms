@@ -143,4 +143,13 @@ public class RdbDmlControllerTest {
             } catch (RuntimeException expected) { }
         }
     }
+
+    @Test
+    public void tableCountKeepsFilterWithoutSelectingBlobOrRowId() {
+        DmlTableRequest request = new DmlTableRequest();
+        request.setCountOnly(true);
+        request.setFilterSql("ID > 10");
+        assertEquals("SELECT COUNT(*) AS TOTAL FROM \"APP\".\"IMAGES\" t WHERE ID > 10",
+                RdbDmlController.tableReadSql(request, "\"APP\".\"IMAGES\"", "ORACLE"));
+    }
 }

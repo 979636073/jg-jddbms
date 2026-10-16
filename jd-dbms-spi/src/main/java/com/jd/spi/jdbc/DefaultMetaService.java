@@ -55,6 +55,36 @@ public class DefaultMetaService implements MetaData {
         return SQLExecutor.getInstance().tables(connection, StringUtils.isEmpty(databaseName) ? null : databaseName, StringUtils.isEmpty(schemaName) ? null : schemaName, tableName, new String[]{"TABLE", "SYSTEM TABLE"});
     }
 
+    protected List<Table> searchCatalogTables(Connection connection, String databaseName, String schemaName, String keyword) {
+        String sql = "SELECT OWNER, TABLE_NAME, COMMENTS FROM SYS.ALL_TAB_COMMENTS " +
+                "WHERE TABLE_TYPE = 'TABLE' AND (INSTR(UPPER(TABLE_NAME), ?) > 0 OR INSTR(UPPER(COMMENTS), ?) > 0) " +
+                (StringUtils.isBlank(schemaName) ? "" : "AND OWNER = ? ") +
+                "AND TABLE_NAME NOT LIKE 'MTAB$%' AND TABLE_NAME NOT LIKE 'SREF_CON_TAB%' " +
+                "AND TABLE_NAME NOT LIKE 'BIN$%' ORDER BY OWNER, TABLE_NAME";
+        List<Table> tables = new java.util.ArrayList<>();
+        try (java.sql.PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setQueryTimeout(10);
+            statement.setFetchSize(200);
+            String pattern = keyword.trim().toUpperCase(java.util.Locale.ROOT);
+            statement.setString(1, pattern);
+            statement.setString(2, pattern);
+            if (StringUtils.isNotBlank(schemaName)) statement.setString(3, schemaName);
+            try (java.sql.ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    Table table = new Table();
+                    table.setName(rows.getString("TABLE_NAME"));
+                    table.setSchemaName(rows.getString("OWNER"));
+                    table.setComment(rows.getString("COMMENTS"));
+                    table.setDatabaseName(databaseName);
+                    tables.add(table);
+                }
+            }
+            return tables;
+        } catch (java.sql.SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Override
     public List<TableIndex> getConstraintsData(Connection connection, String databaseName, String schemaName, String tableName) {
         return null;

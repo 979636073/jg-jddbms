@@ -128,8 +128,11 @@ public class TableController {
 
     @GetMapping("/tree")
     public WebPageResult<TableVO> tree(@Valid TableBriefQueryRequest request) {
-        List<Table> tables = Chat2DBContext.getMetaData().tables(Chat2DBContext.getConnection(),
-                request.getDatabaseName(), request.getSchemaName(), null);
+        List<Table> tables = StringUtils.isNotBlank(request.getSearchKey())
+                ? Chat2DBContext.getMetaData().searchTables(Chat2DBContext.getConnection(),
+                    request.getDatabaseName(), request.getSchemaName(), request.getSearchKey())
+                : Chat2DBContext.getMetaData().tables(Chat2DBContext.getConnection(),
+                    request.getDatabaseName(), request.getSchemaName(), null);
         List<TableVO> objects = rdbWebConverter.tableDto2vo(tables);
         return WebPageResult.of(objects, (long) objects.size(), 1, objects.size());
     }

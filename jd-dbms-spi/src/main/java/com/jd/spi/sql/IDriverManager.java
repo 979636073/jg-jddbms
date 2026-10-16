@@ -115,10 +115,21 @@ public class IDriverManager {
 
     static void applyConnectionDefaults(String url, Properties info) {
         if (StringUtils.startsWithIgnoreCase(url, "jdbc:oracle:")) {
+            info.putIfAbsent("oracle.net.CONNECT_TIMEOUT", "5000");
+            info.putIfAbsent("oracle.net.OUTBOUND_CONNECT_TIMEOUT", "5000");
+            info.putIfAbsent("oracle.jdbc.loginTimeout", "5");
+            // Fetch LOB locators/lengths only; load their contents on explicit preview/download.
+            info.putIfAbsent("oracle.jdbc.defaultLobPrefetchSize", "0");
             info.putIfAbsent(ORACLE_TIMEZONE_AS_REGION, "false");
             if (System.getProperty(ORACLE_TIMEZONE_AS_REGION) == null) {
                 System.setProperty(ORACLE_TIMEZONE_AS_REGION, "false");
             }
+        } else if (StringUtils.startsWithIgnoreCase(url, "jdbc:dm:")
+                || StringUtils.startsWithIgnoreCase(url, "jdbc:mysql:")) {
+            info.putIfAbsent("connectTimeout", "5000");
+        } else if (StringUtils.startsWithIgnoreCase(url, "jdbc:postgresql:")
+                || StringUtils.startsWithIgnoreCase(url, "jdbc:kingbase8:")) {
+            info.putIfAbsent("connectTimeout", "5");
         }
     }
 

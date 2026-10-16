@@ -10,7 +10,7 @@ assert.deepStrictEqual(compiler.compile(descriptor.template.content).errors, [])
 assert(descriptor.template.content.includes('<vue-easy-tree'), '整树应使用参考项目同款虚拟滚动')
 assert(!descriptor.script.content.includes('下一批'), '所有对象目录都不能出现下一批节点')
 const context = {
-  module: { exports: {} }, connectionServer: {}, sqlServer: {}, viewServer: {},
+  module: { exports: {} }, setTimeout, clearTimeout, connectionServer: {}, sqlServer: {}, viewServer: {},
   tableServer: {}, userServer: {}, tableSpaceServer: {},
   SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {},
   SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {},
@@ -106,6 +106,22 @@ async function run() {
   assert.strictEqual(tree.getNode('last'), original, '反复搜索不能销毁已经加载的节点')
   assert.strictEqual(tree.getCurrentKey(), 'last', '搜索保持原选中状态')
   assert.strictEqual(tree.getNode('tables').childNodes.length, 10001)
+  const commentNode = { label: 'T_10001', comment: '图片附件测试' }
+  assert(methods.resourceFilterNode('图片', commentNode, { data: commentNode }))
+  assert(!methods.resourceFilterNode('不匹配', commentNode, { data: commentNode }))
+  const sourceA = { key: 'a', data: { dataSource: { id: 1 } }, expanded: false, loaded: true, visible: true, childNodes: [] }
+  const sourceB = { key: 'b', data: { dataSource: { id: 2 } }, expanded: true, loaded: true, visible: true, childNodes: [] }
+  const nodes = { a: sourceA, b: sourceB }
+  const searchState = { ...methods, resourceFilter: '图片', databaseTree: [{ key: 'a' }, { key: 'b' }],
+    $refs: { resourceTree: { getNode: key => nodes[key], filter() { sourceA.expanded = sourceB.expanded = true } } } }
+  searchState.handleResourceFilter('图片')
+  assert(sourceA.expanded, '搜索可临时展开原来关闭的数据源')
+  searchState._searchSelectedDataSourceId = 2
+  searchState.applyResourceFilter('图片')
+  assert(!sourceA.expanded, '选择其他数据源后，重应用过滤不能重新展开搜索数据源')
+  searchState.resourceFilter = ''
+  searchState.handleResourceFilter('')
+  assert(!sourceA.expanded && sourceB.expanded, '清空搜索必须恢复搜索前各数据源的展开状态')
   tree.$destroy()
 
   const node = state.createObjectNode(groups.find(group => group.groupType === 'materializedViews'),
