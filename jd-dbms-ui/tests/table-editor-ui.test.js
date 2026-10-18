@@ -31,9 +31,8 @@ assert(/\.el-table__body-wrapper\s*\{[^}]*flex: 1 1 0;[^}]*overflow: auto !impor
 const tableEditorFile = path.join(__dirname, '../src/views/main/workspace/components/renderTableEditor/index.vue')
 const tableEditorSource = compiler.parseComponent(fs.readFileSync(tableEditorFile, 'utf8'))
 const tableEditorTemplate = tableEditorSource.template.content
-assert(tableEditorTemplate.indexOf('class="back-overview-button"') < tableEditorTemplate.indexOf('<el-tabs'), '返回模式总览应位于页签内容上方')
-assert(tableEditorTemplate.includes('class="table-save-button"'), '表结构保存按钮应使用独立定位，避免被返回按钮遮挡')
-assert(/\.table-save-button\s*\{[^}]*right: 160px;[^}]*top: 17px;/s.test(tableEditorSource.styles[0].content), '表结构保存按钮应与返回按钮错开')
+assert(tableEditorTemplate.includes('class="table-save-button"'), '表结构保存按钮应使用独立定位')
+assert(/\.table-save-button\s*\{[^}]*right: 20px;[^}]*top: 17px;/s.test(tableEditorSource.styles[0].content), '表结构保存按钮应在右上角对齐')
 
 const kind = component.methods.editorKind
 assert.strictEqual(kind({ dataType: 'CLOB' }), 'text')

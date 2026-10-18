@@ -114,9 +114,6 @@ export default {
     }
   },
   methods: {
-    backToOverview() {
-      this.$emit("restoreOverview", this.currentConfig?.uniqueData || {});
-    },
     initData() {
       this.currentConfig = this.queryResultData;
       if (!this.currentConfig?.uniqueData?.dataSourceId) return Promise.resolve();
@@ -554,15 +551,6 @@ export default {
 
 <template>
   <div class="table_editor">
-    <el-button
-      class="back-overview-button"
-      size="small"
-      type="primary"
-      plain
-      @click="backToOverview"
-    >
-      <i class="el-icon-back"></i> 返回模式总览
-    </el-button>
     <el-tabs v-model="activeName" @tab-change="handleClick">
       <el-tab-pane label="数据" name="sixth">
         <renderSearchResult :queryResultData="queryResultData" ref="renderSearchResult"></renderSearchResult>
@@ -670,7 +658,7 @@ export default {
   height: 100%;
   ::v-deep .el-tabs__header {
     position: relative;
-    padding-right: 145px;
+    padding-right: 80px;
   }
   ::v-deep .el-tabs__content {
     height: calc(100% - 55px);
@@ -679,15 +667,9 @@ export default {
     }
   }
 }
-.back-overview-button {
-  position: absolute;
-  right: 20px;
-  top: 17px;
-  z-index: 2;
-}
 .table-save-button {
   position: absolute;
-  right: 160px;
+  right: 20px;
   top: 17px;
   z-index: 2;
 }
