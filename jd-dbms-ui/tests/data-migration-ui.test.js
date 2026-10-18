@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const source = fs.readFileSync(path.join(__dirname, '../src/views/main/dataMigration/index.vue'), 'utf8')
 const page = compiler.parseComponent(source)
 assert.deepStrictEqual(compiler.compile(page.template.content).errors, [])
@@ -251,7 +251,7 @@ async function run() {
   assert.strictEqual(state.task.id, 2, '迟到任务响应不能覆盖另一任务')
   state.task.status = 'MIG_COMPLETED'; state.schedulePolling(); assert.strictEqual(state.pollTimer, null)
   state.task.status = 'MIG_RUNNING'; state.schedulePolling(); assert.strictEqual(state.pollTimer, 99)
-  component.beforeDestroy.call(state); assert.strictEqual(state.pollTimer, null)
+  component.beforeUnmount.call(state); assert.strictEqual(state.pollTimer, null)
 
   const apiSource = fs.readFileSync(path.join(__dirname, '../src/api/main/migration.js'), 'utf8')
   const api = { request: () => Promise.resolve({ success: false, errorMessage: '阻断项' }) }
@@ -263,8 +263,8 @@ async function run() {
   const tabs = compiler.compile(page.template.content).ast
   const visit = (node, callback) => { if (!node || node.type !== 1) return; callback(node); (node.children || []).forEach(child => visit(child, callback)); (node.ifConditions || []).slice(1).forEach(condition => visit(condition.block, callback)) }
   const panes = []; visit(tabs, node => { if (node.tag === 'el-tab-pane') panes.push(node) })
-  assert.deepStrictEqual(panes.map(node => node.attrsMap.label), ['对象映射', '执行设置'])
-  const modelFields = node => { const fields = []; visit(node, child => { if (child.attrsMap['v-model']) fields.push(child.attrsMap['v-model']) }); return fields }
+  assert.deepStrictEqual(panes.map(node => compiler.attribute(node, 'label')), ['对象映射', '执行设置'])
+  const modelFields = node => { const fields = []; visit(node, child => { const model = compiler.directive(child, 'model'); if (model) fields.push(model.exp.content) }); return fields }
   assert(modelFields(panes[0]).includes('config.targetSchema') && !modelFields(panes[0]).includes('config.commitSize'), '对象映射不能混杂执行参数')
   for (const field of ['fetchSize', 'commitSize', 'parallelism', 'rowsPerSecond', 'targetTablespace', 'errorPolicy']) assert(modelFields(panes[1]).includes('config.' + field), '执行设置不得丢失字段 ' + field)
   const cached = create(); cached.config.commitSize = 700; cached.config.targetSchema = 'TARGET'; cached.config.tables = [{ source: 'A', target: 'RENAMED' }]

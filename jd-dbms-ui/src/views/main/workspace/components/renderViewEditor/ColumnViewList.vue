@@ -2,7 +2,7 @@
   <div>
     <!-- <el-button type="primary" size="small" style="margin-bottom:10px" @click="updateSave">保存</el-button> -->
     <el-table
-      size="mini"
+      size="small"
       :data="tableData"
       :cell-class-name="getRowCloumn"
       row-key="key"
@@ -10,9 +10,9 @@
       height="700"
     >
     <el-table-column prop="name" label="列名称">
-      <template slot-scope="scope">
+      <template #default="scope">
           <template>
-            <el-input size="mini" v-model="scope.row.name" @focus="startEdit(scope.row)" @blur="inputBlur(scope.row)" maxlength="50" show-word-limit></el-input>
+            <el-input size="small" v-model="scope.row.name" @focus="startEdit(scope.row)" @blur="inputBlur(scope.row)" maxlength="50" show-word-limit></el-input>
           </template>
         </template>
        </el-table-column>

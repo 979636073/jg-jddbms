@@ -546,7 +546,7 @@ export default {
       );
     }
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.cancelRelationQuery(false);
   }
 };
@@ -556,7 +556,7 @@ export default {
   <div class="table_editor">
     <el-button
       class="back-overview-button"
-      size="mini"
+      size="small"
       type="primary"
       plain
       @click="backToOverview"
@@ -638,7 +638,7 @@ export default {
     <el-button
       class="table-save-button"
       @click="submit()"
-      size="mini"
+      size="small"
       type="primary"
       plain
       v-if=" activeName == 'second' || activeName == 'third' || activeName == 'first'"
@@ -647,7 +647,7 @@ export default {
       <el-button
         style="position: absolute; right: 60px; top: 12px"
         @click="executeUpdateDataSql"
-        size="mini"
+        size="small"
         type="primary"
         plain
       >

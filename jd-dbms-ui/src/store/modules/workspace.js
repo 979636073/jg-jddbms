@@ -1,4 +1,4 @@
-import { Message } from "element-ui";
+import { ElMessage as Message } from 'element-plus';
 import historyServer from "@/api/main/history"
 import connectionServer from "@/api/main/connection";
 const workspace = {

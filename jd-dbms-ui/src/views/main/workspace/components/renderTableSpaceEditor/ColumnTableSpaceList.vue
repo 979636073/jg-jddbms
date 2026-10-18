@@ -10,35 +10,35 @@
       >
         <el-table-column prop="path" label="表空间" show-overflow-tooltip></el-table-column>
         <el-table-column prop="totalSize" label="大小" sortable>
-          <template slot-scope="scope">
+          <template #default="scope">
           <span>{{ scope.row.totalSize + "MB" }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="freeSize" label="空闲" sortable>
-          <template slot-scope="scope">
+          <template #default="scope">
           <span>{{ scope.row.freeSize + "MB" }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="useSize" label="占用">
-          <template slot-scope="scope">
+          <template #default="scope">
           <span>{{ scope.row.useSize + "MB" }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="expandUpperLimit" label="最大值">
-          <template slot-scope="scope">
+          <template #default="scope">
           <span>{{ scope.row.expandUpperLimit + "MB" }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="usageRate" label="最大占用比">
-          <template slot-scope="scope">
+          <template #default="scope">
           <span>{{ scope.row.usageRate + "%" }}</span>
           </template>
         </el-table-column>
         <el-table-column width="250" label="操作">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button
-              @click.native="editData(scope.row)"
-              size="mini"
+              @click="editData(scope.row)"
+              size="small"
               type="text"
               plain
             >

@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 
 const workspaceFile = path.join(__dirname, '../src/views/main/workspace/SideBar.vue')
 const panelFile = path.join(__dirname, '../src/views/main/workspace/components/renderViewEditor/ViewGrantPanel.vue')
@@ -29,8 +29,8 @@ async function main() {
   const sidebar = readComponent(workspaceFile)
   const template = compiler.compile(sidebar.template.content)
   assert.deepStrictEqual(template.errors, [])
-  const resourceTree = findNode(template.ast, node => node.tag === 'vue-easy-tree' && node.attrsMap.class === 'resource-tree')
-  assert(resourceTree && resourceTree.events && resourceTree.events['node-click'], '资源树对象点击入口不存在')
+  const resourceTree = findNode(template.ast, node => node.tag === 'vue-easy-tree' && compiler.attribute(node, 'class') === 'resource-tree')
+  assert(resourceTree && compiler.directive(resourceTree, 'on', 'node-click'), '资源树对象点击入口不存在')
 
   const panel = readComponent(panelFile)
   const source = panel.script.content

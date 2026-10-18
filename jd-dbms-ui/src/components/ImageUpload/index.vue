@@ -21,7 +21,7 @@
     </el-upload>
 
     <!-- 上传提示 -->
-    <div class="el-upload__tip" slot="tip" v-if="showTip">
+    <div class="el-upload__tip"  v-if="showTip">
       请上传
       <template v-if="fileSize"> 大小不超过 <b style="color: #f56c6c">{{ fileSize }}MB</b> </template>
       <template v-if="fileType"> 格式为 <b style="color: #f56c6c">{{ fileType.join("/") }}</b> </template>
@@ -29,7 +29,7 @@
     </div>
 
     <el-dialog
-      :visible.sync="dialogVisible"
+      v-model="dialogVisible"
       title="预览"
       width="800"
       append-to-body

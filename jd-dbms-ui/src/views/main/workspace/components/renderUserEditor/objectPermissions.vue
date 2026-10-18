@@ -5,39 +5,39 @@
         <el-option v-for="item in visibleSchemaOptions" :key="item.name" :label="item.name" :value="item.name" />
       </el-select>
       <div class="object-tools">
-        <el-checkbox :value="allObjectsSelected" :indeterminate="someObjectsSelected" :disabled="!objects.length || loading" @change="toggleAllObjects">全选对象</el-checkbox>
+        <el-checkbox :model-value="allObjectsSelected" :indeterminate="someObjectsSelected" :disabled="!objects.length || loading" @change="toggleAllObjects">全选对象</el-checkbox>
         <span>已选 {{ selectedNames.length }} / {{ objects.length }}</span>
       </div>
       <el-input v-model.trim="objectSearch" size="small" clearable placeholder="搜索对象" @input="objectPage = 1" />
       <el-scrollbar class="object-list">
         <div v-for="item in pagedObjects" :key="item.name" class="object-row" :class="{ active: focusedName === item.name }" @click="focusObject(item)">
           <span class="object-toggle" @click.stop>
-            <el-checkbox :value="selectedNames.includes(item.name)" :disabled="loading" @change="checked => toggleObject(item, checked)" />
+            <el-checkbox :model-value="selectedNames.includes(item.name)" :disabled="loading" @change="checked => toggleObject(item, checked)" />
           </span>
           <span class="object-name" :title="item.name">{{ item.name }}</span>
         </div>
       </el-scrollbar>
       <div v-if="filteredObjects.length > objectPageSize" class="object-pages">
-        <el-button size="mini" :disabled="objectPage === 1" @click="objectPage--">上一页</el-button>
+        <el-button size="small" :disabled="objectPage === 1" @click="objectPage--">上一页</el-button>
         <span>{{ objectPage }} / {{ objectPageCount }}</span>
-        <el-button size="mini" :disabled="objectPage >= objectPageCount" @click="objectPage++">下一页</el-button>
+        <el-button size="small" :disabled="objectPage >= objectPageCount" @click="objectPage++">下一页</el-button>
       </div>
     </div>
     <div class="permission-panel" v-loading="loading">
       <div class="permission-tools">
         <span>{{ selectedNames.length ? `所选对象的权限（${selectedNames.length} 个）` : '请选择对象' }}</span>
-        <el-checkbox :value="allPrivilegesSelected" :indeterminate="somePrivilegesSelected" :disabled="!tableData.length || loading" @change="toggleAllPrivileges">全选权限</el-checkbox>
-        <el-button size="mini" :disabled="!tableData.length || loading" @click="setAllPrivileges(false)">全部撤销</el-button>
+        <el-checkbox :model-value="allPrivilegesSelected" :indeterminate="somePrivilegesSelected" :disabled="!tableData.length || loading" @change="toggleAllPrivileges">全选权限</el-checkbox>
+        <el-button size="small" :disabled="!tableData.length || loading" @click="setAllPrivileges(false)">全部撤销</el-button>
       </div>
       <el-table :data="tableData" border height="calc(100% - 92px)" empty-text="请选择左侧对象">
         <el-table-column prop="desc" label="权限" min-width="180" />
         <el-table-column label="授权" min-width="110">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-checkbox v-model="scope.row.rule" :indeterminate="scope.row.mixedRule" @change="checked => changePrivilege(scope.row, 'rule', checked)" />
           </template>
         </el-table-column>
         <el-table-column label="转授" min-width="110">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-checkbox v-model="scope.row.toRule" :indeterminate="scope.row.mixedToRule" :disabled="!scope.row.rule && !scope.row.mixedRule" @change="checked => changePrivilege(scope.row, 'toRule', checked)" />
           </template>
         </el-table-column>

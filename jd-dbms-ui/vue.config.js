@@ -43,7 +43,7 @@ module.exports = {
   devServer: {
     host: '0.0.0.0',
     port: port,
-    open: true,
+    open: false,
     proxy: {
       // detail: https://cli.vuejs.org/config/#devserver-proxy
       [process.env.VUE_APP_BASE_API]: {
@@ -63,7 +63,8 @@ module.exports = {
         }
       }
     },
-    disableHostCheck: true
+    allowedHosts: 'all',
+    client: { overlay: { errors: true, warnings: false } }
   },
   css: {
     loaderOptions: {
@@ -75,24 +76,32 @@ module.exports = {
   configureWebpack: {
     resolve: {
       alias: {
-        '@': resolve('src')
-      }
+        '@': resolve('src'),
+        'vue$': '@vue/compat'
+      },
+      fallback: { path: require.resolve('path-browserify') }
+    },
+    module: {
+      rules: [{ test: /\.m?js$/, resolve: { fullySpecified: false } }]
     },
     plugins: [
       // http://doc.ruoyi.vip/ruoyi-vue/other/faq.html#使用gzip解压缩静态文件
       new CompressionPlugin({
-        cache: false,                   // 不启用文件缓存
         test: /\.(js|css|html)?$/i,     // 压缩文件格式
-        filename: '[path].gz[query]',   // 压缩后的文件名
+        filename: '[path][base].gz',
         algorithm: 'gzip',              // 使用gzip压缩
         minRatio: 0.8                   // 压缩率小于1才会压缩
       }),
       new MonacoWebpackPlugin({
-        language: ['sql']
+        languages: ['sql']
       })
     ],
   },
   chainWebpack(config) {
+    config.module.rule('vue').use('vue-loader').tap(options => ({
+      ...options,
+      compilerOptions: { ...options.compilerOptions, compatConfig: { MODE: 2 } }
+    }))
     config.plugins.delete('preload') // TODO: need test
     config.plugins.delete('prefetch') // TODO: need test
 
@@ -114,15 +123,6 @@ module.exports = {
       .end()
 
     config.when(process.env.NODE_ENV !== 'development', config => {
-          config
-            .plugin('ScriptExtHtmlWebpackPlugin')
-            .after('html')
-            .use('script-ext-html-webpack-plugin', [{
-            // `runtime` must same as runtimeChunk name. default is `runtime`
-              inline: /runtime\..*\.js$/
-            }])
-            .end()
-
           config.optimization.splitChunks({
             chunks: 'all',
             cacheGroups: {
@@ -134,7 +134,7 @@ module.exports = {
               },
               elementUI: {
                 name: 'chunk-elementUI', // split elementUI into a single package
-                test: /[\\/]node_modules[\\/]_?element-ui(.*)/, // in order to adapt to cnpm
+                test: /[\\/]node_modules[\\/]element-plus[\\/]/,
                 priority: 20 // the weight needs to be larger than libs and app or it will be packaged into libs or app
               },
               commons: {

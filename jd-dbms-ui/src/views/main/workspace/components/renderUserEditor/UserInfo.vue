@@ -209,7 +209,7 @@ export default {
     </div>
     <el-form
       ref="basicForm"
-      size="mini"
+      size="small"
       :model="basicForm"
       label-width="100px"
       class="basicForm"
@@ -220,7 +220,7 @@ export default {
       <el-form-item label="默认表空间" style="margin-left: 15px">
         <el-select
           v-model="basicForm.defaultTableSpace"
-          size="mini"
+          size="small"
           placeholder="请选择表空间"
         >
           <el-option
@@ -234,7 +234,7 @@ export default {
       <el-form-item label="临时表空间" style="margin-left: 15px">
         <el-select
           v-model="basicForm.tempTableSpace"
-          size="mini"
+          size="small"
           placeholder="请选择表空间"
         >
           <el-option
@@ -257,21 +257,21 @@ export default {
         </el-switch>
       </el-form-item>
        <el-form-item style="margin-left: 15px">
-        <el-button type="primary" size="mini" @click="editPassword"
+        <el-button type="primary" size="small" @click="editPassword"
           >修改密码</el-button
         >
       </el-form-item>
     </el-form>
     <el-dialog
       title="修改密码"
-      :visible.sync="dialogVisible"
+      v-model="dialogVisible"
       width="30%"
       :before-close="cancel"
     >
       <span>
         <el-form
           ref="fromData"
-          size="mini"
+          size="small"
           :model="fromData"
           label-width="80px"
         >
@@ -286,11 +286,11 @@ export default {
               ref="password"
               v-model="fromData.password"
             >
-              <span class="show-pwd" @click="showPwd(1)" slot="suffix">
+              <template #suffix><span class="show-pwd" @click="showPwd(1)" >
                 <svg-icon
                   :icon-class="passwordType === 'password' ? 'eye' : 'eye-open'"
                 />
-              </span>
+              </span></template>
             </el-input>
           </el-form-item>
           <el-form-item label="确认密码">
@@ -304,21 +304,21 @@ export default {
               ref="password2"
               v-model="fromData.secondPassword"
             >
-              <span class="show-pwd" @click="showPwd(2)" slot="suffix">
+              <template #suffix><span class="show-pwd" @click="showPwd(2)" >
                 <svg-icon
                   :icon-class="passwordType2 === 'password' ? 'eye' : 'eye-open'"
                 />
-              </span>
+              </span></template>
             </el-input>
           </el-form-item>
         </el-form>
       </span>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button size="small" @click="cancel">取 消</el-button>
         <el-button size="small" type="primary" @click="submitSave"
           >确 定</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
     <!-- <SqlPreview ref="sqlPreview" title="sql预览">
       <el-button

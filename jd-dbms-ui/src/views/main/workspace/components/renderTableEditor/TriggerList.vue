@@ -209,7 +209,7 @@ export default {
   <div class="draggable">
     <div class="table_btn_list">
       <el-button
-        size="mini"
+        size="small"
         type="text"
         style="margin-left: 0"
         @click="addTriggerData"
@@ -217,7 +217,7 @@ export default {
         <img src="@/assets/main/3-con-ico01.png" alt="" />
         添加
       </el-button>
-      <el-button size="mini" type="text" @click="refreshFn">
+      <el-button size="small" type="text" @click="refreshFn">
         <img src="@/assets/main/5-ico3.png" alt="" />
         刷新
       </el-button>
@@ -225,7 +225,7 @@ export default {
     <el-table
       :data="tableData"
       style="width: 100%"
-      size="mini"
+      size="small"
       :header-cell-style="{ background: '#f1f3f9', color: '#68728c' }"
       height="380"
       border
@@ -244,10 +244,10 @@ export default {
         sortable
       ></el-table-column>
       <el-table-column label="操作" width="240">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-button
             @click="handelDelete(scope.row)"
-            size="mini"
+            size="small"
             type="text"
             plain
           >
@@ -256,7 +256,7 @@ export default {
           </el-button>
           <el-button
             @click="handelEdit(scope.row)"
-            size="mini"
+            size="small"
             type="text"
             plain
           >
@@ -286,7 +286,7 @@ export default {
     </div>
     <el-dialog
       title="新增触发器"
-      :visible.sync="dialogVisible"
+      v-model="dialogVisible"
       width="30%"
       :before-close="handleClose">
       <span>
@@ -325,10 +325,10 @@ export default {
           </el-form-item>
         </el-form>
       </span>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button @click="handleClose">取 消</el-button>
         <el-button type="primary" @click="createTrigger()">确 定</el-button>
-      </span>
+      </span></template>
     </el-dialog>
   </div>
 </template>

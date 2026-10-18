@@ -2,7 +2,7 @@
 <template>
   <div class="icon-body">
     <el-input v-model="name" class="icon-search" clearable placeholder="请输入图标名称" @clear="filterIcons" @input="filterIcons">
-      <i slot="suffix" class="el-icon-search el-input__icon" />
+      <template #suffix><i  class="el-icon-search el-input__icon" /></template>
     </el-input>
     <div class="icon-list">
       <div class="list-container">

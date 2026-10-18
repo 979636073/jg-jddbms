@@ -1,7 +1,7 @@
 const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 
 const source = fs.readFileSync(path.join(__dirname, '../src/views/main/dmpTools/index.vue'), 'utf8')
 const component = compiler.parseComponent(source)
@@ -10,8 +10,8 @@ assert.deepStrictEqual(compiled.errors, [])
 const dialogs = compiled.ast.children.filter(node => node.tag === 'el-dialog')
 assert.strictEqual(dialogs.length, 2)
 for (const dialog of dialogs) {
-  assert.strictEqual(dialog.attrsMap.class, 'dmp-client-dialog')
-  assert.strictEqual(dialog.attrsMap['append-to-body'], '')
+  assert.strictEqual(compiler.attribute(dialog, 'class'), 'dmp-client-dialog')
+  assert.strictEqual(compiler.attribute(dialog, 'append-to-body'), '')
 }
 const css = component.styles.map(style => style.content).join('\n')
 assert.match(css, /\.dmp-client-dialog\s*::v-deep\s*\.el-dialog\s*\{[^}]*max-height:\s*88vh/s)

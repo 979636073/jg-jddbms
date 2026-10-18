@@ -1,7 +1,4 @@
-import Vue from 'vue'
-import Router from 'vue-router'
-
-Vue.use(Router)
+import { createRouter, createWebHistory } from 'vue-router'
 
 /* Layout */
 import Layout from '@/layout'
@@ -92,7 +89,7 @@ export const constantRoutes = [
         path: '/logManagement',
         component: () => import('@/views/main/log'),
         meta: { title: '日志管理' },
-        name: "query"
+        name: "LogManagement"
       },
     ]
   },
@@ -264,20 +261,8 @@ export const dynamicRoutes = [
   }
 ]
 
-// 防止连续点击多次路由报错
-let routerPush = Router.prototype.push;
-let routerReplace = Router.prototype.replace;
-// push
-Router.prototype.push = function push(location) {
-  return routerPush.call(this, location).catch(err => err)
-}
-// replace
-Router.prototype.replace = function push(location) {
-  return routerReplace.call(this, location).catch(err => err)
-}
-
-export default new Router({
-  mode: 'history', // 去掉url中的#
-  scrollBehavior: () => ({ y: 0 }),
+export default createRouter({
+  history: createWebHistory(),
+  scrollBehavior: () => ({ top: 0 }),
   routes: constantRoutes
 })

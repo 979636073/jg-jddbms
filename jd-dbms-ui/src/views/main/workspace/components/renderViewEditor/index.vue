@@ -429,8 +429,8 @@ export default {
     <div class="view-editor-header">
       <span class="view-editor-kind">{{ materializedView ? '物化视图' : '普通视图' }}</span>
       <span class="view-editor-name">{{ basicForm && basicForm.tableName }}</span>
-      <el-button v-if="materializedView" type="primary" size="mini" :loading="refreshing" @click="refreshMaterializedView">刷新数据</el-button>
-      <el-button v-else size="mini" :loading="compiling" @click="compileView">编译</el-button>
+      <el-button v-if="materializedView" type="primary" size="small" :loading="refreshing" @click="refreshMaterializedView">刷新数据</el-button>
+      <el-button v-else size="small" :loading="compiling" @click="compileView">编译</el-button>
     </div>
     <el-tabs v-model="activeTab">
       <el-tab-pane label="数据" name="third">
@@ -450,8 +450,8 @@ export default {
         <el-input v-model="viewName" :disabled="materializedView" size="small" maxlength="50" show-word-limit></el-input>
       </el-tab-pane>
       <el-tab-pane label="脚本" name="first">
-        <el-button type="primary" size="mini" style="margin-bottom:10px" @click="importScript">导出</el-button>
-        <el-button v-if="!materializedView" type="primary" size="mini" style="margin-bottom:10px" :loading="saving" @click="submit">保存定义</el-button>
+        <el-button type="primary" size="small" style="margin-bottom:10px" @click="importScript">导出</el-button>
+        <el-button v-if="!materializedView" type="primary" size="small" style="margin-bottom:10px" :loading="saving" @click="submit">保存定义</el-button>
         <span v-else class="view-editor-note">物化视图脚本仅供查看</span>
         <MonacoEditor
           ref="MonacoEditor"

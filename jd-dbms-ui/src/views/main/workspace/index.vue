@@ -50,7 +50,7 @@ export default {
       return this.$route.path;
     },
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.stopResizeSideBar();
   },
   methods: {
@@ -239,10 +239,12 @@ export default {
         </el-aside>
         <div v-if="!opened" class="isOpen" @click="openSideBar"><img src="@/assets/main/1-1-sub侧边.png" alt /></div>
         <div class="workspace-content">
-          <keep-alive>
-            <router-view ref="workspaceContent" :key="key" :objectLoading="objectLoading"
-              @openRouteObject="openRouteObject" @tableRefresh="tableRefresh" @updateViewNameTwo="updateViewNameTwo" />
-          </keep-alive>
+          <router-view v-slot="{ Component }">
+            <keep-alive>
+              <component :is="Component" ref="workspaceContent" :key="key" :objectLoading="objectLoading"
+                @openRouteObject="openRouteObject" @tableRefresh="tableRefresh" @updateViewNameTwo="updateViewNameTwo" />
+            </keep-alive>
+          </router-view>
         </div>
       </div>
     </el-container>
@@ -254,17 +256,17 @@ export default {
       @saved="handleDataSourceSaved"
       @connected="handleDataSourceConnected"
     />
-    <el-dialog title="选择数据源并新建查询" :visible.sync="queryDialogVisible" width="420px" append-to-body>
+    <el-dialog title="选择数据源并新建查询" v-model="queryDialogVisible" width="420px" append-to-body>
       <el-select v-model="queryDataSourceId" filterable placeholder="请选择数据源" style="width: 100%">
         <el-option v-for="source in queryDataSources" :key="source.id" :value="String(source.id)"
           :label="`${source.alias || source.user || source.userName || source.id}${$store.state.workspace.connectedDataSourceIds[source.id] ? '（已连接）' : '（未连接）'}`" />
       </el-select>
       <div v-if="!queryDataSources.length" style="margin-top: 12px; color: #909399">暂无数据源，请先新增连接。</div>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button @click="queryDialogVisible = false">取消</el-button>
         <el-button v-if="!queryDataSources.length" type="primary" @click="queryDialogVisible = false; openDataSourceManager()">新增连接</el-button>
         <el-button v-else type="primary" :loading="queryCreating" @click="confirmNewQuery">连接并新建查询</el-button>
-      </span>
+      </span></template>
     </el-dialog>
   </div>
 </template>

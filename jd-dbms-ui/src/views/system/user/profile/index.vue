@@ -7,7 +7,7 @@
     <el-row :gutter="20" class="profile-page__content">
       <el-col :xs="24" :sm="24" :md="8">
         <el-card class="profile-page__card" shadow="never">
-          <div slot="header" class="profile-page__card-title">个人信息</div>
+          <template #header><div  class="profile-page__card-title">个人信息</div></template>
           <div class="profile-page__identity">
             <img :src="avatarUrl(user.avatar)" alt="用户头像" class="profile-page__avatar" />
             <strong>{{ user.userName || '—' }}</strong>
@@ -32,7 +32,7 @@
       </el-col>
       <el-col :xs="24" :sm="24" :md="16">
         <el-card class="profile-page__card" shadow="never">
-          <div slot="header" class="profile-page__card-title">修改密码</div>
+          <template #header><div  class="profile-page__card-title">修改密码</div></template>
           <resetPwd />
         </el-card>
       </el-col>

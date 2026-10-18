@@ -256,13 +256,13 @@ export default {
     this.$EventBus.$on("dataSourceConnected", this.handleDataSourceConnected);
     window.addEventListener("workspace-resource-mutation", this.handleResourceMutation);
   },
-  destroyed() {
+  unmounted() {
     window.removeEventListener("beforeunload", this.beforeunload);
     window.removeEventListener("keydown", this.handelKeyDown);
     window.removeEventListener("workspace-resource-mutation", this.handleResourceMutation);
   },
   //解绑事件
-  beforeDestroy() {
+  beforeUnmount() {
     document.removeEventListener("pointerdown", this.closeMenu, true);
     this.$EventBus.$off("refreshRightTable");
     this.$EventBus.$off("refreshDataSourceTree", this.initializeResourceTree);
@@ -2629,7 +2629,7 @@ export default {
       <el-input
         v-model="resourceFilter"
         class="resource-search"
-        size="mini"
+        size="small"
         clearable
         prefix-icon="el-icon-search"
         placeholder="搜索库/表/注释/用户..."
@@ -2654,7 +2654,7 @@ export default {
           @node-expand="applyResourceFilter(resourceFilter)"
           @node-collapse="applyResourceFilter(resourceFilter)"
         >
-          <span slot-scope="{ node, data }" class="resource-node"
+          <template #default="{ node, data }"><span  class="resource-node"
             :class="{ 'resource-node-datasource': data.treeNodeType === 'datasource' }">
             <span class="resource-node-main">
               <span v-if="data.treeNodeType === 'schemaOverview' || (data.treeNodeType === 'objectGroup' && node.isLeaf)"
@@ -2662,9 +2662,9 @@ export default {
               <el-checkbox
                 v-if="data.treeNodeType === 'table'"
                 class="resource-table-checkbox"
-                :value="isTreeTableSelected(data)"
+                :model-value="isTreeTableSelected(data)"
                 :aria-label="`选择表 ${data.label}`"
-                @click.native.stop
+                @click.stop
                 @change="toggleTreeTableSelection(data, $event)"
               />
               <span
@@ -2759,7 +2759,7 @@ export default {
                 <i class="el-icon-delete"></i>
               </button>
             </span>
-          </span>
+          </span></template>
         </vue-easy-tree>
         <div v-if="!resourceTreeLoading && !databaseTree.length" class="resource-empty">
           <i class="el-icon-connection"></i>
@@ -2776,7 +2776,7 @@ export default {
           effect="dark"
           manual
           ref="buttonTooltip"
-          v-model="buttonVisible"
+          v-model:visible="buttonVisible"
           :content="dataBaseInfo.url"
           placement="top-start"
         >
@@ -2787,7 +2787,7 @@ export default {
       </div>
       <div class="database_form_item">
         <el-select
-          size="mini"
+          size="small"
           filterable
           v-model="schema"
           style="width: 240px"
@@ -2809,7 +2809,7 @@ export default {
           v-model="type"
           style="width: 240px"
           @change="checkTypeFn"
-          size="mini"
+          size="small"
         >
           <el-option
             v-for="dict in dict.type.model_type"
@@ -2821,7 +2821,7 @@ export default {
         </el-select>
       </div>
       <el-input
-        size="mini"
+        size="small"
         v-model="filterName"
         placeholder="搜索名称"
         show-word-limit
@@ -2834,10 +2834,10 @@ export default {
         <el-checkbox
           v-if="type == 'tables' && !isQuery"
           class="select-all"
-          :value="isCurrentFilterAllSelected"
+          :model-value="isCurrentFilterAllSelected"
           :indeterminate="isCurrentFilterPartiallySelected"
           :disabled="filteredTableNames.length === 0"
-          @click.native.stop
+          @click.stop
           @change="toggleFilteredTableSelection"
         >{{ isCurrentFilterAllSelected ? '取消全选' : '全选' }}</el-checkbox>
         <div
@@ -3007,9 +3007,9 @@ export default {
           <el-checkbox
             v-if="type == 'tables'"
             class="table-selection"
-            :value="seleCtrlKet.includes(item.name)"
+            :model-value="seleCtrlKet.includes(item.name)"
             :aria-label="`选择表 ${item.name}`"
-            @click.native.stop
+            @click.stop
             @change="toggleTableSelection(item)"
           />
           <span
@@ -3144,7 +3144,7 @@ export default {
     </div>
     <el-dialog
       :title="copyTableWithData ? '复制表及数据' : '复制表结构'"
-      :visible.sync="copyTableDialogVisible"
+      v-model="copyTableDialogVisible"
       width="380px"
       append-to-body
       :close-on-click-modal="false"
@@ -3170,10 +3170,10 @@ export default {
           </el-form-item>
         </el-form>
       </div>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button @click="copyTableDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmCopyTable">开始复制</el-button>
-      </span>
+      </span></template>
     </el-dialog>
     <CreateOption ref="createOption" />
     <TableTransferDialog :visible="tableTransferVisible" :operation="tableTransferOperation" :table-info="tableTransferContext"

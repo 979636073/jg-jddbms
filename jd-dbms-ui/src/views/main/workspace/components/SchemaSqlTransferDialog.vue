@@ -1,7 +1,7 @@
 <template>
-  <el-dialog :visible="visible" :title="operation === 'import' ? '导入模式 SQL' : '导出模式 SQL'" width="720px" append-to-body :close-on-click-modal="false" @close="$emit('close')">
+  <el-dialog :model-value="visible" :title="operation === 'import' ? '导入模式 SQL' : '导出模式 SQL'" width="720px" append-to-body :close-on-click-modal="false" @close="$emit('close')">
     <div class="schema-sql-dialog">
-      <p class="schema-label">模式：<b>{{ context.schema }}</b> <el-tag size="mini">{{ context.type }}</el-tag></p>
+      <p class="schema-label">模式：<b>{{ context.schema }}</b> <el-tag size="small">{{ context.type }}</el-tag></p>
       <el-alert v-if="operation === 'import'" type="warning" :closable="false" title="SQL 导入会创建所选表；目标表须不存在。DDL 可能在失败前部分生效，请先在测试库验收。同类型且同名模式可恢复索引、约束、触发器、视图和过程；跨库或跨模式仅导入表及数据。" />
       <el-alert v-else type="info" :closable="false" title="导出始终包含建表 SQL、数据行及相关的索引、约束、触发器、视图和过程。空表只有建表 SQL。文件会在后台生成，到任务中心下载。" />
       <div v-if="operation === 'import'" class="file-row">
@@ -9,14 +9,14 @@
       </div>
       <div class="object-title">选择表 <small>已选 {{ selectedAll ? total : selected.length }} 张</small></div>
       <div class="search-row">
-        <el-input v-model.trim="search" size="small" clearable placeholder="搜索表名" prefix-icon="el-icon-search" @keyup.enter.native="searchTables" @clear="searchTables" />
+        <el-input v-model.trim="search" size="small" clearable placeholder="搜索表名" prefix-icon="el-icon-search" @keyup.enter="searchTables" @clear="searchTables" />
         <el-button size="small" @click="searchTables">搜索</el-button>
         <el-button size="small" @click="selectPage">选中本页</el-button>
         <el-button size="small" type="primary" plain @click="selectAllResults">全选{{ operation === 'import' ? '筛选结果' : '搜索结果' }}</el-button>
         <el-button size="small" @click="clearSelection">清空</el-button>
       </div>
       <div class="table-list" v-loading="loading">
-        <el-checkbox v-for="name in pageTables" :key="name" :value="selectedAll || selected.includes(name)" :disabled="selectedAll" @change="toggle(name, $event)">{{ name }}</el-checkbox>
+        <el-checkbox v-for="name in pageTables" :key="name" :model-value="selectedAll || selected.includes(name)" :disabled="selectedAll" @change="toggle(name, $event)">{{ name }}</el-checkbox>
         <div v-if="!pageTables.length" class="empty">{{ operation === 'import' && !file ? '请先选择 SQL 文件' : '没有匹配的表' }}</div>
       </div>
       <el-pagination v-if="total > pageSize" small layout="total, prev, pager, next" :current-page="page" :page-size="pageSize" :total="total" @current-change="changePage" />
@@ -28,7 +28,7 @@
       <p v-if="operation === 'import'" class="file-hint">{{ importScope === 'all' ? '创建所选表并导入数据行。' : '创建所选表，不导入数据行。' }}同类型且同名模式还会恢复文件中的索引、约束、触发器、视图和过程。</p>
       <p v-if="operation === 'import' && preview" class="file-hint">文件来源：{{ preview.sourceType }} · {{ preview.schema }} · {{ preview.tables.length }} 张表。仅接受本系统导出的模式 SQL 包。</p>
     </div>
-    <span slot="footer"><el-button size="small" @click="$emit('close')">取消</el-button><el-button type="primary" size="small" :loading="busy" @click="submit">提交后台{{ operation === 'import' ? '导入' : '导出' }}任务</el-button></span>
+    <template #footer><span ><el-button size="small" @click="$emit('close')">取消</el-button><el-button type="primary" size="small" :loading="busy" @click="submit">提交后台{{ operation === 'import' ? '导入' : '导出' }}任务</el-button></span></template>
   </el-dialog>
 </template>
 

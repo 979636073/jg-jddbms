@@ -308,7 +308,7 @@ export default {
   created() {
     this.loadDataSources()
   },
-  beforeDestroy() {
+  beforeUnmount() {
     clearTimeout(this.source.searchTimer)
     clearTimeout(this.target.searchTimer)
   },

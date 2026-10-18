@@ -142,7 +142,7 @@ if (process.env.PDF_FIXTURE_HTML) fs.writeFileSync(process.env.PDF_FIXTURE_HTML,
 
 const tagsFile = path.join(__dirname, '../src/components/JdTagsView/index.vue')
 const tagsSource = fs.readFileSync(tagsFile, 'utf8')
-assert(tagsSource.includes('@contextmenu.prevent.native="openMenu(tag, $event)"'), '标签页应启用右键菜单')
+assert(tagsSource.includes('@contextmenu.prevent="openMenu(tag, $event)"'), '标签页应启用右键菜单')
 assert(tagsSource.includes('刷新页面'))
 assert(tagsSource.includes('关闭当前'))
 assert(tagsSource.includes('关闭其他'))

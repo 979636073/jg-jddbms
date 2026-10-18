@@ -259,7 +259,7 @@ export default {
     <div class="table_btn_list">
       <el-button
         @click="createTable"
-        size="mini"
+        size="small"
         type="text"
         class="el-button_before"
         style="margin-left: 0"
@@ -269,7 +269,7 @@ export default {
       </el-button>
       <el-button
         @click="refresh"
-        size="mini"
+        size="small"
         type="text"
         class="el-button_before"
       >
@@ -278,11 +278,11 @@ export default {
       </el-button>
       <el-input
         v-model="searchKey"
-        size="mini"
+        size="small"
         placeholder="搜索"
         style="width: 200px; margin: 0 5px"
       />
-      <el-button @click="onSearch" size="mini" type="primary">
+      <el-button @click="onSearch" size="small" type="primary">
         <img src="@/assets/main/5-ico4.png" alt />
         查询
       </el-button>
@@ -291,15 +291,15 @@ export default {
         trigger="click"
         style="margin-left: 10px"
       >
-        <el-button size="mini" type="primary" plain>
+        <el-button size="small" type="primary" plain>
           <img src="@/assets/main/3-con-ico05.png" alt />
           导出
         </el-button>
-        <el-dropdown-menu slot="dropdown">
+        <template #dropdown><el-dropdown-menu >
           <el-dropdown-item command="a">导出选中数据模板</el-dropdown-item>
           <el-dropdown-item command="b">导出选中数据</el-dropdown-item>
           <el-dropdown-item command="c">导出DMP</el-dropdown-item>
-        </el-dropdown-menu>
+        </el-dropdown-menu></template>
       </el-dropdown>
       <el-upload
         accept=".sql"
@@ -309,7 +309,7 @@ export default {
         :on-success="handleAvatarSuccess"
         :before-upload="beforeAvatarUpload"
       >
-        <el-button size="mini" type="primary" plain style="margin-left: 10px">
+        <el-button size="small" type="primary" plain style="margin-left: 10px">
           <img src="@/assets/main/3-con-ico04.png" alt />
           导入SQL
         </el-button>
@@ -322,7 +322,7 @@ export default {
         :on-success="handleAvatarSuccess2"
         :before-upload="beforeAvatarUpload"
       >
-        <el-button size="mini" type="primary" plain style="margin-left: 10px">
+        <el-button size="small" type="primary" plain style="margin-left: 10px">
           <img src="@/assets/main/3-con-ico04.png" alt />
           导入DMP
         </el-button>
@@ -331,7 +331,7 @@ export default {
     <el-table
       :data="tableData"
       v-loading="tableLoading"
-      size="mini"
+      size="small"
       style="width: 100%"
       height="calc(100% - 80px)"
       @selection-change="handleSelectionChange"
@@ -351,7 +351,7 @@ export default {
         :total="tableDataTotal"
       ></el-pagination>
     </div>
-    <el-dialog width="30%" :visible.sync="dialogExportVisible" title="导出进度">
+    <el-dialog width="30%" v-model="dialogExportVisible" title="导出进度">
       <p>
         导出进度:
         <el-progress :percentage="exportProgress"></el-progress>
@@ -359,7 +359,7 @@ export default {
     </el-dialog>
     <el-dialog
       title="批量导入确认"
-      :visible.sync="dialogImportVisible"
+      v-model="dialogImportVisible"
       :before-close="handleClose"
     >
       <div class="left_right_title">
@@ -383,9 +383,9 @@ export default {
           {{ item }}
         </li>
       </ul>
-      <div slot="footer" class="dialog-footer">
+      <template #footer><div  class="dialog-footer">
         <el-button type="primary" @click="handleClose">关 闭</el-button>
-      </div>
+      </div></template>
     </el-dialog>
   </div>
 </template>

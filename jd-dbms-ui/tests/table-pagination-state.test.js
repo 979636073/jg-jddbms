@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const file = path.join(__dirname, '../src/views/main/workspace/components/renderSearchResult/index.vue')
 const source = compiler.parseComponent(fs.readFileSync(file, 'utf8'))
 assert.deepStrictEqual(compiler.compile(source.template.content).errors, [])
@@ -11,15 +11,16 @@ for (const name of ['SqlPreview', 'MonacoEditor', 'ScreeningResult', 'Filedialog
 vm.runInNewContext(source.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), context)
 const component = context.module.exports
 assert.strictEqual(component.data().valuePanelVisible, false, '表数据字段值面板默认收起')
-const Vue = require('vue')
+const Vue = require('@vue/compat')
 const summaryTemplate = source.template.content.match(/<div class="table_bottom_info">[\s\S]*?<\/div>/)[0]
 const summaryRender = compiler.compileToFunctions(summaryTemplate)
-const vnodeText = node => node.text || (node.children || []).map(vnodeText).join('')
+const vnodeText = node => typeof node.children === 'string' ? node.children :
+  (Array.isArray(node.children) ? node.children : []).map(vnodeText).join('')
 const summary = new Vue({
   data: () => ({ queryResultData: { description: '执行成功', duration: 44, hasNextPage: true }, total: 2000 }),
   ...summaryRender
 })
-const summaryText = vnodeText(summary._render()).replace(/\s+/g, ' ')
+const summaryText = vnodeText(summaryRender.render.call(summary, summary, [])).replace(/\s+/g, ' ')
 assert(summaryText.includes('【结果】 执行成功') && summaryText.includes('【耗时】 44ms'))
 assert(!summaryText.includes('【查询行数】') && !summaryText.includes('【提示】'),
   '底部状态栏不再重复显示查询行数和翻页提示')

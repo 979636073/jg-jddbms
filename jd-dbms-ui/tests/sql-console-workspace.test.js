@@ -1,7 +1,7 @@
 const assert = require('assert')
 const fs = require('fs')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const path = require('path')
 const root = path.join(__dirname, '../src')
 function load(relative, mocks) {
@@ -41,16 +41,17 @@ async function main() {
     $emit(event, key, value) { this.currentConfig[key] = value },
   }
   let executions = 0;
-  const keyboardState = { ...state, loadRecentSqlScripts() {}, executeSQL() { executions++ }, _inactive: true };
+  const keyboardState = { ...state, loadRecentSqlScripts() {}, executeSQL() { executions++ } };
   component.mounted.call(keyboardState);
+  component.deactivated.call(keyboardState);
   const key = { key: 'Enter', ctrlKey: true, preventDefault() {}, stopPropagation() {} };
   keyHandler(key);
   assert.strictEqual(executions, 0, '隐藏窗口不能响应执行快捷键');
-  keyboardState._inactive = false;
+  component.activated.call(keyboardState);
   keyHandler(key);
   assert.strictEqual(executions, 1);
   assert.strictEqual(keyCapture, true, 'Ctrl+Enter 必须在 Monaco 吞掉冒泡事件前处理');
-  component.beforeDestroy.call(keyboardState);
+  component.beforeUnmount.call(keyboardState);
   assert.strictEqual(component.computed.hasPendingTransaction.call({ disableCommit: true, disableRollBack: true, successList: [] }), true,
     '清除查询结果不能抹掉待提交事务的保护状态')
   component.methods.executeSQL.call(state, 'run')

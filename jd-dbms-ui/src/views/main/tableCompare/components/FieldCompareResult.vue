@@ -36,19 +36,19 @@
       class="difference-table"
     >
       <el-table-column label="字段" min-width="150" fixed="left">
-        <template slot-scope="scope">
+        <template #default="scope">
           <span class="column-name">{{ scope.row.columnName }}</span>
         </template>
       </el-table-column>
       <el-table-column label="结果" width="100" align="center">
-        <template slot-scope="scope">
-          <el-tag :type="statusType(scope.row.status)" size="mini" effect="plain">
+        <template #default="scope">
+          <el-tag :type="statusType(scope.row.status)" size="small" effect="plain">
             {{ statusText(scope.row.status) }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="变化内容（源 → 目标）" min-width="330">
-        <template slot-scope="scope">
+        <template #default="scope">
           <div v-if="scope.row.status === 'changed'" class="change-list">
             <div v-for="detail in scope.row.changeDetails" :key="detail.field" class="change-line">
               <strong>{{ detail.label }}</strong>
@@ -63,18 +63,18 @@
         </template>
       </el-table-column>
       <el-table-column label="源表完整属性" min-width="310">
-        <template slot-scope="scope">
+        <template #default="scope">
           <column-structure :row="scope.row" side="source" />
         </template>
       </el-table-column>
       <el-table-column label="目标表完整属性" min-width="310">
-        <template slot-scope="scope">
+        <template #default="scope">
           <column-structure :row="scope.row" side="target" />
         </template>
       </el-table-column>
     </el-table>
     <el-pagination v-if="filteredRows.length > pageSize" small layout="total, prev, pager, next"
-                   :total="filteredRows.length" :page-size="pageSize" :current-page.sync="page" />
+                   :total="filteredRows.length" :page-size="pageSize" v-model:current-page="page" />
   </div>
 </template>
 

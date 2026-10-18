@@ -39,7 +39,7 @@ export default {
   <div class="draggable">
     <div class="table_btn_list">
       <el-button
-        size="mini"
+        size="small"
         type="text"
         class="el-button_before"
         style="margin-left: 0"
@@ -47,29 +47,29 @@ export default {
         <img src="@/assets/main/3-con-ico01.png" alt="" />
         添加
       </el-button>
-      <el-button size="mini" type="text" :disabled="!multipleSelection.length" @click="delRow">
+      <el-button size="small" type="text" :disabled="!multipleSelection.length" @click="delRow">
         <img src="@/assets/main/3-con-ico02.png" alt="" />
         删除
       </el-button>
-      <el-button size="mini" type="text">
+      <el-button size="small" type="text">
         <img src="@/assets/main/5-ico3.png" alt="" />
         提交
       </el-button>
-      <el-button size="mini" type="text">
+      <el-button size="small" type="text">
         <img src="@/assets/main/5-ico3.png" alt="" />
         回退
       </el-button>
-      <el-button size="mini" type="text" :disabled="!multipleSelection.length">
+      <el-button size="small" type="text" :disabled="!multipleSelection.length">
         <img src="@/assets/main/3-con-ico05.png" alt="" />
         导入
       </el-button>
-      <el-button size="mini" type="text" :disabled="!multipleSelection.length">
+      <el-button size="small" type="text" :disabled="!multipleSelection.length">
         <img src="@/assets/main/3-con-ico05.png" alt="" />
         导出
       </el-button>
     </div>
     <el-table
-      size="mini"
+      size="small"
       :data="dataTable"
       row-key="key"
       @selection-change="handleSelectionChange"

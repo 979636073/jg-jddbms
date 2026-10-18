@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const fileContext = { module: { exports: {} }, atob, Response, ReadableStream,
   process: { env: { VUE_APP_BASE_API: '/dev-api' } }, getToken: () => 'test-token' }
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/utils/file.js'), 'utf8')

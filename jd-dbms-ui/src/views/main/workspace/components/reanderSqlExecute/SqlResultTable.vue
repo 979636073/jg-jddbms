@@ -78,7 +78,7 @@ export default {
     this._resizeObserver = new ResizeObserver(this.measure);
     this._resizeObserver.observe(this.$refs.viewport);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.stopResize();
     this._requestId = (this._requestId || 0) + 1;
     if (this._resizeObserver) this._resizeObserver.disconnect();
@@ -243,7 +243,7 @@ export default {
             @click="selectCell(entry.index, column.index)" @dblclick="showValue(entry.index, column.index)"
             @contextmenu.prevent="contextMenu($event, entry.index, column.index)">
             <template v-if="isBinary(column) && entry.row[column.index] != null">
-              文件 <el-button type="text" size="mini" :loading="binaryLoading" @click.stop="showBinary(entry.index, column.index)">查看</el-button>
+              文件 <el-button type="text" size="small" :loading="binaryLoading" @click.stop="showBinary(entry.index, column.index)">查看</el-button>
             </template>
             <template v-else>{{ displayValue(entry.row[column.index]) }}</template>
           </div>
@@ -262,9 +262,9 @@ export default {
         <span>第 {{ pageNo }} 页</span>
       </el-pagination>
     </div>
-    <el-dialog title="字段值（只读）" :visible.sync="valueVisible" width="650px" append-to-body>
-      <el-input type="textarea" readonly :value="valueText" :rows="12" />
-      <span slot="footer"><el-button size="small" @click="copyCell">复制</el-button><el-button size="small" @click="valueVisible = false">关闭</el-button></span>
+    <el-dialog title="字段值（只读）" v-model="valueVisible" width="650px" append-to-body>
+      <el-input type="textarea" readonly :model-value="valueText" :rows="12" />
+      <template #footer><span ><el-button size="small" @click="copyCell">复制</el-button><el-button size="small" @click="valueVisible = false">关闭</el-button></span></template>
     </el-dialog>
     <FileDialog ref="fileRef" />
   </div>

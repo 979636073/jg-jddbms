@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const root = path.join(__dirname, '../src/views/main/workspace')
 
 function load(name, mocks) {

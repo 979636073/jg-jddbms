@@ -49,7 +49,7 @@ export default {
     this.initEditor()
   },
 
-  beforeDestroy () {
+  beforeUnmount () {
     if (this.editor) {
       this.clearMistake()
       this.editor.dispose()

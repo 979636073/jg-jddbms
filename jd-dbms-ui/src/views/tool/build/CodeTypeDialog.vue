@@ -5,7 +5,7 @@
       width="500px"
       :close-on-click-modal="false"
       :modal-append-to-body="false"
-      v-on="$listeners"
+
       @open="onOpen"
       @close="onClose"
     >
@@ -14,7 +14,7 @@
           ref="elForm"
           :model="formData"
           :rules="rules"
-          size="medium"
+          size="default"
           label-width="100px"
         >
           <el-col :span="24">
@@ -37,14 +37,14 @@
         </el-form>
       </el-row>
 
-      <div slot="footer">
+      <template #footer><div >
         <el-button @click="close">
           取消
         </el-button>
         <el-button type="primary" @click="handleConfirm">
           确定
         </el-button>
-      </div>
+      </div></template>
     </el-dialog>
   </div>
 </template>

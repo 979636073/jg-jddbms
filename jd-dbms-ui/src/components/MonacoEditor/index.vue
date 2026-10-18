@@ -93,7 +93,7 @@ export default {
     this.initEditor();
     // document.addEventListener("mousedown", this.mouseDownEditor);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     if (this.editor) {
       this.clearMistake();
       const model = this.editor.getModel();

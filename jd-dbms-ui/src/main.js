@@ -1,12 +1,16 @@
-import Vue from 'vue'
+import { createApp, defineAsyncComponent, configureCompat } from 'vue'
 
 import Cookies from 'js-cookie'
 
-import Element from 'element-ui'
-import VueEasyTree from '@wchbrad/vue-easy-tree'
-import '@wchbrad/vue-easy-tree/src/assets/index.scss'
+import Element, { ElDialog } from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import 'element-plus/dist/index.css'
+import * as ElementComponents from 'element-plus'
+import VirtualResourceTree from '@/components/VirtualResourceTree'
+import '@/assets/element-icons/icon.css'
+import elementIcons from '@/assets/element-icons'
 
-Element.Dialog.props.closeOnClickModal.default = false;
+ElDialog.props.closeOnClickModal.default = false;
 import './assets/styles/element-variables.scss'
 
 import '@/assets/styles/index.scss' // global css
@@ -19,7 +23,7 @@ import directive from './directive' // directive
 import plugins from './plugins' // plugins
 import { download } from '@/utils/request'
 
-import './assets/icons' // icon
+import icons from './assets/icons' // icon
 import './permission' // permission control
 import { getDicts } from "@/api/system/dict/data";
 import { getConfigKey } from "@/api/system/config";
@@ -38,43 +42,55 @@ import ImagePreview from "@/components/ImagePreview"
 // 字典标签组件
 import DictTag from '@/components/DictTag'
 // 头部标签组件
-import VueMeta from 'vue-meta'
 // 字典数据组件
 import DictData from '@/components/DictData'
 // 拖动指令
 import { resize } from "@/utils/resize"
-Vue.directive("sy-resize", resize);
+import { createEventBus } from '@/utils/eventBus'
+import Contextmenu from '@imengyu/vue3-context-menu'
+import '@imengyu/vue3-context-menu/lib/vue3-context-menu.css'
+
+configureCompat({ COMPONENT_ASYNC: false })
+const app = createApp(App)
+// Vue 3 libraries use native modelValue bindings within the migration runtime.
+Object.entries(ElementComponents).forEach(([name, component]) => {
+  if (name.startsWith('El') && component && typeof component === 'object' && component.props) {
+    component.compatConfig = { MODE: 3 }
+  }
+})
+app.directive("sy-resize", resize);
 
 // 全局方法挂载
-Vue.prototype.getDicts = getDicts
-Vue.prototype.getConfigKey = getConfigKey
-Vue.prototype.parseTime = parseTime
-Vue.prototype.resetForm = resetForm
-Vue.prototype.addDateRange = addDateRange
-Vue.prototype.selectDictLabel = selectDictLabel
-Vue.prototype.selectDictLabels = selectDictLabels
-Vue.prototype.download = download
-Vue.prototype.handleTree = handleTree
-Vue.prototype.$EventBus = new Vue();
+Object.assign(app.config.globalProperties, {
+  getDicts, getConfigKey, parseTime, resetForm, addDateRange,
+  selectDictLabel, selectDictLabels, download, handleTree,
+  $EventBus: createEventBus()
+})
 
 // 全局组件挂载
-Vue.component('DictTag', DictTag)
-Vue.component('VueEasyTree', VueEasyTree)
-Vue.component('Pagination', Pagination)
-Vue.component('RightToolbar', RightToolbar)
-Vue.component('Editor', () => import('@/components/Editor'))
-Vue.component('FileUpload', FileUpload)
-Vue.component('ImageUpload', ImageUpload)
-Vue.component('ImagePreview', ImagePreview)
+app.component('DictTag', DictTag)
+app.component('VueEasyTree', VirtualResourceTree)
+app.component('Pagination', Pagination)
+app.component('RightToolbar', RightToolbar)
+app.component('Editor', defineAsyncComponent(() => import('@/components/Editor')))
+app.component('FileUpload', FileUpload)
+app.component('ImageUpload', ImageUpload)
+app.component('ImagePreview', ImagePreview)
 
 
-import Contextmenu from "vue-contextmenujs"
-Vue.use(Contextmenu);
+const contextmenu = options => Contextmenu.showContextMenu({
+  ...options,
+  x: options.x ?? options.event?.clientX,
+  y: options.y ?? options.event?.clientY
+})
+contextmenu.destroy = () => Contextmenu.closeContextMenu()
+app.config.globalProperties.$contextmenu = contextmenu
 
-Vue.use(directive)
-Vue.use(plugins)
-Vue.use(VueMeta)
-DictData.install()
+app.use(directive)
+app.use(plugins)
+app.use(icons)
+app.use(elementIcons)
+app.use(DictData)
 
 /**
  * If you don't want to use mock-server
@@ -85,15 +101,11 @@ DictData.install()
  * please remove it before going online! ! !
  */
 
-Vue.use(Element, {
-  size: Cookies.get('size') || 'medium' // set element-ui default size
+app.use(Element, {
+  locale: zhCn,
+  size: ({ mini: 'small', medium: 'default' })[Cookies.get('size')] || Cookies.get('size') || 'default'
 })
 
-Vue.config.productionTip = false
-
-new Vue({
-  el: '#app',
-  router,
-  store,
-  render: h => h(App)
-})
+app.use(store)
+app.use(router)
+router.isReady().then(() => app.mount('#app'))

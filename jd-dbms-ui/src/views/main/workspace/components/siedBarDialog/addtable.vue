@@ -2,7 +2,7 @@
   <div>
     <el-dialog
       title="新增表"
-      :visible.sync="tableDialogVisibl"
+      :model-value="tableDialogVisibl"
       :before-close="handleClose"
       width="70%"
     >
@@ -11,7 +11,7 @@
           <el-form-item label="表名" class="is-required">
             <el-input
               placeholder="请输入内容"
-              size="mini"
+              size="small"
               v-model="searchParams.name"
               show-word-limit
               maxlength="50"
@@ -21,7 +21,7 @@
           <el-form-item label="注释">
             <el-input
               placeholder="请输入内容"
-              size="mini"
+              size="small"
               v-model="searchParams.note"
               show-word-limit
               maxlength="50"
@@ -50,10 +50,10 @@
             width="180"
             show-overflow-tooltip
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-input
                 v-model="scope.row.name"
-                size="mini"
+                size="small"
                 placeholder="请输入内容"
                 maxlength="50"
               ></el-input>
@@ -65,10 +65,10 @@
             width="180"
             show-overflow-tooltip
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-select
                 v-model="scope.row.columnType"
-                size="mini"
+                size="small"
                 placeholder="请选择"
                 filterable
                 @change="(value) => selectType(value, scope.row)"
@@ -84,11 +84,11 @@
             </template>
           </el-table-column>
           <el-table-column prop="columnSize" label="精度" show-overflow-tooltip>
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-input
                 v-model="scope.row.columnSize"
                 @input="(val) => handleInput(val, scope.row)"
-                size="mini"
+                size="small"
                 placeholder="请输入内容"
                 maxlength="50"
                 :disabled="!scope.row.isDisable"
@@ -101,7 +101,7 @@
             show-overflow-tooltip
             width="70"
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-checkbox
                 v-model="scope.row.nullable"
                 :disabled="scope.row.primaryKey || scope.row.autoIncrement"
@@ -114,7 +114,7 @@
             show-overflow-tooltip
             width="70"
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-checkbox
                 :disabled="scope.row.unique"
                 @change="
@@ -133,7 +133,7 @@
             show-overflow-tooltip
             width="90"
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-checkbox
                 v-model="scope.row.unique"
                 :disabled="scope.row.primaryKey"
@@ -146,7 +146,7 @@
             label="默认值"
             show-overflow-tooltip
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-input
                 :disabled="
                   scope.row.unique ||
@@ -154,7 +154,7 @@
                   scope.row.autoIncrement
                 "
                 v-model="scope.row.defaultValue"
-                size="mini"
+                size="small"
                 placeholder="请输入默认值"
                 maxlength="120"
               ></el-input>
@@ -167,7 +167,7 @@
             v-if="dataBaseInfo.type != 'ORACLE'"
             width="90"
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-checkbox
                 @change="handleCheck(scope.row, scope.$index)"
                 v-if="
@@ -181,20 +181,20 @@
           </el-table-column>
 
           <el-table-column prop="comment" label="注释" show-overflow-tooltip>
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-input
                 v-model="scope.row.comment"
-                size="mini"
+                size="small"
                 placeholder="请输入内容"
                 maxlength="120"
               ></el-input>
             </template>
           </el-table-column>
           <el-table-column width="120" label="操作">
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-button
                 @click="deleteData(scope.row, scope.$index)"
-                size="mini"
+                size="small"
                 type="text"
                 plain
               >
@@ -205,12 +205,12 @@
           </el-table-column>
         </el-table>
       </span>
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="tableCloseFn(false)" size="mini">取 消</el-button>
-        <el-button type="primary" size="mini" @click="saveData"
+      <template #footer><span  class="dialog-footer">
+        <el-button @click="tableCloseFn(false)" size="small">取 消</el-button>
+        <el-button type="primary" size="small" @click="saveData"
           >确 定</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
   </div>
 </template>

@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const file = path.join(__dirname, '../src/views/main/workspace/components/renderViewEditor/index.vue')
 const source = compiler.parseComponent(fs.readFileSync(file, 'utf8'))
 const context = { module: { exports: {} }, viewServer: {}, tableServer: {} }
@@ -15,7 +15,8 @@ const stateFor = config => ({
 })
 async function run() {
   const containerSource = compiler.parseComponent(fs.readFileSync(path.join(__dirname, '../src/views/main/workspace/ContainerBar.vue'), 'utf8'))
-  const containerContext = { module: { exports: {} }, TableViewList: {}, ViewList: {}, UserList: {}, TableSpace: {} }
+  const containerContext = { module: { exports: {} }, TableViewList: {}, ViewList: {}, UserList: {}, TableSpace: {},
+    defineAsyncComponent: require('@vue/compat').defineAsyncComponent }
   vm.runInNewContext(containerSource.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), containerContext)
   const container = containerContext.module.exports
   const route = { params: { id: 'view-page' } }

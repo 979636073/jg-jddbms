@@ -1,7 +1,7 @@
 <template>
   <el-dialog class="view-create-dialog"
     :title="viewKind === 'materialized' ? '新增物化视图' : '新增普通视图'"
-    :visible="viewDialogVisible" :before-close="handleClose" width="760px">
+    :model-value="viewDialogVisible" :before-close="handleClose" width="760px">
     <div class="view-create-tabs">
       <button :class="{ active: editorMode === 'guided' }" type="button" @click="editorMode = 'guided'">可视化创建</button>
       <button :class="{ active: editorMode === 'sql' }" type="button" @click="editorMode = 'sql'">直接输入 SQL</button>
@@ -10,7 +10,7 @@
       <template v-if="editorMode === 'guided'">
         <div class="view-create-section-title">基本信息</div>
         <el-form class="view-create-grid" label-position="top" size="small">
-          <el-form-item label="所属模式"><el-input :value="schema" disabled /></el-form-item>
+          <el-form-item label="所属模式"><el-input :model-value="schema" disabled /></el-form-item>
           <el-form-item label="视图名称（必填）"><el-input v-model.trim="form.name" placeholder="请输入视图名称" /></el-form-item>
         </el-form>
         <template v-if="viewKind === 'normal'">
@@ -66,10 +66,10 @@
           :placeholder="viewKind === 'materialized' ? 'CREATE MATERIALIZED VIEW ... AS SELECT ...' : 'CREATE VIEW ... AS SELECT ...'" />
       </template>
     </div>
-    <span slot="footer" class="dialog-footer">
+    <template #footer><span  class="dialog-footer">
       <el-button size="small" @click="viewCloseFn(false)">取消</el-button>
       <el-button type="primary" size="small" :loading="submitting" @click="addViewFn">创建视图</el-button>
-    </span>
+    </span></template>
   </el-dialog>
 </template>
 

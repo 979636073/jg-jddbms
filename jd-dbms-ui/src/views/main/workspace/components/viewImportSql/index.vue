@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog title="视图导入" :visible.sync="dialogVisible" width="40%" :before-close="handleClose">
+    <el-dialog title="视图导入" v-model="dialogVisible" width="40%" :before-close="handleClose">
       <span>
         <div class="download-box">
           <el-upload
@@ -38,10 +38,10 @@
           </div>
         </div>
       </span>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button @click="handleClose" size="small">取 消</el-button>
         <el-button type="primary" @click="save" size="small">确 定</el-button>
-      </span>
+      </span></template>
     </el-dialog>
      <addView
       :viewDialogVisible="viewDialogVisible"

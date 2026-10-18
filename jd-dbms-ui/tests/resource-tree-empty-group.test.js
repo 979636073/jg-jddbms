@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 
 const file = path.join(__dirname, '../src/views/main/workspace/SideBar.vue')
 const descriptor = compiler.parseComponent(fs.readFileSync(file, 'utf8'))
@@ -48,16 +48,16 @@ async function run() {
     assert.strictEqual(children[6].extraParams.schemaName, 'QA_SCHEMA')
   }
   process.env.VUE_ENV = 'server'
-  const Vue = require('vue')
-  const Tree = require('element-ui/lib/tree').default
-  const emptyTree = new (Vue.extend(Tree))({ propsData: {
+  const createTree = require('./helpers/resource-tree')
+
+  const emptyTree = createTree({
     nodeKey: 'key', lazy: true,
     load(treeNode, resolve) {
       resolve(treeNode.level === 0
         ? [{ key: 'empty-group', treeNodeType: 'objectGroup', leaf: false }]
         : [])
     },
-  } })
+  })
   const emptyGroupNode = emptyTree.getNode('empty-group')
   emptyGroupNode.expand()
   assert.strictEqual(emptyGroupNode.isLeaf, true, '空分组加载后 Element UI 会将其识别为叶节点')

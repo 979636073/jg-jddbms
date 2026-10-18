@@ -186,12 +186,12 @@ const initResize = ({
   elEventsWeakMap.set(el, unBindElEvents);
 };
 export const resize = {
-  inserted: function (el, binding) {
+  mounted: function (el, binding) {
     const {modifiers, value} = binding;
     const positions = Object.keys(modifiers);
     initResize({el, positions, ...value});
   },
-  unbind: function (el) {
+  unmounted: function (el) {
     const unBindElEvents = elEventsWeakMap.get(el);
     unBindElEvents();
   }

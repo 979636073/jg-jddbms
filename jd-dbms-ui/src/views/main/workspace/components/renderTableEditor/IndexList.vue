@@ -162,7 +162,7 @@ export default {
   <div class="draggable indexList">
     <div class="table_btn_list">
       <el-button
-        size="mini"
+        size="small"
         type="text"
         style="margin-left: 0"
         @click="addData"
@@ -170,13 +170,13 @@ export default {
         <img src="@/assets/main/3-con-ico01.png" alt="" />
         添加
       </el-button>
-      <el-button size="mini" type="text" @click="refresh">
+      <el-button size="small" type="text" @click="refresh">
         <img src="@/assets/main/5-ico3.png" alt="" />
         刷新
       </el-button>
     </div>
     <el-table
-      size="mini"
+      size="small"
       :data="tableData"
       row-key="key"
       height="550"
@@ -196,12 +196,12 @@ export default {
           :width="item.width"
           :fixed="item.fixed"
         >
-          <template slot-scope="{ row }">
+          <template #default="{ row }">
             <template v-if="tableRowEditKey === row.key">
               <el-input
                 v-if="item.dataIndex === 'tableName' || item.dataIndex === 'name'"
                 v-model="row[item.dataIndex]"
-                size="mini"
+                size="small"
                 :disabled="row.editStatus != 'ADD' || (row.editStatus == 'ADD' && item.dataIndex == 'tableName')"
                 @change="handleFieldsChange(item.dataIndex, row)"
                 @input="(val)=>handleInput(val,item.dataIndex,row)"
@@ -214,7 +214,7 @@ export default {
                 placeholder="请选择"
                 filterable
                 :disabled="row.editStatus != 'ADD'"
-                size="mini"
+                size="small"
                 @change="handleFieldsChange(item.dataIndex, row)"
               >
                 <el-option
@@ -228,7 +228,7 @@ export default {
               <span v-else-if="item.dataIndex === 'columnList'">
                 <el-button
                   @click="openIncludeColModal(row)"
-                  size="mini"
+                  size="small"
                   type="text"
                   plain
                 >
@@ -244,7 +244,7 @@ export default {
                 v-else-if="item.dataIndex === 'comment'"
                 v-model="row[item.dataIndex]"
                 :disabled="row.editStatus != 'ADD'"
-                size="mini"
+                size="small"
                 maxlength="20"
                 @change="handleFieldsChange(item.dataIndex, row)"
               />
@@ -256,10 +256,10 @@ export default {
         </el-table-column>
       </template>
       <el-table-column width="120" label="操作">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-button
             @click="deleteData(scope.row, scope.$index)"
-            size="mini"
+            size="small"
             type="text"
             plain
           >

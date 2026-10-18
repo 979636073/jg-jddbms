@@ -1,7 +1,7 @@
 <template>
-  <el-dialog :visible="visible" :title="operation === 'import' ? '导入表数据' : '导出表'" width="620px" append-to-body :close-on-click-modal="false" @close="$emit('close')">
+  <el-dialog :model-value="visible" :title="operation === 'import' ? '导入表数据' : '导出表'" width="620px" append-to-body :close-on-click-modal="false" @close="$emit('close')">
     <div class="table-transfer-dialog">
-      <div class="transfer-table"><i class="el-icon-tickets" /> {{ tableInfo.schema }}.{{ tableInfo.table }} <el-tag size="mini">{{ tableInfo.type }}</el-tag></div>
+      <div class="transfer-table"><i class="el-icon-tickets" /> {{ tableInfo.schema }}.{{ tableInfo.table }} <el-tag size="small">{{ tableInfo.type }}</el-tag></div>
       <el-form label-position="top" size="small">
         <el-form-item label="操作方式">
           <el-radio-group v-model="mode" size="small" @change="resetMode">
@@ -70,10 +70,10 @@
         </template>
       </el-form>
     </div>
-    <span slot="footer" class="dialog-footer">
+    <template #footer><span  class="dialog-footer">
       <el-button size="small" @click="$emit('close')">取消</el-button>
       <el-button type="primary" size="small" :loading="busy" @click="submit">{{ mode === 'database' ? '创建并预检查' : operation === 'import' ? '提交后台导入任务' : '提交后台导出任务' }}</el-button>
-    </span>
+    </span></template>
   </el-dialog>
 </template>
 

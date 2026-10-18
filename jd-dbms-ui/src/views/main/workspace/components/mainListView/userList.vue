@@ -18,7 +18,7 @@
       </el-table-column>
       <el-table-column prop="created" label="创建时间"> </el-table-column>
     </el-table>
-    <el-pagination v-if="filteredUsers.length > pageSize" small layout="prev, pager, next" :total="filteredUsers.length" :page-size="pageSize" :current-page.sync="page" />
+    <el-pagination v-if="filteredUsers.length > pageSize" small layout="prev, pager, next" :total="filteredUsers.length" :page-size="pageSize" v-model:current-page="page" />
   </div>
 </template>
 

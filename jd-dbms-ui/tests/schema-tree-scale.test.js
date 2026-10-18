@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 
 const file = path.join(__dirname, '../src/views/main/workspace/SideBar.vue')
 const descriptor = compiler.parseComponent(fs.readFileSync(file, 'utf8'))
@@ -20,8 +20,7 @@ vm.runInNewContext(descriptor.script.content.replace(/^import .*;?\s*$/gm, '')
   .replace('export default', 'module.exports ='), context, { filename: file })
 const methods = context.module.exports.methods
 process.env.VUE_ENV = 'server'
-const Vue = require('vue')
-const Tree = require('element-ui/lib/tree').default
+const createTree = require('./helpers/resource-tree')
 
 async function run() {
   const state = {
@@ -73,16 +72,16 @@ async function run() {
   const root = { key: 'datasource-13', label: 'QA', leaf: false }
   let delayedResolve
   let filterState
-  const tree = new (Vue.extend(Tree))({ propsData: {
+  const tree = createTree({
     nodeKey: 'key', lazy: true, props: { isLeaf: 'leaf', label: 'label' },
     filterNodeMethod: (value, data, node) => methods.resourceFilterNode.call(filterState, value, data, node),
     load(node, resolve) {
       if (node.level === 0) resolve([root])
-      else if (node.data === root) resolve([schema])
-      else if (node.data === schema) resolve([tables])
+      else if (node.key === root.key) resolve([schema])
+      else if (node.key === schema.key) resolve([tables])
       else delayedResolve = resolve
     },
-  } })
+  })
   tree.getNode(root.key).expand()
   tree.getNode(schema.key).expand()
   tree.getNode(tables.key).expand()
@@ -127,7 +126,7 @@ async function run() {
   assert(tree.getNode('last').visible, '用户主动展开后已加载表可以再次参与搜索')
   assert(tree.getNode(schema.key).expanded)
   filterState.handleResourceFilter('')
-  tree.$destroy()
+
 
   const node = state.createObjectNode(groups.find(group => group.groupType === 'materializedViews'),
     { name: 'MV_FALLBACK', type: 'MATERIALIZED VIEW' }, 0)

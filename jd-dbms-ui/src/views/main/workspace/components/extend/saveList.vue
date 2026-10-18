@@ -128,7 +128,7 @@ export default {
       <div ref="leftModuleTitleRef" class="leftModuleTitle">
         <div v-if="searching" class="leftModuleTitleSearch">
           <el-input
-            size="mini"
+            size="small"
             placeholder="搜索"
             prefix-icon="el-icon-search"
             v-model="searchValue"
@@ -166,16 +166,16 @@ export default {
 
     <el-dialog
       title="重命名"
-      :visible.sync="editData"
+      v-model="editData"
       width="800"
       :before-close="handleClose"
       :close-on-click-modal="false"
     >
       <el-input v-if="editData" v-model="editData.name" placeholder="请输入名称"></el-input>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button type="primary" @click="editSubmit">确定</el-button>
         <el-button @click="editData = null">取消</el-button>
-      </span>
+      </span></template>
     </el-dialog>
   </div>
 </template>

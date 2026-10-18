@@ -2,26 +2,26 @@
   <div class="top-right-btn" :style="style">
     <el-row>
       <el-tooltip class="item" effect="dark" :content="showSearch ? '隐藏搜索' : '显示搜索'" placement="top" v-if="search">
-        <el-button size="mini" circle icon="el-icon-search" @click="toggleSearch()" />
+        <el-button size="small" circle icon="el-icon-search" @click="toggleSearch()" />
       </el-tooltip>
       <el-tooltip class="item" effect="dark" content="刷新" placement="top">
-        <el-button size="mini" circle icon="el-icon-refresh" @click="refresh()" />
+        <el-button size="small" circle icon="el-icon-refresh" @click="refresh()" />
       </el-tooltip>
       <el-tooltip class="item" effect="dark" content="显隐列" placement="top" v-if="columns">
-        <el-button size="mini" circle icon="el-icon-menu" @click="showColumn()" v-if="showColumnsType == 'transfer'"/>
+        <el-button size="small" circle icon="el-icon-menu" @click="showColumn()" v-if="showColumnsType == 'transfer'"/>
         <el-dropdown trigger="click" :hide-on-click="false" style="padding-left: 12px" v-if="showColumnsType == 'checkbox'">
-          <el-button size="mini" circle icon="el-icon-menu" />
-          <el-dropdown-menu slot="dropdown">
-            <template v-for="item in columns">
-              <el-dropdown-item :key="item.key">
-                <el-checkbox :checked="item.visible" @change="checkboxChange($event, item.label)" :label="item.label" />
+          <el-button size="small" circle icon="el-icon-menu" />
+          <template #dropdown><el-dropdown-menu >
+            <template v-for="item in columns" :key="item.key">
+              <el-dropdown-item>
+                <el-checkbox :model-value="item.visible" @change="checkboxChange($event, item.label)" :label="item.label" />
               </el-dropdown-item>
             </template>
-          </el-dropdown-menu>
+          </el-dropdown-menu></template>
         </el-dropdown>
       </el-tooltip>
     </el-row>
-    <el-dialog :title="title" :visible.sync="open" append-to-body>
+    <el-dialog :title="title" v-model="open" append-to-body>
       <el-transfer
         :titles="['显示', '隐藏']"
         v-model="value"

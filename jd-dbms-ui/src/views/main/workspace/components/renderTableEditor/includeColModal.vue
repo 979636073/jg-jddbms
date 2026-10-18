@@ -91,13 +91,13 @@ export default {
 <template>
   <el-dialog
     :title="title"
-    :visible.sync="dialogVisible"
+    v-model="dialogVisible"
     width="500"
     :before-close="handleClose"
   >
-    <el-button @click="addData" size="mini" icon="el-icon-plus" style="margin-bottom: 10px;">新 增</el-button>
+    <el-button @click="addData" size="small" icon="el-icon-plus" style="margin-bottom: 10px;">新 增</el-button>
     <el-table
-      size="mini"
+      size="small"
       :data="tableData"
       row-key="name"
       @cell-click="cellclick"
@@ -114,14 +114,14 @@ export default {
         :width="item.width"
         :fixed="item.fixed"
       >
-        <template slot-scope="{ row }">
+        <template #default="{ row }">
           <template v-if="tableRowEditKey === row.key">
             <el-select
               v-if="item.dataIndex === 'columnName'"
               v-model="row[item.dataIndex]"
               placeholder="请选择"
               filterable
-              size="mini"
+              size="small"
               @change="edit(row)"
             >
               <el-option
@@ -141,7 +141,7 @@ export default {
               v-model="row[item.dataIndex]"
               placeholder="请选择"
               filterable
-              size="mini"
+              size="small"
               @change="edit(row)"
             >
               <el-option
@@ -161,8 +161,8 @@ export default {
         </template>
       </el-table-column>
       <el-table-column width="120" label="操作">
-        <template slot-scope="scope">
-          <el-button @click="deleteData(scope.row, scope.$index)" size="mini" type="text" plain>
+        <template #default="scope">
+          <el-button @click="deleteData(scope.row, scope.$index)" size="small" type="text" plain>
             <img src="@/assets/main/3-con-ico02.png" alt="">
             删除
           </el-button>
@@ -170,10 +170,10 @@ export default {
       </el-table-column>
     </el-table>
 
-    <span slot="footer" class="dialog-footer">
+    <template #footer><span  class="dialog-footer">
       <el-button type="primary" plain @click="dialogClose">取 消</el-button>
       <el-button type="primary" @click="saveIncludeCol">确 定</el-button>
-    </span>
+    </span></template>
   </el-dialog>
 </template>
 

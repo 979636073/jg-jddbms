@@ -1,18 +1,18 @@
 <template>
-  <el-dialog title="新增模式" :visible="visible" :before-close="close" width="460px">
-    <el-form ref="form" :model="form" :rules="rules" label-width="90px" @submit.native.prevent>
+  <el-dialog title="新增模式" :model-value="visible" :before-close="close" width="460px">
+    <el-form ref="form" :model="form" :rules="rules" label-width="90px" @submit.prevent>
       <el-form-item label="模式名称" prop="name">
-        <el-input v-model="form.name" size="small" maxlength="128" placeholder="请输入模式名称" @keyup.enter.native="save" />
+        <el-input v-model="form.name" size="small" maxlength="128" placeholder="请输入模式名称" @keyup.enter="save" />
       </el-form-item>
       <el-form-item label="所属用户">
         <span>{{ dataSourceUser || '当前连接用户' }}</span>
         <div class="form-hint">新模式归当前数据库连接用户所有。</div>
       </el-form-item>
     </el-form>
-    <span slot="footer">
+    <template #footer><span >
       <el-button size="small" @click="close">取消</el-button>
       <el-button size="small" type="primary" :loading="saving" @click="save">创建模式</el-button>
-    </span>
+    </span></template>
   </el-dialog>
 </template>
 

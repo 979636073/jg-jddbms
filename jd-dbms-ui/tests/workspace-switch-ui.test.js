@@ -2,18 +2,20 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const src = path.join(__dirname, '../src')
 
 const shell = compiler.parseComponent(fs.readFileSync(path.join(src, 'views/main/workspace/index.vue'), 'utf8'))
 const compiled = compiler.compile(shell.template.content)
 assert.deepStrictEqual(compiled.errors, [])
 function findWindowHost(node) {
-  if (node.attrsMap?.class === 'workspace-content') return node
+  if (compiler.attribute(node, 'class') === 'workspace-content') return node
   return (node.children || []).filter(child => child.type === 1).map(findWindowHost).find(Boolean)
 }
 const host = findWindowHost(compiled.ast)
-assert.strictEqual(host.children.filter(child => child.type === 1)[0].tag, 'keep-alive',
+const routerView = host.children.find(child => child.tag === 'router-view')
+assert(routerView && compiler.directive(routerView, 'slot'), 'Vue Router 4 应通过插槽保留窗口缓存')
+assert.strictEqual(routerView.children.filter(child => child.type === 1)[0].tag, 'keep-alive',
   '缓存窗口应直接切换，不能先淡出旧窗口再淡入新窗口')
 
 let beforeEach, afterEach, starts = 0, completions = 0, continued = 0

@@ -12,8 +12,8 @@
       </el-select>
     </div>
     <el-table :data="pageRows" size="small" row-key="key" empty-text="没有匹配的结构对象">
-      <el-table-column type="expand" width="44"><template slot-scope="scope">
-        <el-table v-if="scope.row.changeDetails && scope.row.changeDetails.length" :data="scope.row.changeDetails" size="mini">
+      <el-table-column type="expand" width="44"><template #default="scope">
+        <el-table v-if="scope.row.changeDetails && scope.row.changeDetails.length" :data="scope.row.changeDetails" size="small">
           <el-table-column prop="label" label="差异属性（方括号为字段顺序）" min-width="220" />
           <el-table-column prop="source" label="源侧" min-width="200" />
           <el-table-column prop="target" label="目标侧" min-width="200" />
@@ -23,12 +23,12 @@
           <div><strong>目标定义摘要 · {{ scope.row.target && scope.row.target.name }}</strong><pre>{{ scope.row.target ? scope.row.target.definition : scope.row.status === 'unknown' ? '无法判定' : '不存在' }}</pre></div>
         </div>
       </template></el-table-column>
-      <el-table-column label="类型" width="110"><template slot-scope="scope">{{ kindLabel(scope.row.kind) }}</template></el-table-column>
+      <el-table-column label="类型" width="110"><template #default="scope">{{ kindLabel(scope.row.kind) }}</template></el-table-column>
       <el-table-column prop="name" label="对象名" min-width="260" show-overflow-tooltip />
-      <el-table-column label="结果" width="110"><template slot-scope="scope"><el-tag size="mini" :type="statusType(scope.row.status)">{{ statusLabel(scope.row.status) }}</el-tag></template></el-table-column>
+      <el-table-column label="结果" width="110"><template #default="scope"><el-tag size="small" :type="statusType(scope.row.status)">{{ statusLabel(scope.row.status) }}</el-tag></template></el-table-column>
     </el-table>
     <el-pagination v-if="filteredRows.length > pageSize" small layout="total, prev, pager, next"
-                   :total="filteredRows.length" :page-size="pageSize" :current-page.sync="page" />
+                   :total="filteredRows.length" :page-size="pageSize" v-model:current-page="page" />
   </div>
 </template>
 

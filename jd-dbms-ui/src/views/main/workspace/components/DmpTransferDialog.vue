@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :visible="visible" :title="`${operation === 'import' ? '导入' : '导出'} DMP · ${scope === 'table' ? '表' : '模式'}`"
+  <el-dialog :model-value="visible" :title="`${operation === 'import' ? '导入' : '导出'} DMP · ${scope === 'table' ? '表' : '模式'}`"
     width="680px" append-to-body :close-on-click-modal="false" @close="$emit('close')">
     <div class="dmp-transfer-dialog">
       <div class="context-line">{{ context.type === 'DM' ? '达梦' : 'Oracle' }} · {{ context.schema }}<span v-if="scope === 'table'">.{{ context.table }}</span></div>
@@ -26,12 +26,12 @@
         </el-form-item>
         <template v-if="operation === 'export' && scope === 'schema' && exportRange === 'tables'">
           <div class="table-toolbar">
-            <el-input v-model.trim="search" clearable placeholder="搜索表名" @keyup.enter.native="searchTables" @clear="searchTables" />
+            <el-input v-model.trim="search" clearable placeholder="搜索表名" @keyup.enter="searchTables" @clear="searchTables" />
             <el-button @click="searchTables">搜索</el-button>
             <el-button @click="selectPage">选中本页</el-button>
           </div>
           <div class="table-list" v-loading="loadingTables">
-            <el-checkbox v-for="name in pageTables" :key="name" :value="selectedTables.includes(name)" @change="toggleTable(name, $event)">{{ name }}</el-checkbox>
+            <el-checkbox v-for="name in pageTables" :key="name" :model-value="selectedTables.includes(name)" @change="toggleTable(name, $event)">{{ name }}</el-checkbox>
             <span v-if="!pageTables.length" class="hint">没有匹配的表</span>
           </div>
           <el-pagination v-if="tableTotal > pageSize" small layout="total, prev, pager, next" :current-page="page"
@@ -67,10 +67,10 @@
           title="Oracle Data Pump 需预先配置数据库 DIRECTORY 与客户端共享目录。" />
       </el-form>
     </div>
-    <span slot="footer">
+    <template #footer><span >
       <el-button size="small" @click="$emit('close')">取消</el-button>
       <el-button type="primary" size="small" :loading="busy" @click="submit">提交后台{{ operation === 'import' ? '导入' : '导出' }}任务</el-button>
-    </span>
+    </span></template>
   </el-dialog>
 </template>
 

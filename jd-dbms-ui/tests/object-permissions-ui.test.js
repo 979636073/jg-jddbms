@@ -1,7 +1,7 @@
 const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 
 const file = path.join(__dirname, '../src/views/main/workspace/components/renderUserEditor/objectPermissions.vue')
 const componentSource = compiler.parseComponent(fs.readFileSync(file, 'utf8'))

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="客户端工具管理"
-    :visible.sync="dialogVisible"
+    v-model="dialogVisible"
     width="920px"
     append-to-body
     class="dmp-tool-manager"
@@ -27,54 +27,54 @@
 
     <el-table v-loading="loading" :data="tools" height="430" empty-text="尚未上传客户端工具">
       <el-table-column label="数据库" width="90">
-        <template slot-scope="scope">
-          <el-tag size="mini" :type="scope.row.databaseType === 'ORACLE' ? 'warning' : ''">
+        <template #default="scope">
+          <el-tag size="small" :type="scope.row.databaseType === 'ORACLE' ? 'warning' : ''">
             {{ scope.row.databaseType === 'ORACLE' ? 'Oracle' : '达梦' }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="工具族" min-width="150">
-        <template slot-scope="scope">{{ familyLabel(scope.row.toolFamily) }}</template>
+        <template #default="scope">{{ familyLabel(scope.row.toolFamily) }}</template>
       </el-table-column>
       <el-table-column prop="version" label="版本" width="110" />
       <el-table-column label="运行平台" width="145">
-        <template slot-scope="scope">
+        <template #default="scope">
           <div>{{ scope.row.os }} / {{ scope.row.arch }}</div>
           <div v-if="scope.row.currentPlatformCompatible === false" class="platform-warning">当前服务不可运行</div>
         </template>
       </el-table-column>
       <el-table-column label="检测状态" min-width="180" show-overflow-tooltip>
-        <template slot-scope="scope">
-          <el-tag size="mini" :type="scope.row.status === 'AVAILABLE' ? 'success' : 'danger'">
+        <template #default="scope">
+          <el-tag size="small" :type="scope.row.status === 'AVAILABLE' ? 'success' : 'danger'">
             {{ scope.row.status === 'AVAILABLE' ? '检测通过' : '检测失败' }}
           </el-tag>
           <span class="status-message">{{ scope.row.statusMessage }}</span>
         </template>
       </el-table-column>
       <el-table-column label="启用" width="75" align="center">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-switch
-            :value="scope.row.enabled"
+            :model-value="scope.row.enabled"
             :disabled="!isAdmin || scope.row.status !== 'AVAILABLE' || changingId === scope.row.id"
             @change="value => changeEnabled(scope.row, value)"
           />
         </template>
       </el-table-column>
       <el-table-column v-if="isAdmin" label="操作" width="115" align="center">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-button type="text" @click="openEdit(scope.row)">修改</el-button>
           <el-button type="text" class="delete-action" :disabled="scope.row.enabled" :title="scope.row.enabled ? '请先停用，再删除该版本' : ''" @click="removeTool(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <span slot="footer" class="dialog-footer">
+    <template #footer><span  class="dialog-footer">
       <el-button size="small" @click="dialogVisible = false">关闭</el-button>
-    </span>
+    </span></template>
 
     <el-dialog
       title="上传客户端工具包"
-      :visible.sync="uploadVisible"
+      v-model="uploadVisible"
       width="520px"
       append-to-body
       class="dmp-tool-upload"
@@ -105,14 +105,14 @@
           <div class="platform-help">能识别文件头时以自动检测结果为准；无法识别时使用这里选择的平台。</div>
         </el-form-item>
       </el-form>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button size="small" @click="uploadVisible = false">取消</el-button>
         <el-button type="primary" size="small" :loading="uploading" @click="submitUpload">
           {{ uploading ? '正在检测' : '上传并检测' }}
         </el-button>
-      </span>
+      </span></template>
     </el-dialog>
-    <el-dialog title="修改客户端信息" :visible.sync="editVisible" width="480px" append-to-body>
+    <el-dialog title="修改客户端信息" v-model="editVisible" width="480px" append-to-body>
       <el-form label-position="top" size="small">
         <el-form-item label="版本号">
           <el-input v-model.trim="editVersion" placeholder="例如 8.1.4.200" maxlength="60" />
@@ -124,10 +124,10 @@
           <div class="platform-help">文件头能够识别运行平台时，只能使用识别到的平台。</div>
         </el-form-item>
       </el-form>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button size="small" @click="editVisible = false">取消</el-button>
         <el-button type="primary" size="small" :loading="editing" @click="submitEdit">保存修改</el-button>
-      </span>
+      </span></template>
     </el-dialog>
   </el-dialog>
 </template>

@@ -5,7 +5,7 @@
 
 import Clipboard from 'clipboard'
 export default {
-  bind(el, binding, vnode) {
+  mounted(el, binding, vnode) {
     switch (binding.arg) {
       case 'success':
         el._vClipBoard_success = binding.value;
@@ -30,7 +30,7 @@ export default {
       }
     }
   },
-  update(el, binding) {
+  updated(el, binding) {
     if (binding.arg === 'success') {
       el._vClipBoard_success = binding.value;
     } else if (binding.arg === 'error') {
@@ -40,14 +40,13 @@ export default {
       el._vClipBoard.action = () => binding.arg === 'cut' ? 'cut' : 'copy';
     }
   },
-  unbind(el, binding) {
-    if (!el._vClipboard) return
+  unmounted(el, binding) {
     if (binding.arg === 'success') {
       delete el._vClipBoard_success;
     } else if (binding.arg === 'error') {
       delete el._vClipBoard_error;
     } else {
-      el._vClipBoard.destroy();
+      el._vClipBoard?.destroy();
       delete el._vClipBoard;
     }
   }

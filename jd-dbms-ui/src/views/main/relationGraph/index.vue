@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <el-form :inline="true" size="small" @submit.native.prevent="loadRelations">
+    <el-form :inline="true" size="small" @submit.prevent="loadRelations">
       <el-form-item label="数据源ID"><el-input v-model="form.dataSourceId" placeholder="请输入数据源ID" /></el-form-item>
       <el-form-item label="数据库"><el-input v-model="form.databaseName" /></el-form-item>
       <el-form-item label="模式"><el-input v-model="form.schemaName" /></el-form-item>
@@ -19,11 +19,11 @@
     <el-card v-loading="loading" class="relation-card">
       <el-empty v-if="!treeData" description="请输入表信息查询关联关系" />
       <el-tree v-else :data="[treeData]" node-key="id" default-expand-all :props="treeProps">
-        <span slot-scope="{ node, data }" class="tree-node">
+        <template #default="{ node, data }"><span  class="tree-node">
           <i :class="data.type === 'TABLE' ? 'el-icon-tickets' : 'el-icon-connection'" />
           <span>{{ data.schemaName ? data.schemaName + '.' : '' }}{{ data.tableName }}</span>
-          <el-tag v-if="data.status" size="mini" type="info">{{ data.status }}</el-tag>
-        </span>
+          <el-tag v-if="data.status" size="small" type="info">{{ data.status }}</el-tag>
+        </span></template>
       </el-tree>
     </el-card>
   </div>

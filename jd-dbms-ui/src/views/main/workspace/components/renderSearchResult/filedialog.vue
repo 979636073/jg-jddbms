@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="文件"
-    :visible.sync="dialogVisible"
+    v-model="dialogVisible"
     width="50%"
     :before-close="handleClose"
   >
@@ -21,10 +21,10 @@
      <el-tag v-else>{{ blobStr === '' ? '空文件（0 字节）' : '请下载后预览' }}</el-tag>
      <p v-if="downloadLoading">已下载 {{ (downloadedBytes / 1024 / 1024).toFixed(2) }} MiB</p>
     </span>
-    <span slot="footer" class="dialog-footer">
+    <template #footer><span  class="dialog-footer">
       <el-button @click="handleClose">{{ loading || downloadLoading ? '取消读取' : '关闭' }}</el-button>
       <el-button type="primary" :loading="downloadLoading" :disabled="loading || !!error || nullValue" @click="downLoad">下 载</el-button>
-    </span> 
+    </span></template>
   </el-dialog>
 </template>
 
@@ -56,7 +56,7 @@ export default {
       return `data:${mime};base64,${this.blobStr}`;
     },
   },
-  beforeDestroy() { this.cancelRead(); },
+  beforeUnmount() { this.cancelRead(); },
   methods: {
     cancelRead() {
       if (this._readController) {

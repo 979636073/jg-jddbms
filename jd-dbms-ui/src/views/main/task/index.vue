@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <el-form :inline="true" size="small" @submit.native.prevent="handleQuery">
+    <el-form :inline="true" size="small" @submit.prevent="handleQuery">
       <el-form-item label="任务状态">
         <el-select v-model="queryParams.taskStatus" clearable placeholder="全部状态" @change="handleQuery">
           <el-option label="初始化" value="INIT" />
@@ -18,23 +18,23 @@
 
     <el-table v-loading="loading" :data="list" stripe>
       <el-table-column prop="taskName" label="任务名称" min-width="180" show-overflow-tooltip />
-      <el-table-column label="任务类型" min-width="150" show-overflow-tooltip><template slot-scope="scope">{{ typeText(scope.row.taskType) }}</template></el-table-column>
+      <el-table-column label="任务类型" min-width="150" show-overflow-tooltip><template #default="scope">{{ typeText(scope.row.taskType) }}</template></el-table-column>
       <el-table-column prop="taskStatus" label="状态" width="100">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-tag :type="statusType(scope.row.taskStatus)">{{ statusText(scope.row.taskStatus) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="taskProgress" label="进度" width="160">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-progress :percentage="progress(scope.row.taskProgress)" :status="scope.row.taskStatus === 'ERROR' ? 'exception' : undefined" />
           <div v-if="taskMessage(scope.row)" class="task-progress-text">{{ taskMessage(scope.row) }}</div>
         </template>
       </el-table-column>
       <el-table-column prop="gmtCreate" label="创建时间" width="180">
-        <template slot-scope="scope">{{ parseTime(scope.row.gmtCreate) }}</template>
+        <template #default="scope">{{ parseTime(scope.row.gmtCreate) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="130" fixed="right">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-button v-if="scope.row.taskStatus === 'FINISH' && scope.row.downloadUrl" type="text" icon="el-icon-download" @click="download(scope.row)">下载</el-button>
           <el-button v-if="!isRunning(scope.row.taskStatus)" type="text" class="task-clear" @click="clearTask(scope.row)">清除</el-button>
           <el-button v-if="canCancel(scope.row)" type="text" @click="cancelTask(scope.row)">取消</el-button>
@@ -43,13 +43,13 @@
       </el-table-column>
     </el-table>
 
-    <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNo" :limit.sync="queryParams.pageSize" @pagination="getList" />
+    <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNo" v-model:limit="queryParams.pageSize" @pagination="getList" />
     <div class="migration-section">
       <h3>跨库数据迁移 <el-button type="text" size="small" @click="openMigrationList">查看全部迁移任务</el-button></h3>
       <el-table :data="migrationTasks" size="small" stripe empty-text="暂无跨库迁移任务">
-        <el-table-column label="任务名称" min-width="200"><template slot-scope="scope"><el-button type="text" @click="openMigration(scope.row)">{{ scope.row.config && scope.row.config.name }}</el-button></template></el-table-column>
+        <el-table-column label="任务名称" min-width="200"><template #default="scope"><el-button type="text" @click="openMigration(scope.row)">{{ scope.row.config && scope.row.config.name }}</el-button></template></el-table-column>
         <el-table-column prop="direction" label="方向" width="125" />
-        <el-table-column label="状态" width="130"><template slot-scope="scope"><el-tag size="mini" :type="migrationStatusType(scope.row.status)">{{ migrationStatus(scope.row.status) }}</el-tag></template></el-table-column>
+        <el-table-column label="状态" width="130"><template #default="scope"><el-tag size="small" :type="migrationStatusType(scope.row.status)">{{ migrationStatus(scope.row.status) }}</el-tag></template></el-table-column>
         <el-table-column prop="committedRows" label="已提交行数" width="140" />
         <el-table-column prop="message" label="执行信息" min-width="220" show-overflow-tooltip />
       </el-table>
@@ -75,7 +75,7 @@ export default {
     }
   },
   created() { this.getList() },
-  beforeDestroy() { this.stopRefresh() },
+  beforeUnmount() { this.stopRefresh() },
   methods: {
     getList() {
       this.loading = true

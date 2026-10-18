@@ -55,13 +55,13 @@ export default {
       :key="item.value"
       :prop="item.value"
       :label="item.label">
-      <template slot-scope="scope">
+      <template #default="scope">
         <div v-if="scope.row.index === clickRow && scope.column.index === clickCell">
           <el-input
             ref="editInput"
             v-model="scope.row[item.value]"
             maxlength="300"
-            size="mini"
+            size="small"
             @blur="inputBlur(scope.row)"
           />
         </div>

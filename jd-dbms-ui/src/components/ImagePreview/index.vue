@@ -5,9 +5,9 @@
     :style="`width:${realWidth};height:${realHeight};`"
     :preview-src-list="realSrcList"
   >
-    <div slot="error" class="image-slot">
+    <template #error><div  class="image-slot">
       <i class="el-icon-picture-outline"></i>
-    </div>
+    </div></template>
   </el-image>
 </template>
 

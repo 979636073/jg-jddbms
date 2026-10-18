@@ -1,5 +1,5 @@
 <template>
-  <el-drawer size="280px" :visible="visible" :with-header="false" :append-to-body="true" :show-close="false">
+  <el-drawer size="280px" :model-value="visible" :with-header="false" :append-to-body="true" :show-close="false">
     <div class="drawer-container">
       <div>
         <div class="setting-drawer-content">

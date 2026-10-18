@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import { Message } from 'element-ui'
+import { ElMessage as Message } from 'element-plus'
 import { saveAs } from 'file-saver'
 
 export function getTaskList(data) {

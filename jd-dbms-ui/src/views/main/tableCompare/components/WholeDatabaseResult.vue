@@ -46,7 +46,7 @@
       class="database-table"
     >
       <el-table-column type="expand" width="46">
-        <template slot-scope="scope">
+        <template #default="scope">
           <div v-if="scope.row.fieldRows.length" class="field-detail">
             <div class="field-detail__title">
               <strong>{{ scope.row.sourceName || scope.row.targetName }}</strong>
@@ -61,25 +61,25 @@
         </template>
       </el-table-column>
       <el-table-column label="表名" min-width="220">
-        <template slot-scope="scope">
+        <template #default="scope">
           <span class="table-name">{{ scope.row.sourceName || scope.row.targetName }}</span>
         </template>
       </el-table-column>
       <el-table-column label="源库" min-width="210">
-        <template slot-scope="scope">
+        <template #default="scope">
           <span v-if="scope.row.sourceName">{{ scope.row.sourceName }}</span>
           <span v-else class="missing-value">不存在</span>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="108" align="center">
-        <template slot-scope="scope">
-          <el-tag :type="statusType(scope.row.status)" size="mini" effect="plain">
+        <template #default="scope">
+          <el-tag :type="statusType(scope.row.status)" size="small" effect="plain">
             {{ tableStatusText(scope.row.status) }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="差异摘要" min-width="280">
-        <template slot-scope="scope">
+        <template #default="scope">
           <span v-if="scope.row.status === 'changed'" class="difference-summary">
             字段修改 {{ scope.row.counts.changed }}，仅源表 {{ scope.row.counts.sourceOnly }}，仅目标表 {{ scope.row.counts.targetOnly }}；结构对象差异 {{ scope.row.objectDifferenceCount || 0 }}
           </span>
@@ -88,14 +88,14 @@
         </template>
       </el-table-column>
       <el-table-column label="目标库" min-width="210">
-        <template slot-scope="scope">
+        <template #default="scope">
           <span v-if="scope.row.targetName">{{ scope.row.targetName }}</span>
           <span v-else class="missing-value">不存在</span>
         </template>
       </el-table-column>
     </el-table>
     <el-pagination v-if="filteredRows.length > pageSize" small layout="total, prev, pager, next"
-                   :total="filteredRows.length" :page-size="pageSize" :current-page.sync="page" />
+                   :total="filteredRows.length" :page-size="pageSize" v-model:current-page="page" />
   </div>
 </template>
 

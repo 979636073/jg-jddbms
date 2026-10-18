@@ -22,7 +22,7 @@
       </template>
     </template>
     <template v-if="unmatch && showValue">
-      {{ unmatchArray | handleArray }}
+      {{ handleArray(unmatchArray) }}
     </template>
   </div>
 </template>
@@ -72,7 +72,7 @@ export default {
     },
 
   },
-  filters: {
+  methods: {
     handleArray(array) {
       if (array.length === 0) return '';
       return array.reduce((pre, cur) => {

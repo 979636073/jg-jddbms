@@ -1,10 +1,10 @@
 <template>
-  <el-dialog title="共享连接授权" :visible="visible" width="960px" :close-on-click-modal="false" @open="load" @close="$emit('close')">
+  <el-dialog title="共享连接授权" :model-value="visible" width="960px" :close-on-click-modal="false" @open="load" @close="$emit('close')">
     <div v-loading="loading">
       <el-tabs v-model="activeTab" @tab-click="tabChanged">
       <el-tab-pane label="授权管理" name="grants">
       <p>按操作授权用户或团队使用此连接。目标数据库账号的权限仍会生效。</p>
-      <el-form inline size="small" @submit.native.prevent>
+      <el-form inline size="small" @submit.prevent>
         <el-form-item label="授权类型">
           <el-select v-model="objectType" style="width: 100px" @change="resetSearch">
             <el-option label="用户" value="USER" /><el-option label="团队" value="TEAM" />
@@ -24,19 +24,19 @@
         <el-button type="primary" size="small" :loading="saving" :disabled="!selectedIds.length || !permissionCodes.length" @click="grant">批量授权</el-button>
       </el-form>
       <el-table :data="grants" size="small" max-height="320" empty-text="当前仅连接所有者可使用">
-        <el-table-column label="类型" width="80"><template slot-scope="scope">{{ scope.row.objectType === 'USER' ? '用户' : scope.row.objectType === 'TEAM' ? '团队' : scope.row.objectType }}</template></el-table-column>
+        <el-table-column label="类型" width="80"><template #default="scope">{{ scope.row.objectType === 'USER' ? '用户' : scope.row.objectType === 'TEAM' ? '团队' : scope.row.objectType }}</template></el-table-column>
         <el-table-column prop="name" label="名称" />
         <el-table-column prop="description" label="说明" />
         <el-table-column label="操作权限" min-width="250">
-          <template slot-scope="scope">
-            <el-select v-model="scope.row.permissionCodes" multiple collapse-tags size="mini" style="width: 185px">
+          <template #default="scope">
+            <el-select v-model="scope.row.permissionCodes" multiple collapse-tags size="small" style="width: 185px">
               <el-option v-for="action in actions" :key="action.code" :label="action.label" :value="action.code" />
             </el-select>
             <el-button type="text" :disabled="saving || !scope.row.permissionCodes.length" @click="saveGrant(scope.row)">保存</el-button>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="150">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button v-if="scope.row.objectType === 'USER'" type="text" @click="previewGrant(scope.row)">有效权限</el-button>
             <el-button type="text" :disabled="saving || !['USER', 'TEAM'].includes(scope.row.objectType)" @click="revoke(scope.row)">撤销</el-button>
           </template>
@@ -53,10 +53,10 @@
         <el-button size="small" :disabled="!previewUserId" :loading="previewLoading" @click="loadPreview">刷新权限</el-button>
         <el-alert v-if="previewError" :title="previewError" type="error" :closable="false" />
         <el-table v-loading="previewLoading" :data="preview ? preview.actions : []" size="small" max-height="360" empty-text="请选择用户查看有效权限">
-          <el-table-column label="操作" width="155"><template slot-scope="scope">{{ actionLabel(scope.row.code) }}</template></el-table-column>
-          <el-table-column label="平台角色" width="85"><template slot-scope="scope">{{ scope.row.platformAllowed ? '允许' : '未允许' }}</template></el-table-column>
-          <el-table-column label="连接授权来源" min-width="160"><template slot-scope="scope">{{ scope.row.sources.map(sourceLabel).join('、') || '未授权' }}</template></el-table-column>
-          <el-table-column label="最终权限" width="85"><template slot-scope="scope"><el-tag size="mini" :type="scope.row.allowed ? 'success' : 'info'">{{ scope.row.allowed ? '允许' : '拒绝' }}</el-tag></template></el-table-column>
+          <el-table-column label="操作" width="155"><template #default="scope">{{ actionLabel(scope.row.code) }}</template></el-table-column>
+          <el-table-column label="平台角色" width="85"><template #default="scope">{{ scope.row.platformAllowed ? '允许' : '未允许' }}</template></el-table-column>
+          <el-table-column label="连接授权来源" min-width="160"><template #default="scope">{{ scope.row.sources.map(sourceLabel).join('、') || '未授权' }}</template></el-table-column>
+          <el-table-column label="最终权限" width="85"><template #default="scope"><el-tag size="small" :type="scope.row.allowed ? 'success' : 'info'">{{ scope.row.allowed ? '允许' : '拒绝' }}</el-tag></template></el-table-column>
           <el-table-column prop="reason" label="原因" min-width="190" />
         </el-table>
       </el-tab-pane>
@@ -68,14 +68,14 @@
           <el-table-column prop="id" label="记录号" width="85" />
           <el-table-column prop="operator" label="操作者" width="100" />
           <el-table-column prop="action" label="操作" width="135" />
-          <el-table-column label="时间" width="160"><template slot-scope="scope">{{ parseTime(scope.row.time) }}</template></el-table-column>
-          <el-table-column label="结果" width="70"><template slot-scope="scope">{{ scope.row.success ? '成功' : '失败' }}</template></el-table-column>
-          <el-table-column label="详情" min-width="160"><template slot-scope="scope"><el-popover trigger="click" width="420"><p>{{ scope.row.url }}</p><pre class="sharing-audit-detail">{{ scope.row.params }}</pre><p>{{ scope.row.error }}</p><el-button slot="reference" type="text">查看对象与权限</el-button></el-popover></template></el-table-column>
+          <el-table-column label="时间" width="160"><template #default="scope">{{ parseTime(scope.row.time) }}</template></el-table-column>
+          <el-table-column label="结果" width="70"><template #default="scope">{{ scope.row.success ? '成功' : '失败' }}</template></el-table-column>
+          <el-table-column label="详情" min-width="160"><template #default="scope"><el-popover trigger="click" width="420"><p>{{ scope.row.url }}</p><pre class="sharing-audit-detail">{{ scope.row.params }}</pre><p>{{ scope.row.error }}</p><template #reference><el-button  type="text">查看对象与权限</el-button></template></el-popover></template></el-table-column>
         </el-table>
       </el-tab-pane>
       </el-tabs>
     </div>
-    <span slot="footer"><el-button @click="$emit('close')">关闭</el-button></span>
+    <template #footer><span ><el-button @click="$emit('close')">关闭</el-button></span></template>
   </el-dialog>
 </template>
 

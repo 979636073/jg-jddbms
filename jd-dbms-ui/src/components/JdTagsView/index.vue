@@ -11,8 +11,8 @@
         tag="span"
         class="tags-view-item"
         :style="activeStyle(tag)"
-        @click.middle.native="!isAffix(tag) ? closeSelectedTag(tag) : ''"
-        @contextmenu.prevent.native="openMenu(tag, $event)"
+        @click.middle="!isAffix(tag) ? closeSelectedTag(tag) : ''"
+        @contextmenu.prevent="openMenu(tag, $event)"
       >
         <span class="badge">{{ index + 1 }}</span>
         {{ getViewTitle(tag) }}
@@ -26,7 +26,7 @@
         placement="right"
         trigger="click"
         class="elpop"
-        v-model="showPop"
+        v-model:visible="showPop"
         popper-class="elpop"
       >
         <template #default>
@@ -35,13 +35,13 @@
             style="display:flex; justify-content: space-around; align-itemsL center;"
           >
             <el-button
-              size="mini"
+              size="small"
               type="primary"
               @click="routerLinkFn('look')"
               style="padding: 10px 50px"
             >新建窗口</el-button>
             <el-button
-              size="mini"
+              size="small"
               type="primary"
               @click="routerLinkFn('query')"
               style="padding: 10px 50px"
@@ -49,7 +49,7 @@
           </div>
         </template>
 
-        <i id="iconColor" slot="reference" class="el-icon-circle-plus"></i>
+        <template #reference><i id="iconColor"  class="el-icon-circle-plus"></i></template>
       </el-popover>
     </scroll-pane>
     <ul v-show="visible" :style="{ left: left + 'px', top: top + 'px' }" class="contextmenu">
@@ -136,7 +136,7 @@ export default {
       return this.$store.state.jdTagsView.titleMap;
     },
     getViewTitle() {
-      return function(item) {
+      return item => {
         let id = item.params.id;
         let title = "";
 
@@ -207,13 +207,6 @@ export default {
   mounted() {
     if (this.$store.getters.visitedViews2.length) {
       this.activeStyle(this.$store.getters.visitedViews2[0]);
-    }
-
-    let createData = JSON.parse(sessionStorage.getItem("createData"));
-    if (!createData) {
-      this.$router.push({
-        path: "/workspace"
-      });
     }
   },
   methods: {

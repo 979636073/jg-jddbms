@@ -2,7 +2,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 function component(file, name) {
   const source = compiler.parseComponent(fs.readFileSync(path.join(__dirname, '../src', file), 'utf8'))
   const template = compiler.compile(source.template.content)

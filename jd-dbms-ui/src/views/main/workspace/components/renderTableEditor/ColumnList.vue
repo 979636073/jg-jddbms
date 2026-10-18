@@ -335,17 +335,17 @@ export default {
 <template>
   <div class="draggable">
     <div class="table_btn_list">
-      <el-button size="mini" type="text" style="margin-left: 0" @click="addData">
+      <el-button size="small" type="text" style="margin-left: 0" @click="addData">
         <img src="@/assets/main/3-con-ico01.png" alt />
         添加
       </el-button>
-      <el-button size="mini" type="text" @click="refresh">
+      <el-button size="small" type="text" @click="refresh">
         <img src="@/assets/main/5-ico3.png" alt />
         刷新
       </el-button>
     </div>
     <el-table
-      size="mini"
+      size="small"
       :data="tableData"
       row-key="key"
       @cell-click="cellclick"
@@ -364,7 +364,7 @@ export default {
         :width="item.width"
         :fixed="item.fixed"
       >
-        <template slot-scope="{ row }">
+        <template #default="{ row }">
           <template v-if="item.dataIndex === 'autoIncrement'">
             <el-checkbox
               @change="() => {handleFieldsChange(item.dataIndex, row);}"
@@ -394,7 +394,7 @@ export default {
             <el-input
               v-if="item.dataIndex === 'name' || item.dataIndex === 'defaultValue'"
               v-model="row[item.dataIndex]"
-              size="mini"
+              size="small"
               @change="handleFieldsChange(item.dataIndex, row)"
               show-word-limit
               :maxlength="50"
@@ -404,7 +404,7 @@ export default {
               v-model="row[item.dataIndex]"
               placeholder="请选择"
               filterable
-              size="mini"
+              size="small"
               @change=" () => {edit(row); handleFieldsChange(item.dataIndex, row);}"
             >
               <el-option
@@ -417,7 +417,7 @@ export default {
             <el-input
               v-else-if="item.dataIndex === 'columnSize'"
               v-model="row[item.dataIndex]"
-              size="mini"
+              size="small"
               @input="handleFieldsInput(item.dataIndex, row)"
               @change="handleFieldsChange(item.dataIndex, row)"
               :disabled="!editingConfig || !editingConfig.supportLength"
@@ -427,7 +427,7 @@ export default {
             <el-input
               v-else-if="item.dataIndex === 'comment'"
               v-model="row[item.dataIndex]"
-              size="mini"
+              size="small"
               :disabled="editingConfig && !editingConfig.supportComments"
               @change="handleFieldsChange(item.dataIndex, row)"
               show-word-limit
@@ -438,8 +438,8 @@ export default {
         </template>
       </el-table-column>
       <el-table-column width="120" label="操作">
-        <template slot-scope="scope">
-          <el-button @click="deleteData(scope.row, scope.$index)" size="mini" type="text" plain>
+        <template #default="scope">
+          <el-button @click="deleteData(scope.row, scope.$index)" size="small" type="text" plain>
             <img src="@/assets/main/3-con-ico02.png" alt />
             删除
           </el-button>
@@ -448,7 +448,7 @@ export default {
     </el-table>
     <!-- <el-button @click="addData" size="mini" icon="el-icon-plus" style="width: 100%; margin-top: 10px;">添加列</el-button> -->
     <!-- <div class="ceshi"></div> -->
-    <el-form size="mini" ref="form" :model="editingData" label-width="90px">
+    <el-form size="small" ref="form" :model="editingData" label-width="90px">
       <!-- <el-form-item
         v-if="editingConfig && editingConfig.supportDefaultValue"
         label="默认值"

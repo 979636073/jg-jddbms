@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :title="dialogTitle" :visible="visibleDialog" width="600px" top="8vh"
+  <el-dialog :title="dialogTitle" :model-value="visibleDialog" width="600px" top="8vh"
     custom-class="datasource-dialog" :close-on-click-modal="false" :before-close="handleClose" @open="initializeForm">
     <div v-loading="loading" class="datasource-content">
       <p class="dialog-hint">{{ dialogHint }}</p>
@@ -55,13 +55,13 @@
         </el-form-item>
       </el-form>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div  class="dialog-footer">
       <el-button :disabled="connecting" @click="handleClose">取消</el-button>
       <el-button v-if="!isReadonly" :disabled="loading || connecting" @click="saveConnection('test')">测试连接</el-button>
       <el-button type="primary" :loading="connecting" :disabled="loading || (mode !== 'create' && !detailsReady)" @click="submit">
         {{ isReadonly ? '连接' : mode === 'edit' ? '保存' : '保存并连接' }}
       </el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

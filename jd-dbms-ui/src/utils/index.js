@@ -1,5 +1,5 @@
 import { parseTime } from './ruoyi'
-import {Message} from 'element-ui'
+import { ElMessage as Message } from 'element-plus'
 
 /**
  * 表格时间格式化

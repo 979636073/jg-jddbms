@@ -1,19 +1,21 @@
 <script>
-const renderSqlExecute = () => import("./components/reanderSqlExecute/index.vue");
+import { defineAsyncComponent, h } from 'vue';
+const renderSqlExecute = defineAsyncComponent(() => import("./components/reanderSqlExecute/index.vue"));
 const ObjectLoading = {
-  render(h) {
-    return h("div", { class: "object-component-loading", attrs: { role: "status" } }, "正在渲染数据，请稍候…");
+  compatConfig: { MODE: 3 },
+  render() {
+    return h("div", { class: "object-component-loading", role: "status" }, "正在渲染数据，请稍候…");
   }
 };
-const renderTableEditor = () => ({ component: import("./components/renderTableEditor/index.vue"), loading: ObjectLoading, delay: 0 });
-const renderViewEditor = () => ({ component: import("./components/renderViewEditor/index.vue"), loading: ObjectLoading, delay: 0 });
-const renderUserEditor = () => import("./components/renderUserEditor/index.vue");
-const renderTableSpaceEditor = () => import("./components/renderTableSpaceEditor/index.vue");
-const DataSourceConfig = () => import("./components/DataSource/index.vue");
-const renderSearchResult = () => import("./components/renderSearchResult/index.vue");
-const ViewAllTable = () => import("./components/ViewAllTable");
-const ViewAllView = () => import("./components/ViewAllView");
-const CreateSql = () => import("@/views/main/workspace/components/CreateSql/index.vue");
+const renderTableEditor = defineAsyncComponent({ loader: () => import("./components/renderTableEditor/index.vue"), loadingComponent: ObjectLoading, delay: 0 });
+const renderViewEditor = defineAsyncComponent({ loader: () => import("./components/renderViewEditor/index.vue"), loadingComponent: ObjectLoading, delay: 0 });
+const renderUserEditor = defineAsyncComponent(() => import("./components/renderUserEditor/index.vue"));
+const renderTableSpaceEditor = defineAsyncComponent(() => import("./components/renderTableSpaceEditor/index.vue"));
+const DataSourceConfig = defineAsyncComponent(() => import("./components/DataSource/index.vue"));
+const renderSearchResult = defineAsyncComponent(() => import("./components/renderSearchResult/index.vue"));
+const ViewAllTable = defineAsyncComponent(() => import("./components/ViewAllTable"));
+const ViewAllView = defineAsyncComponent(() => import("./components/ViewAllView"));
+const CreateSql = defineAsyncComponent(() => import("@/views/main/workspace/components/CreateSql/index.vue"));
 import TableViewList from "./components/mainListView/tableViewList.vue";
 import ViewList from "./components/mainListView/viewList.vue";
 import UserList from "./components/mainListView/userList.vue";

@@ -2,7 +2,7 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 
 async function main() {
   const source = compiler.parseComponent(fs.readFileSync(path.join(__dirname,
@@ -38,7 +38,7 @@ async function main() {
   await offline
   assert.strictEqual(state.loadError, '无监控权限')
   const destroyed = state.refresh()
-  component.beforeDestroy.call(state)
+  component.beforeUnmount.call(state)
   pending[4].resolve(result(1))
   await destroyed
   assert.strictEqual(state.config.dataSourceId, 2, '销毁后不写入异步响应')

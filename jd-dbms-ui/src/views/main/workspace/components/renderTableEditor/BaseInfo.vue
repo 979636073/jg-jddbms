@@ -13,7 +13,7 @@ export default {
 </script>
 
 <template>
-  <el-form ref="basicForm" size="mini" :model="basicForm" label-position="top" label-width="80px">
+  <el-form ref="basicForm" size="small" :model="basicForm" label-position="top" label-width="80px">
     <el-form-item label="表名">
       <el-input v-model="basicForm.name"></el-input>
     </el-form-item>

@@ -48,7 +48,7 @@ export default {
   mounted() {
     window.addEventListener('keydown', this.handleKeydown);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     window.removeEventListener('keydown', this.handleKeydown);
   },
   methods: {
@@ -160,10 +160,8 @@ export default {
       width: 0px;
     }
   }
-  :global {
-    .decorationsOverviewRuler{
-      display: none !important;
-    }
+  :deep(.decorationsOverviewRuler) {
+    display: none !important;
   }
 }
 </style>

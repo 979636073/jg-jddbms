@@ -2,7 +2,7 @@
   <div>
     <el-dialog
       :title="title"
-      :visible.sync="editDialogVisible"
+      :model-value="editDialogVisible"
       :before-close="handleClose"
       width="640px"
     >
@@ -17,7 +17,7 @@
           <el-form-item label="表空间名称" prop="tableSpace">
             <el-input
               placeholder="请输入表空间名称"
-              size="mini"
+              size="small"
               v-model="form.tableSpace"
               maxlength="128"
             >
@@ -26,13 +26,13 @@
           <el-form-item label="数据文件路径" prop="path">
             <el-input
               placeholder="请输入数据库服务器上的数据文件完整路径"
-              size="mini"
+              size="small"
               class="path-input"
               v-model="form.path"
             >
             </el-input>
             <el-button
-              size="mini"
+              size="small"
               @click="addSpace"
               >参考已有路径</el-button
             >
@@ -42,15 +42,15 @@
           <el-form-item label="初始容量" prop="totalSize">
             <el-input
               v-model="form.totalSize"
-              size="mini"
+              size="small"
               class="input-with-select"
               type="number"
               min="1"
               placeholder="请输入大于零的容量"
             >
-              <el-select
+              <template #append><el-select
                 v-model="form.sizeUnit"
-                slot="append"
+
                 placeholder="单位"
                 style="width: 112px"
               >
@@ -61,7 +61,7 @@
                   :value="item.value"
                 >
                 </el-option>
-              </el-select>
+              </el-select></template>
             </el-input>
           </el-form-item>
           <div class="form-section">扩展设置</div>
@@ -72,16 +72,16 @@
             <el-input
               :disabled="!autoCheck"
               v-model="form.autoSize"
-              size="mini"
+              size="small"
               class="input-with-select"
               type="number"
               min="1"
               placeholder="请输入大于零的容量"
             >
-              <el-select
+              <template #append><el-select
                 :disabled="!autoCheck"
                 v-model="form.autoSizeUnit"
-                slot="append"
+
                 placeholder="单位"
                 style="width: 112px"
               >
@@ -92,7 +92,7 @@
                   :value="item.value"
                 >
                 </el-option>
-              </el-select>
+              </el-select></template>
             </el-input>
           </el-form-item>
           <el-form-item v-if="autoCheck" label="最大容量">
@@ -104,16 +104,16 @@
             <el-input
               v-model="form.expandUpperLimit"
               :disabled="!autoCheck || checked"
-              size="mini"
+              size="small"
               class="input-with-select"
               type="number"
               min="1"
               placeholder="请输入大于初始容量的上限"
             >
-              <el-select
+              <template #append><el-select
                 v-model="form.maxSizeUnit"
                 :disabled="!autoCheck || checked"
-                slot="append"
+
                 placeholder="单位"
                 style="width: 112px"
               >
@@ -124,23 +124,23 @@
                   :value="item.value"
                 >
                 </el-option>
-              </el-select>
+              </el-select></template>
             </el-input>
           </el-form-item>
         </el-form>
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="editHandleCloseFn(false)" size="mini"
+      <template #footer><span  class="dialog-footer">
+        <el-button @click="editHandleCloseFn(false)" size="small"
           >取消</el-button
         >
-        <el-button type="primary" :loading="saving" @click="saveTableSpace" size="mini"
+        <el-button type="primary" :loading="saving" @click="saveTableSpace" size="small"
           >{{ isEditing ? '保存修改' : '创建表空间' }}</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
     <!-- 文件选择 -->
     <el-dialog
       title="参考已有数据文件路径"
-      :visible.sync="dialogSpace"
+      v-model="dialogSpace"
       width="800px"
       style="width: 100%"
       height="500"
@@ -170,16 +170,16 @@
         <pagination
           v-show="total > 0"
           :total="total"
-          :page.sync="queryParams.pageNo"
-          :limit.sync="queryParams.pageSize"
+          v-model:page="queryParams.pageNo"
+          v-model:limit="queryParams.pageSize"
           @pagination="getList"
         />
         <!-- </div> -->
       </span>
-      <span slot="footer" class="dialog-footer">
-        <el-button size="mini" @click="dialogSpace = false">取消</el-button>
-        <el-button type="primary" size="mini" :disabled="!selectTable || !selectTable.path" @click="submit">使用所选路径</el-button>
-      </span>
+      <template #footer><span  class="dialog-footer">
+        <el-button size="small" @click="dialogSpace = false">取消</el-button>
+        <el-button type="primary" size="small" :disabled="!selectTable || !selectTable.path" @click="submit">使用所选路径</el-button>
+      </span></template>
     </el-dialog>
   </div>
 </template>

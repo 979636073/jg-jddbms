@@ -24,7 +24,7 @@
             将文件拖到此处，或
             <em>点击上传</em>
           </div>
-          <div class="el-upload__tip" slot="tip">只能上传.xls、 .xlsx文件，且不超过50MB</div>
+          <template #tip><div class="el-upload__tip" >只能上传.xls、 .xlsx文件，且不超过50MB</div></template>
         </el-upload>
       </el-form-item>
     </el-form>
@@ -47,10 +47,10 @@
                 :label="item"
                 :prop="item"
               >
-                <template slot-scope="scope">
+                <template #default="scope">
                   <el-input
                     :class="returnClass(scope.row[item + '_viewType'])"
-                    size="mini"
+                    size="small"
                     v-model="scope.row[item]"
                     v-if="
                         scope.$index == tabRowindex &&
@@ -129,9 +129,9 @@
                     :label="item"
                     :prop="item"
                   >
-                    <template slot-scope="scope">
+                    <template #default="scope">
                       <el-input
-                        size="mini"
+                        size="small"
                         v-model="scope.row[item]"
                         v-if="
                             scope.$index == tabRowindex &&
@@ -179,10 +179,10 @@
                   min-width="140"
                   show-overflow-tooltip
                 >
-                  <template slot-scope="scope">
+                  <template #default="scope">
                     <el-input
                       :class="returnClass(scope.row[item + '_viewType'])"
-                      size="mini"
+                      size="small"
                       v-model="scope.row[item]"
                       v-if="scope.$index == tabRowindex &&item == tabColumnKey"
                       @blur="inputBlurFn"
@@ -216,7 +216,7 @@
                   min-width="140"
                   show-overflow-tooltip
                 >
-                  <template slot-scope="scope">
+                  <template #default="scope">
                     <div :class="returnClass(scope.row[item + '_viewType'])">{{ scope.row[item] }}</div>
                   </template>
                 </el-table-column>
@@ -283,9 +283,9 @@
                     :label="item"
                     :prop="item"
                   >
-                    <template slot-scope="scope">
+                    <template #default="scope">
                       <el-input
-                        size="mini"
+                        size="small"
                         v-model="scope.row[item]"
                         v-if="scope.$index == tabRowindex && item == tabColumnKey"
                         @blur="inputBlurFn"
@@ -309,7 +309,7 @@
         </el-tab-pane>
       </el-tabs>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <div  class="dialog-footer">
       <div
         class="colorInfo"
         v-if="importRounds == 2 && ((add_importRounds === 2 && activeName == 'add') ||

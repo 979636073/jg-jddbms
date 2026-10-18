@@ -6,7 +6,7 @@
           v-model="queryParams.tableName"
           placeholder="请输入表名称"
           clearable
-          @keyup.enter.native="handleQuery"
+          @keyup.enter="handleQuery"
         />
       </el-form-item>
       <el-form-item label="表描述" prop="tableComment">
@@ -14,7 +14,7 @@
           v-model="queryParams.tableComment"
           placeholder="请输入表描述"
           clearable
-          @keyup.enter.native="handleQuery"
+          @keyup.enter="handleQuery"
         />
       </el-form-item>
       <el-form-item label="创建时间">
@@ -29,8 +29,8 @@
         ></el-date-picker>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
-        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+        <el-button type="primary" icon="el-icon-search" size="small" @click="handleQuery">搜索</el-button>
+        <el-button icon="el-icon-refresh" size="small" @click="resetQuery">重置</el-button>
       </el-form-item>
     </el-form>
 
@@ -40,7 +40,7 @@
           type="primary"
           plain
           icon="el-icon-download"
-          size="mini"
+          size="small"
           @click="handleGenTable"
           v-hasPermi="['tool:gen:code']"
         >生成</el-button>
@@ -50,7 +50,7 @@
           type="info"
           plain
           icon="el-icon-upload"
-          size="mini"
+          size="small"
           @click="openImportTable"
           v-hasPermi="['tool:gen:import']"
         >导入</el-button>
@@ -60,7 +60,7 @@
           type="success"
           plain
           icon="el-icon-edit"
-          size="mini"
+          size="small"
           :disabled="single"
           @click="handleEditTable"
           v-hasPermi="['tool:gen:edit']"
@@ -71,19 +71,19 @@
           type="danger"
           plain
           icon="el-icon-delete"
-          size="mini"
+          size="small"
           :disabled="multiple"
           @click="handleDelete"
           v-hasPermi="['tool:gen:remove']"
         >删除</el-button>
       </el-col>
-      <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+      <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
     <el-table v-loading="loading" :data="tableList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" align="center" width="55"></el-table-column>
       <el-table-column label="序号" type="index" width="50" align="center">
-        <template slot-scope="scope">
+        <template #default="scope">
           <span>{{(queryParams.pageNum - 1) * queryParams.pageSize + scope.$index + 1}}</span>
         </template>
       </el-table-column>
@@ -111,7 +111,7 @@
       <el-table-column label="创建时间" align="center" prop="createTime" width="160" />
       <el-table-column label="更新时间" align="center" prop="updateTime" width="160" />
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-button
             type="text"
             size="small"
@@ -153,12 +153,12 @@
     <pagination
       v-show="total>0"
       :total="total"
-      :page.sync="queryParams.pageNum"
-      :limit.sync="queryParams.pageSize"
+      v-model:page="queryParams.pageNum"
+      v-model:limit="queryParams.pageSize"
       @pagination="getList"
     />
     <!-- 预览界面 -->
-    <el-dialog :title="preview.title" :visible.sync="preview.open" width="80%" top="5vh" append-to-body class="scrollbar">
+    <el-dialog :title="preview.title" v-model="preview.open" width="80%" top="5vh" append-to-body class="scrollbar">
       <el-tabs v-model="preview.activeName">
         <el-tab-pane
           v-for="(value, key) in preview.data"

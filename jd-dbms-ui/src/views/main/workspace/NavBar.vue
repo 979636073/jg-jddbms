@@ -243,7 +243,7 @@ export default {
     this.getServerPath();
     this.$EventBus.$on("openTaskCenter", this.openTaskCenter);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$EventBus.$off("openLookPage");
     this.$EventBus.$off("openTaskCenter", this.openTaskCenter);
   },
@@ -966,26 +966,26 @@ export default {
               />
               <span>{{ item.name }}</span>
             </div>
-            <el-dropdown-menu slot="dropdown" v-if="item.type == 'import'">
+            <template #dropdown><el-dropdown-menu  v-if="item.type == 'import'">
               <el-dropdown-item command="importDMP">导入DMP</el-dropdown-item>
               <el-dropdown placement="right" @command="handleCommandFn">
                 <el-dropdown-item>
                   归档导入
                   <i class="el-icon-arrow-right"></i>
                 </el-dropdown-item>
-                <el-dropdown-menu slot="dropdown">
+                <template #dropdown><el-dropdown-menu >
                   <el-dropdown-item
                     v-for="item in archiveObj"
                     :key="item.id"
-                    @click.native="itemDown(item)"
+                    @click="itemDown(item)"
                     command="importArchive"
                     >{{ item.taskName }}</el-dropdown-item
                   >
-                </el-dropdown-menu>
+                </el-dropdown-menu></template>
               </el-dropdown>
             </el-dropdown-menu>
-            <el-dropdown-menu slot="dropdown" v-else></el-dropdown-menu>
-            <el-dropdown-menu slot="dropdown" v-if="item.type == 'export'">
+            <el-dropdown-menu  v-else></el-dropdown-menu>
+            <el-dropdown-menu  v-if="item.type == 'export'">
               <el-dropdown-item command="exportDMP">导出DMP</el-dropdown-item>
               <!-- 三层 -->
               <el-dropdown placement="right" @command="handleCommandFn">
@@ -993,17 +993,17 @@ export default {
                   归档导出
                   <i class="el-icon-arrow-right"></i>
                 </el-dropdown-item>
-                <el-dropdown-menu slot="dropdown">
+                <template #dropdown><el-dropdown-menu >
                   <el-dropdown-item
                     v-for="item in archiveObj"
                     :key="item.id"
-                    @click.native="itemDown(item)"
+                    @click="itemDown(item)"
                     command="exportArchive"
                     >{{ item.taskName }}</el-dropdown-item
                   >
-                </el-dropdown-menu>
+                </el-dropdown-menu></template>
               </el-dropdown>
-            </el-dropdown-menu>
+            </el-dropdown-menu></template>
           </el-dropdown>
         </div>
       </template>
@@ -1014,7 +1014,7 @@ export default {
       v-show="contextMenuVisible"
       :style="{ left: contextMenu_left + 'px', top: contextMenu_top + 'px' }"
     >
-      <el-button type="text" @click="closeAllnewSearch" size="mini">关闭所有</el-button>
+      <el-button type="text" @click="closeAllnewSearch" size="small">关闭所有</el-button>
     </div>
 
     <el-tooltip
@@ -1048,24 +1048,24 @@ export default {
         <span>{{ userInfo.userName }}</span>
         <i class="el-icon-caret-bottom" />
       </div>
-      <el-dropdown-menu slot="dropdown">
+      <template #dropdown><el-dropdown-menu >
         <router-link to="/user/profile">
           <el-dropdown-item>个人中心</el-dropdown-item>
         </router-link>
-        <el-dropdown-item @click.native="logManagement">
+        <el-dropdown-item @click="logManagement">
           <span>日志管理</span>
         </el-dropdown-item>
-        <el-dropdown-item divided @click.native="logout">
+        <el-dropdown-item divided @click="logout">
           <span>退出登录</span>
         </el-dropdown-item>
-      </el-dropdown-menu>
+      </el-dropdown-menu></template>
     </el-dropdown>
     <task-drawer
-      :visible.sync="taskDrawerVisible"
+      v-model:visible="taskDrawerVisible"
       @running-count="updateRunningTaskCount"
     />
     <dmp-tool-manager
-      :visible.sync="dmpToolManagerVisible"
+      v-model:visible="dmpToolManagerVisible"
       @changed="loadDmpTools"
     />
     <!-- 导出 -->
@@ -1073,7 +1073,7 @@ export default {
       :title="
         isDialog == 'exportArchive' ? acrhive.taskName || '归档导出' : '导出'
       "
-      :visible.sync="ExportDialog"
+      v-model="ExportDialog"
       width="870px"
       :before-close="handleClose"
     >
@@ -1096,7 +1096,7 @@ export default {
           <span>服务器路径</span>
           <el-select
             v-model="serverPath"
-            size="mini"
+            size="small"
             placeholder="请选择服务器路径"
             style="width: 100%"
           >
@@ -1114,17 +1114,17 @@ export default {
           v-model="maxSize"
           style="margin-bottom: 10px"
           placeholder="请输入大小"
-          size="mini"
+          size="small"
           @input="changeValue"
         ></el-input>
         <span>{{ acrhive.filter }}</span>
-        <el-input v-model="exportArchive" disabled size="mini"
-          ><el-button
-            slot="append"
+        <el-input v-model="exportArchive" disabled size="small"
+          ><template #append><el-button
+
             icon="el-icon-search"
             @click="searchDialog"
           ></el-button
-        ></el-input>
+        ></template></el-input>
       </span>
       <span v-else>
         <div class="exportTitle">
@@ -1244,7 +1244,7 @@ export default {
           >Table rows</el-checkbox
         >-->
       </span>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button
           @click="handleClose"
           style="color: #006fff; border: 1px solid #006fff"
@@ -1258,14 +1258,14 @@ export default {
           size="small"
           >{{ this.loading ? `文件下载中` : "确定" }}</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
     <!-- 导入 -->
     <el-dialog
       :title="
         isDialog == 'importArchive' ? acrhive.taskName || '归档导入' : '导入'
       "
-      :visible.sync="ImportDialog"
+      v-model="ImportDialog"
       width="870px"
       :before-close="handleCloseFn"
     >
@@ -1331,7 +1331,7 @@ export default {
         <div style="margin-top: 10px" v-if="radioImp == 'table'">
           <el-form
             :inline="true"
-            size="mini"
+            size="small"
             :model="formData"
             class="demo-form-inline"
           >
@@ -1394,7 +1394,7 @@ export default {
         <div style="margin-top: 10px" v-if="radioImp == 'user'">
           <el-form
             :inline="true"
-            size="mini"
+            size="small"
             :model="searchFrom"
             class="demo-form-inline"
           >
@@ -1553,7 +1553,7 @@ export default {
           </el-upload>
         </div>
       </span>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button
           @click="handleCloseFn"
           style="color: #006fff; border: 1px solid #006fff"
@@ -1568,12 +1568,12 @@ export default {
           :loading="this.loadingTime"
           >{{ this.loadingTime ? "文件导入中" : "确定" }}</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
 
     <el-dialog
       title="选择"
-      :visible.sync="isSearchTable"
+      v-model="isSearchTable"
       width="70%"
       :before-close="handleCloseSearch"
     >
@@ -1610,7 +1610,7 @@ export default {
         >
         </el-pagination>
       </span>
-      <span slot="footer" class="dialog-footer">
+      <template #footer><span  class="dialog-footer">
         <el-button
           style="color: #006fff; border: 1px solid #006fff"
           size="small"
@@ -1620,7 +1620,7 @@ export default {
         <el-button type="primary" size="small" @click="saveSelect"
           >确定</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
   </div>
 </template>

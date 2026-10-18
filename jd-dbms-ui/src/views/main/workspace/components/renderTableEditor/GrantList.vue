@@ -49,7 +49,7 @@ export default {
 
 <template>
   <div class="draggable">
-    <el-table size="mini" :data="tableData" row-key="key">
+    <el-table size="small" :data="tableData" row-key="key">
       <el-table-column
         sortable
         v-for="(item, index) in columns"
@@ -62,7 +62,7 @@ export default {
       >
       </el-table-column>
       <el-table-column v-if="allowRevoke" label="操作" width="110">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-button v-if="scope.row.privilege === 'SELECT'" type="text" :disabled="revokeDisabled" @click="$emit('revoke', scope.row)">撤销 SELECT</el-button>
         </template>
       </el-table-column>

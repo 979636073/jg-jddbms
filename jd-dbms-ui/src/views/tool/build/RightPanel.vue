@@ -86,14 +86,14 @@
           </el-form-item>
           <el-form-item v-if="activeData.vModel!==undefined" label="默认值">
             <el-input
-              :value="setDefaultValue(activeData.defaultValue)"
+              :model-value="setDefaultValue(activeData.defaultValue)"
               placeholder="请输入默认值"
               @input="onDefaultValueInput"
             />
           </el-form-item>
           <el-form-item v-if="activeData.tag==='el-checkbox-group'" label="至少应选">
             <el-input-number
-              :value="activeData.min"
+              :model-value="activeData.min"
               :min="0"
               placeholder="至少应选"
               @input="$set(activeData, 'min', $event?$event:undefined)"
@@ -101,7 +101,7 @@
           </el-form-item>
           <el-form-item v-if="activeData.tag==='el-checkbox-group'" label="最多可选">
             <el-input-number
-              :value="activeData.max"
+              :model-value="activeData.max"
               :min="0"
               placeholder="最多可选"
               @input="$set(activeData, 'max', $event?$event:undefined)"
@@ -115,16 +115,16 @@
           </el-form-item>
           <el-form-item v-if="activeData['prefix-icon']!==undefined" label="前图标">
             <el-input v-model="activeData['prefix-icon']" placeholder="请输入前图标名称">
-              <el-button slot="append" icon="el-icon-thumb" @click="openIconsDialog('prefix-icon')">
+              <template #append><el-button  icon="el-icon-thumb" @click="openIconsDialog('prefix-icon')">
                 选择
-              </el-button>
+              </el-button></template>
             </el-input>
           </el-form-item>
           <el-form-item v-if="activeData['suffix-icon'] !== undefined" label="后图标">
             <el-input v-model="activeData['suffix-icon']" placeholder="请输入后图标名称">
-              <el-button slot="append" icon="el-icon-thumb" @click="openIconsDialog('suffix-icon')">
+              <template #append><el-button  icon="el-icon-thumb" @click="openIconsDialog('suffix-icon')">
                 选择
-              </el-button>
+              </el-button></template>
             </el-input>
           </el-form-item>
           <el-form-item v-if="activeData.tag === 'el-cascader'" label="选项分隔符">
@@ -160,7 +160,7 @@
           </el-form-item>
           <el-form-item v-if="activeData.maxlength !== undefined" label="最多输入">
             <el-input v-model="activeData.maxlength" placeholder="请输入字符长度">
-              <template slot="append">
+              <template #append>
                 个字符
               </template>
             </el-input>
@@ -173,14 +173,14 @@
           </el-form-item>
           <el-form-item v-if="activeData['active-value'] !== undefined" label="开启值">
             <el-input
-              :value="setDefaultValue(activeData['active-value'])"
+              :model-value="setDefaultValue(activeData['active-value'])"
               placeholder="请输入开启值"
               @input="onSwitchValueInput($event, 'active-value')"
             />
           </el-form-item>
           <el-form-item v-if="activeData['inactive-value'] !== undefined" label="关闭值">
             <el-input
-              :value="setDefaultValue(activeData['inactive-value'])"
+              :model-value="setDefaultValue(activeData['inactive-value'])"
               placeholder="请输入关闭值"
               @input="onSwitchValueInput($event, 'inactive-value')"
             />
@@ -224,11 +224,11 @@
           </el-form-item>
           <el-form-item v-if="activeData.fileSize !== undefined" label="文件大小">
             <el-input v-model.number="activeData.fileSize" placeholder="请输入文件大小">
-              <el-select slot="append" v-model="activeData.sizeUnit" :style="{ width: '66px' }">
+              <template #append><el-select  v-model="activeData.sizeUnit" :style="{ width: '66px' }">
                 <el-option label="KB" value="KB" />
                 <el-option label="MB" value="MB" />
                 <el-option label="GB" value="GB" />
-              </el-select>
+              </el-select></template>
             </el-input>
           </el-form-item>
           <el-form-item v-if="activeData.action !== undefined" label="上传地址">
@@ -265,7 +265,7 @@
           </el-form-item>
           <el-form-item v-if="activeData.format !== undefined" label="时间格式">
             <el-input
-              :value="activeData.format"
+              :model-value="activeData.format"
               placeholder="请输入时间格式"
               @input="setTimeValue($event)"
             />
@@ -286,7 +286,7 @@
                 <el-input
                   placeholder="选项值"
                   size="small"
-                  :value="item.value"
+                  :model-value="item.value"
                   @input="setOptionValue(item, $event)"
                 />
                 <div class="close-btn select-line-icon" @click="activeData.options.splice(index, 1)">
@@ -477,12 +477,12 @@
               default-expand-all
               draggable
             >
-              <span slot-scope="{ node, data }">
+              <template #default="{ node, data }"><span >
                 <span class="node-label">
                   <svg-icon class="node-icon" :icon-class="data.tagIcon" />
                   {{ node.label }}
                 </span>
-              </span>
+              </span></template>
             </el-tree>
           </template>
 
@@ -566,12 +566,12 @@
       </el-scrollbar>
     </div>
 
-    <treeNode-dialog :visible.sync="dialogVisible" title="添加选项" @commit="addNode" />
-    <icons-dialog :visible.sync="iconsVisible" :current="activeData[currentIconModel]" @select="setIcon" />
+    <treeNode-dialog v-model:visible="dialogVisible" title="添加选项" @commit="addNode" />
+    <icons-dialog v-model:visible="iconsVisible" :current="activeData[currentIconModel]" @select="setIcon" />
   </div>
 </template>
 
-<script>
+<script lang="jsx">
 import { isArray } from 'util'
 import draggable from 'vuedraggable'
 import TreeNodeDialog from './TreeNodeDialog'

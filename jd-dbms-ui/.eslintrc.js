@@ -9,7 +9,7 @@ module.exports = {
     node: true,
     es6: true
   },
-  extends: ['plugin:vue/essential', 'eslint:recommended'],
+  extends: ['plugin:vue/vue3-essential', 'eslint:recommended'],
   rules: {
     'camelcase': 'off',
     'eqeqeq': ['warn', 'always', { null: 'ignore' }],

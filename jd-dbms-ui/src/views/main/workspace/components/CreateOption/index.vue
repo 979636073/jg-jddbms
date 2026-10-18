@@ -122,7 +122,7 @@ export default {
 <template>
   <el-dialog
     title="新增数据库对象"
-    :visible.sync="dialogVisible"
+    v-model="dialogVisible"
     width="30%"
     :before-close="handleClose">
     <el-form ref="form" :rules="rules" :model="objectForm" label-width="100px">
@@ -156,10 +156,10 @@ export default {
         </el-form-item>
       </template>
     </el-form>
-    <span slot="footer" class="dialog-footer">
+    <template #footer><span  class="dialog-footer">
         <el-button @click="handleClose">取 消</el-button>
         <el-button type="primary" @click="sumbit">确 定</el-button>
-      </span>
+      </span></template>
   </el-dialog>
 </template>
 

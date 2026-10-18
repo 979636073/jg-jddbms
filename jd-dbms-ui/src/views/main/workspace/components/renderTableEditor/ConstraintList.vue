@@ -548,17 +548,17 @@ export default {
 <template>
   <div class="draggable">
     <div class="table_btn_list">
-      <el-button size="mini" type="text" @click="addData">
+      <el-button size="small" type="text" @click="addData">
         <img src="@/assets/main/3-con-ico01.png" alt="" />
         添加
       </el-button>
-      <el-button size="mini" type="text" @click="refresh">
+      <el-button size="small" type="text" @click="refresh">
         <img src="@/assets/main/5-ico3.png" alt="" />
         刷新
       </el-button>
     </div>
     <el-table
-      size="mini"
+      size="small"
       :data="tableData"
       row-key="key"
       height="calc(100% - 300px)"
@@ -570,7 +570,7 @@ export default {
       border
     >
       <el-table-column prop="keyName" label="名称">
-        <template slot-scope="scope">
+        <template #default="scope">
           <span>{{ scope.row.keyName || scope.row.name }}</span>
         </template>
       </el-table-column>
@@ -587,10 +587,10 @@ export default {
       </el-table-column>
       <el-table-column width="250" label="操作">
         <!-- v-if="scope.row.constraintsDesc && scope.row.constraintsDesc.includes('IS NOT NULL')" -->
-        <template slot-scope="scope" v-if="showOperation(scope.row)">
+        <template #default="scope" v-if="showOperation(scope.row)">
           <el-button
-            @click.native="deleteData(scope.row)"
-            size="mini"
+            @click="deleteData(scope.row)"
+            size="small"
             type="text"
             plain
           >
@@ -598,8 +598,8 @@ export default {
             删除
           </el-button>
           <el-button
-            @click.native="editData(scope.row)"
-            size="mini"
+            @click="editData(scope.row)"
+            size="small"
             type="text"
             plain
           >
@@ -611,7 +611,7 @@ export default {
     </el-table>
     <el-dialog
       :title="digTitle"
-      :visible.sync="dialogVisible"
+      v-model="dialogVisible"
       width="870px"
       :before-close="handleCloseFn"
     >
@@ -623,7 +623,7 @@ export default {
                 <el-input
                   v-model="searchFrom.name"
                   ref="conName"
-                  size="mini"
+                  size="small"
                 ></el-input>
               </el-form-item>
             </el-col>
@@ -633,7 +633,7 @@ export default {
                   disabled
                   v-model="searchFrom.schema"
                   @change="queryTransferData"
-                  size="mini"
+                  size="small"
                   placeholder="请选择"
                 >
                   <el-option
@@ -651,7 +651,7 @@ export default {
                 <el-select
                   disabled
                   v-model="searchFrom.tableName"
-                  size="mini"
+                  size="small"
                   placeholder="请选择"
                 >
                   <el-option
@@ -743,7 +743,7 @@ export default {
                           <el-select
                             :disabled="digTitle == '修改'"
                             v-model="fromData.schema"
-                            size="mini"
+                            size="small"
                             filterable
                             placeholder="请选择"
                             style="width: 200px"
@@ -764,7 +764,7 @@ export default {
                           <el-select
                             :disabled="digTitle == '修改'"
                             v-model="fromData.tableName"
-                            size="mini"
+                            size="small"
                             filterable
                             placeholder="请选择"
                             style="width: 200px"
@@ -795,16 +795,16 @@ export default {
           </el-tabs>
         </div>
       </div>
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="handleCloseFn" size="mini">取 消</el-button>
-        <el-button type="primary" @click="createdConstraintFn" size="mini"
+      <template #footer><span  class="dialog-footer">
+        <el-button @click="handleCloseFn" size="small">取 消</el-button>
+        <el-button type="primary" @click="createdConstraintFn" size="small"
           >确 定</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
     <el-dialog
       title="修改"
-      :visible.sync="editDialogVisible"
+      v-model="editDialogVisible"
       width="500px"
       :before-close="editHandleCloseFn"
     >
@@ -818,32 +818,32 @@ export default {
             <el-input
               v-model="searchParams.schema"
               disabled
-              size="mini"
+              size="small"
             ></el-input>
           </el-form-item>
           <el-form-item label="Table Name">
             <el-input
               v-model="searchParams.tableName"
               disabled
-              size="mini"
+              size="small"
             ></el-input>
           </el-form-item>
           <el-form-item label="Constraint Type">
             <el-input
               v-model="searchParams.type"
               disabled
-              size="mini"
+              size="small"
             ></el-input>
           </el-form-item>
           <el-form-item label="Old Constraint Name">
             <el-input
               v-model="searchParams.oldName"
               disabled
-              size="mini"
+              size="small"
             ></el-input>
           </el-form-item>
           <el-form-item label="New Constraint Name">
-            <el-input v-model="searchParams.newName" size="mini"></el-input>
+            <el-input v-model="searchParams.newName" size="small"></el-input>
           </el-form-item>
           <el-form-item label="Constraint State">
             <el-radio-group v-model="searchParams.state">
@@ -853,10 +853,10 @@ export default {
           </el-form-item>
         </el-form>
       </span>
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="editHandleCloseFn" size="mini">取 消</el-button>
-        <el-button type="primary" @click="editFn" size="mini">确 定</el-button>
-      </span>
+      <template #footer><span  class="dialog-footer">
+        <el-button @click="editHandleCloseFn" size="small">取 消</el-button>
+        <el-button type="primary" @click="editFn" size="small">确 定</el-button>
+      </span></template>
     </el-dialog>
     <div style="margin-top: 10px" v-if="isShow">
       <el-table
@@ -868,7 +868,7 @@ export default {
         <el-table-column align="center" prop="foreignColumnName" label="列名">
         </el-table-column>
         <el-table-column prop="foreignTableName" label="关联表名">
-          <template slot-scope="scope">
+          <template #default="scope">
             <span
               style="color: #409eff; cursor: pointer"
               @click="foreignDetail(scope.row)"

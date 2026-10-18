@@ -38,7 +38,7 @@
               placeholder="请输入用户名称"
               clearable
               style="width: 240px"
-              @keyup.enter.native="handleQuery"
+              @keyup.enter="handleQuery"
             />
           </el-form-item>
           <el-form-item label="状态" prop="status">
@@ -68,8 +68,8 @@
             ></el-date-picker>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
-            <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+            <el-button type="primary" icon="el-icon-search" size="small" @click="handleQuery">搜索</el-button>
+            <el-button icon="el-icon-refresh" size="small" @click="resetQuery">重置</el-button>
           </el-form-item>
         </el-form>
 
@@ -79,7 +79,7 @@
               type="primary"
               plain
               icon="el-icon-plus"
-              size="mini"
+              size="small"
               @click="handleAdd"
               v-hasPermi="['system:user:add']"
             >新增</el-button>
@@ -89,7 +89,7 @@
               type="success"
               plain
               icon="el-icon-edit"
-              size="mini"
+              size="small"
               :disabled="single"
               @click="handleUpdate"
               v-hasPermi="['system:user:edit']"
@@ -100,7 +100,7 @@
               type="danger"
               plain
               icon="el-icon-delete"
-              size="mini"
+              size="small"
               :disabled="multiple"
               @click="handleDelete"
               v-hasPermi="['system:user:remove']"
@@ -111,7 +111,7 @@
               type="info"
               plain
               icon="el-icon-upload2"
-              size="mini"
+              size="small"
               @click="handleImport"
               v-hasPermi="['system:user:import']"
             >导入</el-button>
@@ -121,19 +121,19 @@
               type="warning"
               plain
               icon="el-icon-download"
-              size="mini"
+              size="small"
               @click="handleExport"
               v-hasPermi="['system:user:export']"
             >导出</el-button>
           </el-col>
-          <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+          <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
         </el-row>
 
         <el-table v-loading="loading" :data="userList" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="50" align="center" />
           <el-table-column label="用户编号" align="center" key="userId" prop="userId" v-if="columns[0].visible" />
           <el-table-column label="头像" align="center" width="90">
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-button v-if="canEditUser" class="avatar-button" type="text" title="设置头像" @click="openAvatarDialog(scope.row)">
                 <img :src="avatarUrl(scope.row.avatar)" alt="用户头像" class="avatar-thumbnail" />
               </el-button>
@@ -143,7 +143,7 @@
           <el-table-column label="用户名称" align="center" key="userName" prop="userName" v-if="columns[1].visible" :show-overflow-tooltip="true" />
           <el-table-column label="部门" align="center" key="deptName" prop="dept.deptName" v-if="false" :show-overflow-tooltip="true" />
           <el-table-column label="状态" align="center" key="status" v-if="columns[2].visible">
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-switch
                 v-model="scope.row.status"
                 active-value="0"
@@ -153,7 +153,7 @@
             </template>
           </el-table-column>
           <el-table-column label="创建时间" align="center" prop="createTime" v-if="columns[3].visible" width="160">
-            <template slot-scope="scope">
+            <template #default="scope">
               <span>{{ parseTime(scope.row.createTime) }}</span>
             </template>
           </el-table-column>
@@ -163,29 +163,29 @@
             width="160"
             class-name="small-padding fixed-width"
           >
-            <template slot-scope="scope" v-if="scope.row.userId !== 1">
+            <template #default="scope" v-if="scope.row.userId !== 1">
               <el-button
-                size="mini"
+                size="small"
                 type="text"
                 icon="el-icon-edit"
                 @click="handleUpdate(scope.row)"
                 v-hasPermi="['system:user:edit']"
               >修改</el-button>
               <el-button
-                size="mini"
+                size="small"
                 type="text"
                 icon="el-icon-delete"
                 @click="handleDelete(scope.row)"
                 v-hasPermi="['system:user:remove']"
               >删除</el-button>
-              <el-dropdown size="mini" @command="(command) => handleCommand(command, scope.row)" v-hasPermi="['system:user:resetPwd', 'system:user:edit']">
-                <el-button size="mini" type="text" icon="el-icon-d-arrow-right">更多</el-button>
-                <el-dropdown-menu slot="dropdown">
+              <el-dropdown size="small" @command="(command) => handleCommand(command, scope.row)" v-hasPermi="['system:user:resetPwd', 'system:user:edit']">
+                <el-button size="small" type="text" icon="el-icon-d-arrow-right">更多</el-button>
+                <template #dropdown><el-dropdown-menu >
                   <el-dropdown-item command="handleResetPwd" icon="el-icon-key"
                     v-hasPermi="['system:user:resetPwd']">重置密码</el-dropdown-item>
                   <el-dropdown-item command="handleAuthRole" icon="el-icon-circle-check"
                     v-hasPermi="['system:user:edit']">分配角色</el-dropdown-item>
-                </el-dropdown-menu>
+                </el-dropdown-menu></template>
               </el-dropdown>
             </template>
           </el-table-column>
@@ -194,15 +194,15 @@
         <pagination
           v-show="total>0"
           :total="total"
-          :page.sync="queryParams.pageNum"
-          :limit.sync="queryParams.pageSize"
+          v-model:page="queryParams.pageNum"
+          v-model:limit="queryParams.pageSize"
           @pagination="getList"
         />
       </el-col>
     </el-row>
 
     <!-- 添加或修改用户配置对话框 -->
-    <el-dialog :title="title" :visible.sync="open" width="600px" append-to-body>
+    <el-dialog :title="title" v-model="open" width="600px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
         <el-row>
           <el-col :span="12">
@@ -271,13 +271,13 @@
           </el-col>
         </el-row>
       </el-form>
-      <div slot="footer" class="dialog-footer">
+      <template #footer><div  class="dialog-footer">
         <el-button type="primary" @click="submitForm">确 定</el-button>
         <el-button @click="cancel">取 消</el-button>
-      </div>
+      </div></template>
     </el-dialog>
 
-    <el-dialog title="设置头像" :visible.sync="avatarOpen" width="620px" append-to-body>
+    <el-dialog title="设置头像" v-model="avatarOpen" width="620px" append-to-body>
       <p class="avatar-hint">选择一个基础头像，或上传 PNG、JPG、GIF 图片（最大 2 MB）。</p>
       <div class="avatar-grid">
         <button v-for="(preset, index) in presetAvatars" :key="preset" type="button"
@@ -291,14 +291,14 @@
         <el-button size="small" icon="el-icon-upload2">上传自定义头像</el-button>
       </el-upload>
       <p v-else class="avatar-hint">新用户保存后可上传自定义头像。</p>
-      <div slot="footer" class="dialog-footer">
+      <template #footer><div  class="dialog-footer">
         <el-button @click="avatarOpen = false">取消</el-button>
         <el-button type="primary" :disabled="!selectedAvatar || avatarSaving" :loading="avatarSaving" @click="saveSelectedAvatar">保存头像</el-button>
-      </div>
+      </div></template>
     </el-dialog>
 
     <!-- 用户导入对话框 -->
-    <el-dialog :title="upload.title" :visible.sync="upload.open" width="400px" append-to-body>
+    <el-dialog :title="upload.title" v-model="upload.open" width="400px" append-to-body>
       <el-upload
         ref="upload"
         :limit="1"
@@ -313,18 +313,18 @@
       >
         <i class="el-icon-upload"></i>
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
-        <div class="el-upload__tip text-center" slot="tip">
-          <div class="el-upload__tip" slot="tip">
+        <template #tip><div class="el-upload__tip text-center" >
+          <div class="el-upload__tip" >
             <el-checkbox v-model="upload.updateSupport" /> 是否更新已经存在的用户数据
           </div>
           <span>仅允许导入xls、xlsx格式文件。</span>
           <el-link type="primary" :underline="false" style="font-size:12px;vertical-align: baseline;" @click="importTemplate">下载模板</el-link>
-        </div>
+        </div></template>
       </el-upload>
-      <div slot="footer" class="dialog-footer">
+      <template #footer><div  class="dialog-footer">
         <el-button type="primary" @click="submitFileForm">确 定</el-button>
         <el-button @click="upload.open = false">取 消</el-button>
-      </div>
+      </div></template>
     </el-dialog>
   </div>
 </template>
@@ -333,8 +333,8 @@
 import { listUser, getUser, delUser, addUser, updateUser, resetUserPwd, changeUserStatus, deptTreeSelect, selectUserAvatar, uploadUserAvatar } from "@/api/system/user";
 import { avatarUrl, presetAvatars } from "@/utils/avatar";
 import { getToken } from "@/utils/auth";
-import Treeselect from "@riophae/vue-treeselect";
-import "@riophae/vue-treeselect/dist/vue-treeselect.css";
+import Treeselect from "@zanmato/vue3-treeselect";
+import "@zanmato/vue3-treeselect/dist/vue3-treeselect.min.css";
 
 export default {
   name: "User",

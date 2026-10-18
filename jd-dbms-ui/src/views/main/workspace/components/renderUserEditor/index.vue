@@ -92,7 +92,7 @@ export default {
   mounted() {
     window.addEventListener(RESOURCE_MUTATION_EVENT, this.handleResourceMutation);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     window.removeEventListener(RESOURCE_MUTATION_EVENT, this.handleResourceMutation);
   },
   methods: {
@@ -313,7 +313,7 @@ export default {
       </el-tab-pane>
     </el-tabs>
     <el-button
-      size="mini"
+      size="small"
       type="text"
       plain
       style="position: absolute; right: 10px; top: 10px"

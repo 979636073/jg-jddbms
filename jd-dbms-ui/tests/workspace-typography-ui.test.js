@@ -1,7 +1,7 @@
 const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const sass = require('sass')
 const root = path.join(__dirname, '../src/views/main/workspace')
 function read(name) { return compiler.parseComponent(fs.readFileSync(path.join(root, name), 'utf8')) }

@@ -72,7 +72,7 @@ export default {
   mounted() {
     if (this.isStandaloneTool) this.startStandaloneAuthChecks()
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.stopStandaloneAuthChecks()
   },
   methods: {

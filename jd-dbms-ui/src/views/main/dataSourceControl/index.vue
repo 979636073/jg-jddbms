@@ -2,9 +2,9 @@
   <div class="app-container">
     <h2>数据源控制</h2>
     <p class="summary">集中查看连接、所有者和共享授权。授权按操作生效，目标数据库账号仍执行最终权限检查。</p>
-    <el-form inline size="small" @submit.native.prevent>
+    <el-form inline size="small" @submit.prevent>
       <el-form-item label="连接名称">
-        <el-input v-model="keyword" clearable placeholder="搜索连接名称或地址" @keyup.enter.native="reload" />
+        <el-input v-model="keyword" clearable placeholder="搜索连接名称或地址" @keyup.enter="reload" />
       </el-form-item>
       <el-button type="primary" size="small" icon="el-icon-search" @click="reload">查询</el-button>
       <el-button size="small" icon="el-icon-refresh" @click="reload">刷新</el-button>
@@ -14,17 +14,17 @@
       <el-table-column prop="type" label="数据库类型" width="120" />
       <el-table-column prop="host" label="主机" min-width="170" />
       <el-table-column label="共享状态" width="110">
-        <template slot-scope="scope">{{ scope.row.kind === 'SHARED' ? '已共享' : '私有' }}</template>
+        <template #default="scope">{{ scope.row.kind === 'SHARED' ? '已共享' : '私有' }}</template>
       </el-table-column>
       <el-table-column prop="userId" label="所有者 ID" width="110" />
       <el-table-column label="操作" width="120" fixed="right">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-button v-if="canManage(scope.row)" type="text" @click="openSharing(scope.row)">共享授权</el-button>
           <span v-else>仅可查看</span>
         </template>
       </el-table-column>
     </el-table>
-    <pagination v-show="total > 0" :total="total" :page.sync="pageNo" :limit.sync="pageSize" @pagination="reload" />
+    <pagination v-show="total > 0" :total="total" v-model:page="pageNo" v-model:limit="pageSize" @pagination="reload" />
     <DataSourceSharingDialog :visible="sharingVisible" :data-source-id="selectedId"
       @close="sharingVisible = false" @changed="reload" />
   </div>

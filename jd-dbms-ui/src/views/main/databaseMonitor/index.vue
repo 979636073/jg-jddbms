@@ -13,8 +13,8 @@
     <div v-if="config" class="monitor-thresholds">
       <strong>后台监控</strong>
       <el-switch v-model="config.enabled" :disabled="!canManage || saving" active-text="启用" inactive-text="关闭" />
-      <label>活动会话 ≥ <el-input-number v-model="config.activeThreshold" :disabled="!canManage || saving" :min="1" :max="100000" size="mini" /></label>
-      <label>表空间使用率 ≥ <el-input-number v-model="config.spaceThreshold" :disabled="!canManage || saving" :min="1" :max="100" size="mini" /> %</label>
+      <label>活动会话 ≥ <el-input-number v-model="config.activeThreshold" :disabled="!canManage || saving" :min="1" :max="100000" size="small" /></label>
+      <label>表空间使用率 ≥ <el-input-number v-model="config.spaceThreshold" :disabled="!canManage || saving" :min="1" :max="100" size="small" /> %</label>
       <el-button v-if="canManage" size="small" type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
       <span>服务端每 30 秒采集；历史及已恢复告警保留 7 天。{{ canManage ? '' : '当前账号仅可查看。' }}</span>
     </div>
@@ -28,11 +28,11 @@
     <section v-if="config" class="monitor-section">
       <h3>告警记录 <small>未恢复优先，最多 100 条；关闭采集不会将告警标记为恢复</small></h3>
       <el-table :data="alertHistory" size="small" max-height="320" empty-text="暂无告警记录">
-        <el-table-column label="状态" width="100"><template slot-scope="scope"><el-tag size="mini" :type="scope.row.endedAt ? 'success' : 'danger'">{{ scope.row.endedAt ? '已恢复' : '未恢复' }}</el-tag></template></el-table-column>
+        <el-table-column label="状态" width="100"><template #default="scope"><el-tag size="small" :type="scope.row.endedAt ? 'success' : 'danger'">{{ scope.row.endedAt ? '已恢复' : '未恢复' }}</el-tag></template></el-table-column>
         <el-table-column prop="message" label="告警内容" min-width="280" />
-        <el-table-column label="触发时间" min-width="170"><template slot-scope="scope">{{ formatTime(scope.row.startedAt) }}</template></el-table-column>
-        <el-table-column label="最近触发" min-width="170"><template slot-scope="scope">{{ formatTime(scope.row.lastSeen) }}</template></el-table-column>
-        <el-table-column label="恢复时间" min-width="170"><template slot-scope="scope">{{ formatTime(scope.row.endedAt) }}</template></el-table-column>
+        <el-table-column label="触发时间" min-width="170"><template #default="scope">{{ formatTime(scope.row.startedAt) }}</template></el-table-column>
+        <el-table-column label="最近触发" min-width="170"><template #default="scope">{{ formatTime(scope.row.lastSeen) }}</template></el-table-column>
+        <el-table-column label="恢复时间" min-width="170"><template #default="scope">{{ formatTime(scope.row.endedAt) }}</template></el-table-column>
       </el-table>
     </section>
     <template v-if="snapshot">
@@ -44,7 +44,7 @@
         <div><span>表空间文件</span><strong>{{ snapshot.tablespaceFiles ? snapshot.tablespaceFiles.length : '—' }}</strong></div>
       </div>
       <section class="monitor-section">
-        <h3>当前告警 <el-tag size="mini" :type="alerts.length ? 'danger' : 'success'">{{ alerts.length }}</el-tag></h3>
+        <h3>当前告警 <el-tag size="small" :type="alerts.length ? 'danger' : 'success'">{{ alerts.length }}</el-tag></h3>
         <el-alert v-for="alert in alerts" :key="alert.key" :title="alert.message" type="warning" show-icon :closable="false" class="monitor-alert" />
         <p v-if="!alerts.length && !hasSectionErrors" class="monitor-muted">当前采集数据未触发阈值。</p>
         <p v-if="hasSectionErrors" class="monitor-muted">部分指标无法读取；不可将缺失数据判断为正常。请检查数据库账号的动态视图和表空间权限。</p>
@@ -65,7 +65,7 @@
         <el-table v-else :data="snapshot.tablespaceFiles || []" size="small" max-height="360" empty-text="没有可见表空间文件">
           <el-table-column prop="name" label="表空间" min-width="150" />
           <el-table-column prop="path" label="文件路径" min-width="240" show-overflow-tooltip />
-          <el-table-column label="使用率" width="115"><template slot-scope="scope">{{ scope.row.usagePercent == null ? '—' : `${scope.row.usagePercent}%` }}</template></el-table-column>
+          <el-table-column label="使用率" width="115"><template #default="scope">{{ scope.row.usagePercent == null ? '—' : `${scope.row.usagePercent}%` }}</template></el-table-column>
           <el-table-column prop="status" label="状态" width="110" />
         </el-table>
       </section>
@@ -110,7 +110,7 @@ export default {
     window.addEventListener('resize', this.resizeChart)
     this.timer = setInterval(() => { if (this.dataSourceId && !document.hidden) this.refresh() }, 30000)
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.destroyed = true
     this.requestVersion++
     clearInterval(this.timer)

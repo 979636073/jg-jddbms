@@ -16,22 +16,22 @@
     >
       <h3 class="title">欢迎登录</h3>
       <el-form-item prop="username">
-        <span slot="label">用户名</span>
+        <template #label><span >用户名</span></template>
         <el-input
           v-model="loginForm.username"
           type="text"
           auto-complete="off"
           placeholder="用户名"
         >
-          <svg-icon
-            slot="prefix"
+          <template #prefix><svg-icon
+
             icon-class="user"
             class="el-input__icon input-icon"
-          />
+          /></template>
         </el-input>
       </el-form-item>
       <el-form-item prop="password">
-        <span slot="label">密码</span>
+        <template #label><span >密码</span></template>
         <el-input
           :key="passwordType"
           v-model="loginForm.password"
@@ -42,12 +42,12 @@
           tabindex="2"
           autocomplete="on"
           ref="password"
-          @keyup.enter.native="handleLogin"
+          @keyup.enter="handleLogin"
         >
-          <svg-icon slot="prefix" icon-class="password" class="el-input__icon input-icon" />
-          <span class="show-pwd" @click="showPwd" slot="suffix">
+          <template #prefix><svg-icon  icon-class="password" class="el-input__icon input-icon" /></template>
+          <template #suffix><span class="show-pwd" @click="showPwd" >
             <svg-icon :icon-class="passwordType === 'password' ? 'eye' : 'eye-open'"/>
-          </span> 
+          </span></template>
         </el-input>
       </el-form-item>
       <el-checkbox
@@ -58,10 +58,10 @@
       <el-form-item style="width: 100%">
         <el-button
           :loading="loading"
-          size="medium"
+          size="default"
           type="primary"
           style="width: 100%"
-          @click.native.prevent="handleLogin"
+          @click.prevent="handleLogin"
         >
           <span v-if="!loading">登 录</span>
           <span v-else>登 录 中...</span>

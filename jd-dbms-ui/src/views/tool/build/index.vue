@@ -126,7 +126,7 @@
     />
 
     <code-type-dialog
-      :visible.sync="dialogVisible"
+      v-model:visible="dialogVisible"
       title="选择生成类型"
       :show-file-name="showFileName"
       @confirm="generate"

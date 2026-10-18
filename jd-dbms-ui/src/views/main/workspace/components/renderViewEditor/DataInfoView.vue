@@ -1,7 +1,7 @@
 <template>
   <div>
     <el-table
-      size="mini"
+      size="small"
       :data="tableData"
       row-key="key"
       height="calc(100% - 300px)"

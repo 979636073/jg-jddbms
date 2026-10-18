@@ -108,14 +108,14 @@ export default {
 
 <template>
   <div>
-    <el-button type="primary" size="mini" style="margin-bottom:10px" :disabled="disabled || grantSubmitting" @click="grantDialogVisible = true">授予 SELECT</el-button>
+    <el-button type="primary" size="small" style="margin-bottom:10px" :disabled="disabled || grantSubmitting" @click="grantDialogVisible = true">授予 SELECT</el-button>
     <GrantList v-loading="grantLoading" :tableData="grantList" :allow-revoke="!disabled" :revoke-disabled="grantSubmitting" @revoke="revokeViewSelect" />
-    <el-dialog title="授予视图 SELECT 权限" :visible.sync="grantDialogVisible" width="420px" append-to-body>
+    <el-dialog title="授予视图 SELECT 权限" v-model="grantDialogVisible" width="420px" append-to-body>
       <el-input v-model="grantUser" placeholder="被授权用户名" maxlength="128" />
-      <span slot="footer">
+      <template #footer><span >
         <el-button @click="grantDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="grantSubmitting" @click="grantViewSelect">确定</el-button>
-      </span>
+      </span></template>
     </el-dialog>
   </div>
 </template>

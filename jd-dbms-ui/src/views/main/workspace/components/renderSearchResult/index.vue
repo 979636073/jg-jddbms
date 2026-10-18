@@ -428,7 +428,7 @@ export default {
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     //销毁监听键盘按下以及抬起
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
@@ -2843,13 +2843,13 @@ export default {
     :style="{ marginTop: readonly ? '5px' : 0 }"
   >
     <div class="table_btn_list table-editor-toolbar" v-if="!readonly">
-      <el-tag v-if="!isEditableTable && !isMaterializedView" size="mini" type="info">只读</el-tag>
-      <el-tag v-if="isMaterializedView" size="mini" type="info" class="materialized-readonly-tag">
+      <el-tag v-if="!isEditableTable && !isMaterializedView" size="small" type="info">只读</el-tag>
+      <el-tag v-if="isMaterializedView" size="small" type="info" class="materialized-readonly-tag">
         物化视图 · 只读
       </el-tag>
       <el-button
         v-if="isMaterializedView"
-        size="mini"
+        size="small"
         type="primary"
         plain
         :loading="materializedViewRefreshing"
@@ -2857,12 +2857,12 @@ export default {
       >刷新物化视图</el-button>
       <el-button
         v-if="isMaterializedView"
-        size="mini"
+        size="small"
         plain
         :loading="materializedDdlLoading"
         @click="showMaterializedDdl"
       >查看 DDL</el-button>
-      <el-button v-if="isMaterializedView" size="mini" plain @click="materializedGrantVisible = true">授权</el-button>
+      <el-button v-if="isMaterializedView" size="small" plain @click="materializedGrantVisible = true">授权</el-button>
       <el-popover
         placement="bottom"
         width="280"
@@ -2871,23 +2871,22 @@ export default {
       >
         <div class="content-wrapper">
           <el-checkbox-group v-model="checkList">
-            <template v-for="item in copyHeader">
+            <template v-for="item in copyHeader" :key="item.name">
               <el-checkbox
                 v-show="item.name != '行号' && item.name != 'ROWID'"
-                :key="item.name"
                 :label="item.name"
                 >{{ item.name }}</el-checkbox
               >
             </template>
           </el-checkbox-group>
         </div>
-        <el-button size="mini" type="text" slot="reference">
+        <template #reference><el-button size="small" type="text" >
           <img src="@/assets/main/3-con-ico01.png" alt /> 过滤字段
-        </el-button>
+        </el-button></template>
       </el-popover>
       <el-button
         @click="addRow"
-        size="mini"
+        size="small"
         type="text"
         style="margin-left: 0"
         v-if="isEditableTable"
@@ -2898,7 +2897,7 @@ export default {
       <el-button
         @click="deleteRow()"
         :disabled="!multipleSelection.length"
-        size="mini"
+        size="small"
         type="text"
         v-if="isEditableTable"
       >
@@ -2907,7 +2906,7 @@ export default {
       </el-button>
       <el-button
         @click="handelBack"
-        size="mini"
+        size="small"
         type="text"
         :disabled="!pendingChangeSummary.length"
         v-if="isEditableTable"
@@ -2915,7 +2914,7 @@ export default {
         <img src="@/assets/main/15-1.png" alt />
         撤销变更
       </el-button>
-      <el-button @click="refresh" size="mini" type="primary" plain>
+      <el-button @click="refresh" size="small" type="primary" plain>
         <img src="@/assets/main/5-ico3.png" alt />
         刷新
       </el-button>
@@ -2924,11 +2923,11 @@ export default {
         trigger="click"
         style="margin-left: 10px"
       >
-        <el-button size="mini" type="primary" plain>
+        <el-button size="small" type="primary" plain>
           <img src="@/assets/main/3-con-ico05.png" alt />
           导出
         </el-button>
-        <el-dropdown-menu slot="dropdown">
+        <template #dropdown><el-dropdown-menu >
           <el-dropdown-item command="e">导出结果集 excel</el-dropdown-item>
           <el-dropdown-item command="b">导出结果集 insert sql</el-dropdown-item>
           <el-dropdown-item command="i" v-if="this.multipleSelection.length > 0"
@@ -2943,10 +2942,10 @@ export default {
           <el-dropdown-item command="d"
             >导出当前页结果集 insert sql</el-dropdown-item
           >
-        </el-dropdown-menu>
+        </el-dropdown-menu></template>
       </el-dropdown>
       <el-button
-        size="mini"
+        size="small"
         type="primary"
         plain
         style="margin-left: 10px"
@@ -2960,7 +2959,7 @@ export default {
         导入
       </el-button>
       <el-button
-        size="mini"
+        size="small"
         type="primary"
         plain
         style="margin-left: 10px"
@@ -2972,19 +2971,19 @@ export default {
         >高级查询</el-button
       >
       <div class="table-editor-commit">
-        <el-tag size="mini" :type="pendingChangeSummary.length ? 'warning' : 'info'" class="pending-change-summary">
+        <el-tag size="small" :type="pendingChangeSummary.length ? 'warning' : 'info'" class="pending-change-summary">
           {{ pendingChangeSummary.length ? `${pendingChangeSummary.length} 行待保存` : "无待保存变更" }}
         </el-tag>
-        <el-button size="mini" plain :disabled="!pendingChangeSummary.length || blobSaveLoading" @click="pendingPreviewVisible = !pendingPreviewVisible">预览变更</el-button>
+        <el-button size="small" plain :disabled="!pendingChangeSummary.length || blobSaveLoading" @click="pendingPreviewVisible = !pendingPreviewVisible">预览变更</el-button>
         <el-button
           @click="executeUpdateDataSql"
           v-if="isEditableTable"
           :disabled="!pendingChangeSummary.length || blobSaveLoading"
           :loading="blobSaveLoading"
-          size="mini"
+          size="small"
           type="primary"
         >{{ blobSaveLoading ? "保存中…" : "保存变更" }}</el-button>
-        <el-button size="mini" type="text" @click="valuePanelVisible = !valuePanelVisible">
+        <el-button size="small" type="text" @click="valuePanelVisible = !valuePanelVisible">
           {{ valuePanelVisible ? "收起字段值" : "展开字段值" }}
         </el-button>
       </div>
@@ -2999,16 +2998,16 @@ export default {
       <el-table
         :data="dataTable"
         ref="ref_table"
-        size="mini"
+        size="small"
         class="table-custom-class jdTable_small"
         style="width: 100%; height: calc(100% - 32px)"
         border
         tabindex="0"
         @cell-click="handleCellClick"
-        @keydown.native="handleGridKeydown"
+        @keydown="handleGridKeydown"
         @cell-contextmenu="handleContextMenu"
         @selection-change="handleSelectionChange"
-        @paste.native="pasteInfo($event)"
+        @paste="pasteInfo($event)"
         @sort-change="sortChange"
         @cell-dblclick="celldblclick"
         :cell-style="tableCellStyle"
@@ -3031,7 +3030,7 @@ export default {
           :column-key="header.autoIncrement && header.primaryKey ? '1' : '0'"
           :min-width="headerList.length >= 10 ? '150' : 'auto'"
         >
-          <template slot="header" slot-scope="scope">
+          <template #header="scope" >
             <el-tooltip
               class="item"
               effect="dark"
@@ -3074,7 +3073,7 @@ export default {
               </el-tooltip>
             </div>
           </template>
-          <template slot-scope="scope">
+          <template #default="scope" v-if="!header.comment">
             <div
               v-if="
                 scope.$index === clickRow && scope.column.index === clickCell
@@ -3084,7 +3083,7 @@ export default {
                 v-if="isDateColumn(header.dataType)"
                 :value="parseDatePickerValue(scope.row[header.name])"
                 :type="datePickerType(header.dataType)"
-                size="mini"
+                size="small"
                 @input="scope.row[header.name] = formatDatePickerValue($event, header.dataType)"
                 @change="inputBlur(scope.row, header)"
                 placeholder="选择日期"
@@ -3099,16 +3098,16 @@ export default {
                 :on-change="(file) => fileChange(file, scope.row, header.name)"
                 :auto-upload="false"
               >
-                <el-button slot="trigger" size="mini" type="primary" :loading="binaryUploadLoading" :disabled="binaryUploadLoading"
+                <template #trigger><el-button  size="small" type="primary" :loading="binaryUploadLoading" :disabled="binaryUploadLoading"
                   >{{ binaryUploadLoading ? "读取中…" : "选取文件" }}</el-button
-                >
+                ></template>
               </el-upload>
               <el-input
                 v-else-if="['string', 'number'].includes(editorKind(header))"
                 class="focusInput"
                 :disabled="header.name === isDisableds(scope.row)"
                 v-model="scope.row[header.name]"
-                size="mini"
+                size="small"
                 @blur="inputBlur(scope.row, header)"
               />
               <el-popover v-else placement="top" width="500" trigger="focus">
@@ -3121,21 +3120,21 @@ export default {
                   v-model="scope.row[header.name]"
                   @blur="inputBlur(scope.row, header)"
                 />
-                <el-input
-                  slot="reference"
+                <template #reference><el-input
+
                   class="focusInput"
                   :ref="'focusInput' + scope.row.index + '__' + header.name"
                   :disabled="header.name === isDisableds(scope.row)"
                   v-model="scope.row[header.name]"
                   @focus="inputFocus(`textarea_${scope.$index}_${header.name}`)"
-                  size="mini"
-                />
+                  size="small"
+                /></template>
               </el-popover>
             </div>
             <template v-else>
               <span v-if="scope.row[header.name] || (editorKind(header) === 'binary' && scope.row[header.name] === '')">
                 <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}
-                  <el-button type="text" size="mini" :loading="binaryPreviewLoading" @click.stop="openBinaryViewer(scope.row, header)">查看</el-button>
+                  <el-button type="text" size="small" :loading="binaryPreviewLoading" @click.stop="openBinaryViewer(scope.row, header)">查看</el-button>
                 </span>
                 <span v-else>{{ scope.row[header.name] }}</span>
               </span>
@@ -3144,8 +3143,8 @@ export default {
               >
             </template>
           </template>
-          <!-- 切换表有些表显示不出来的问题为以下代码 -->
-          <template v-if="header.comment">
+          <!-- 有注释时使用分组列展示第二行表头。 -->
+          <template #default v-else>
             <el-table-column
               :label="header.comment"
               :prop="header.name"
@@ -3156,7 +3155,7 @@ export default {
               :min-width="headerList.length >= 10 ? '150' : 'auto'"
               show-overflow-tooltip
             >
-              <template slot-scope="scope">
+              <template #default="scope">
                 <div
                   v-if="scope.$index === clickRow && index + 1 === clickCell"
                 >
@@ -3164,7 +3163,7 @@ export default {
                     v-if="isDateColumn(header.dataType)"
                     :value="parseDatePickerValue(scope.row[header.name])"
                     :type="datePickerType(header.dataType)"
-                    size="mini"
+                    size="small"
                     @input="scope.row[header.name] = formatDatePickerValue($event, header.dataType)"
                     @change="inputBlur(scope.row, header)"
                     placeholder="选择日期"
@@ -3181,16 +3180,16 @@ export default {
                     "
                     :auto-upload="false"
                   >
-                    <el-button slot="trigger" size="mini" type="primary" :loading="binaryUploadLoading" :disabled="binaryUploadLoading"
+                    <template #trigger><el-button  size="small" type="primary" :loading="binaryUploadLoading" :disabled="binaryUploadLoading"
                       >{{ binaryUploadLoading ? "读取中…" : "选取文件" }}</el-button
-                    >
+                    ></template>
                   </el-upload>
                   <el-input
                     v-else-if="['string', 'number'].includes(editorKind(header))"
                     class="focusInput"
                     :disabled="header.name === isDisableds(scope.row)"
                     v-model="scope.row[header.name]"
-                    size="mini"
+                    size="small"
                     @blur="inputBlur(scope.row, header)"
                   />
                   <el-popover
@@ -3208,8 +3207,8 @@ export default {
                       v-model="scope.row[header.name]"
                       @blur="inputBlur(scope.row, header)"
                     />
-                    <el-input
-                      slot="reference"
+                    <template #reference><el-input
+
                       class="focusInput"
                       :ref="'focusInput' + scope.row.index + '__' + header.name"
                       :disabled="header.name === isDisableds(scope.row)"
@@ -3217,14 +3216,14 @@ export default {
                       @focus="
                         inputFocus(`textarea_${scope.$index}_${header.name}`)
                       "
-                      size="mini"
-                    />
+                      size="small"
+                    /></template>
                   </el-popover>
                 </div>
                 <template v-else>
                   <span v-if="scope.row[header.name] || (editorKind(header) === 'binary' && scope.row[header.name] === '')">
                     <span v-if="editorKind(header) === 'binary'">{{ scope.row[header.name] === '' ? '空文件' : '文件' }}
-                  <el-button type="text" size="mini" :loading="binaryPreviewLoading" @click.stop="openBinaryViewer(scope.row, header)">查看</el-button>
+                  <el-button type="text" size="small" :loading="binaryPreviewLoading" @click.stop="openBinaryViewer(scope.row, header)">查看</el-button>
                 </span>
                     <span v-else>{{ scope.row[header.name] }}</span>
                   </span>
@@ -3247,23 +3246,23 @@ export default {
         <label>当前列 / 类型</label>
         <div class="value-inspector-meta">
           <strong>{{ selectedHeader.name }}</strong>
-          <el-tag size="mini" type="info">{{ selectedHeader.dataType }}</el-tag>
+          <el-tag size="small" type="info">{{ selectedHeader.dataType }}</el-tag>
         </div>
         <label>完整值</label>
         <template v-if="valueEditorKind === 'binary'">
           <div class="value-inspector-file">{{ binaryUploadLoading ? `正在读取 ${binaryUploadFileName}…` : selectedRow[selectedHeader.name] == null ? "无文件" : selectedRow[selectedHeader.name] === '' ? "空文件" : "二进制文件" }}</div>
-          <el-button size="mini" :loading="binaryPreviewLoading" :disabled="selectedRow[selectedHeader.name] == null" @click="openBinaryViewer(selectedRow, selectedHeader)">预览 / 下载</el-button>
+          <el-button size="small" :loading="binaryPreviewLoading" :disabled="selectedRow[selectedHeader.name] == null" @click="openBinaryViewer(selectedRow, selectedHeader)">预览 / 下载</el-button>
           <div class="value-inspector-actions" v-if="!valueEditorReadonly">
             <el-upload action="none" :show-file-list="false" :auto-upload="false" :on-change="file => fileChange(file, selectedRow, selectedHeader.name)">
-              <el-button size="mini" :loading="binaryUploadLoading" :disabled="binaryUploadLoading">{{ binaryUploadLoading ? "读取中…" : "上传 / 替换" }}</el-button>
+              <el-button size="small" :loading="binaryUploadLoading" :disabled="binaryUploadLoading">{{ binaryUploadLoading ? "读取中…" : "上传 / 替换" }}</el-button>
             </el-upload>
-            <el-button size="mini" :disabled="selectedRow[selectedHeader.name] == null" @click="clearBinaryValue">清空字段值</el-button>
-            <el-button size="mini" @click="revertValueEditor">还原此值</el-button>
+            <el-button size="small" :disabled="selectedRow[selectedHeader.name] == null" @click="clearBinaryValue">清空字段值</el-button>
+            <el-button size="small" @click="revertValueEditor">还原此值</el-button>
           </div>
           <p v-if="!valueEditorReadonly">清空后仅形成待保存变更，点击“保存变更”才会写入数据库。</p>
         </template>
         <template v-else-if="valueEditorKind === 'readonly'">
-          <el-input :value="String(selectedRow[selectedHeader.name] || '')" type="textarea" :rows="3" readonly />
+          <el-input :model-value="String(selectedRow[selectedHeader.name] || '')" type="textarea" :rows="3" readonly />
         </template>
         <template v-else>
           <el-date-picker
@@ -3271,7 +3270,7 @@ export default {
             :value="parseDatePickerValue(valueEditorDraft)"
             :type="datePickerType(selectedHeader.dataType)"
             @input="valueEditorDraft = formatDatePickerValue($event, selectedHeader.dataType)"
-            size="mini"
+            size="small"
             :disabled="valueEditorReadonly || valueEditorNull"
             placeholder="选择日期时间"
           />
@@ -3279,11 +3278,11 @@ export default {
             v-else-if="valueEditorKind === 'time'"
             v-model="valueEditorDraft"
             value-format="HH:mm:ss"
-            size="mini"
+            size="small"
             :disabled="valueEditorReadonly || valueEditorNull"
             placeholder="选择时间"
           />
-          <el-select v-else-if="valueEditorKind === 'boolean'" v-model="valueEditorDraft" size="mini" :disabled="valueEditorReadonly || valueEditorNull">
+          <el-select v-else-if="valueEditorKind === 'boolean'" v-model="valueEditorDraft" size="small" :disabled="valueEditorReadonly || valueEditorNull">
             <el-option label="1 / TRUE" value="1" />
             <el-option label="0 / FALSE" value="0" />
           </el-select>
@@ -3293,13 +3292,13 @@ export default {
             :type="valueEditorKind === 'text' ? 'textarea' : 'text'"
             :rows="valueEditorKind === 'text' ? 8 : 2"
             :disabled="valueEditorReadonly || valueEditorNull"
-            size="mini"
+            size="small"
             :placeholder="valueEditorKind === 'timezone' ? '保留时区偏移量输入完整值' : '输入字段值'"
           />
           <el-checkbox v-if="!valueEditorReadonly" v-model="valueEditorNull" class="value-inspector-null">设为 NULL</el-checkbox>
           <div class="value-inspector-actions" v-if="!valueEditorReadonly">
-            <el-button size="mini" type="primary" :disabled="!valueEditorChanged" @click="applyValueEditor">应用修改</el-button>
-            <el-button size="mini" @click="revertValueEditor">还原此值</el-button>
+            <el-button size="small" type="primary" :disabled="!valueEditorChanged" @click="applyValueEditor">应用修改</el-button>
+            <el-button size="small" @click="revertValueEditor">还原此值</el-button>
           </div>
           <p>应用后仅形成待保存变更，点击“保存变更”才会写入数据库。</p>
         </template>
@@ -3308,9 +3307,9 @@ export default {
     </aside>
     </div>
     <div class="table-editor-pending" v-if="pendingPreviewVisible && pendingChangeSummary.length">
-      <div><strong>待保存变更 · 操作摘要</strong><el-button size="mini" type="text" @click="pendingPreviewVisible = false">收起</el-button></div>
+      <div><strong>待保存变更 · 操作摘要</strong><el-button size="small" type="text" @click="pendingPreviewVisible = false">收起</el-button></div>
       <ul><li v-for="item in pendingChangeSummary" :key="item.rowId">第 {{ item.rowId }} 行 · {{ item.type === 'CREATE' ? '新增' : item.type === 'DELETE' ? '删除' : '修改' }}</li></ul>
-      <el-button size="mini" type="text" @click="sqlPreview">查看 SQL 预览</el-button>
+      <el-button size="small" type="text" @click="sqlPreview">查看 SQL 预览</el-button>
     </div>
     <div class="table_bottom_box">
       <div class="table_bottom_info">
@@ -3329,7 +3328,7 @@ export default {
       >
         <span v-if="queryResultData.totalExact === false && countedTotal === null" class="el-pagination__total">第 {{ queryParams.pageNum }} 页</span>
       </el-pagination>
-      <el-button v-if="queryResultData.totalExact === false && countedTotal === null" type="text" size="mini"
+      <el-button v-if="queryResultData.totalExact === false && countedTotal === null" type="text" size="small"
         :loading="isDialogLoading || countLoading" @click="advancedQuery(false, true)">统计总行数</el-button>
     </div>
 
@@ -3338,7 +3337,7 @@ export default {
         v-if="sqlPreviewType === 'execute'"
         style="position: absolute; right: 60px; top: 12px"
         @click="executeUpdateDataSql"
-        size="mini"
+        size="small"
         type="primary"
         plain
       >
@@ -3349,7 +3348,7 @@ export default {
         v-else-if="sqlPreviewType === 'update'"
         style="position: absolute; right: 60px; top: 12px"
         @click="updateColumn"
-        size="mini"
+        size="small"
         type="primary"
         plain
       >
@@ -3367,7 +3366,7 @@ export default {
 
     <el-dialog
       title="批量导入确认"
-      :visible.sync="dialogImportVisible"
+      v-model="dialogImportVisible"
       :close-on-click-modal="false"
       :before-close="handleClose"
       :width="importRounds === 1 ? '50%' : '80%'"
@@ -3398,10 +3397,10 @@ export default {
                 将文件拖到此处，或
                 <em>点击上传</em>
               </div>
-              <div class="el-upload__tip" slot="tip">
+              <template #tip><div class="el-upload__tip" >
                 只能上传.xls、 .xlsx文件，且不超过50MB
                 <!-- <el-checkbox v-model="checked">错误时停止</el-checkbox> -->
-              </div>
+              </div></template>
             </el-upload>
           </el-form-item>
         </el-form>
@@ -3427,10 +3426,10 @@ export default {
                     :label="item"
                     :prop="item"
                   >
-                    <template slot-scope="scope">
+                    <template #default="scope">
                       <el-input
                         :class="returnClass(scope.row[item + '_viewType'])"
-                        size="mini"
+                        size="small"
                         v-model="scope.row[item]"
                         v-if="
                           scope.$index == tabRowindex && item == tabColumnKey
@@ -3510,9 +3509,9 @@ export default {
                         :label="item"
                         :prop="item"
                       >
-                        <template slot-scope="scope">
+                        <template #default="scope">
                           <el-input
-                            size="mini"
+                            size="small"
                             v-model="scope.row[item]"
                             v-if="
                               scope.$index == tabRowindex &&
@@ -3561,10 +3560,10 @@ export default {
                       min-width="140"
                       show-overflow-tooltip
                     >
-                      <template slot-scope="scope">
+                      <template #default="scope">
                         <el-input
                           :class="returnClass(scope.row[item + '_viewType'])"
-                          size="mini"
+                          size="small"
                           v-model="scope.row[item]"
                           v-if="
                             scope.$index == tabRowindex && item == tabColumnKey
@@ -3605,7 +3604,7 @@ export default {
                       min-width="140"
                       show-overflow-tooltip
                     >
-                      <template slot-scope="scope">
+                      <template #default="scope">
                         <div
                           :class="returnClass(scope.row[item + '_viewType'])"
                         >
@@ -3676,9 +3675,9 @@ export default {
                         :label="item"
                         :prop="item"
                       >
-                        <template slot-scope="scope">
+                        <template #default="scope">
                           <el-input
-                            size="mini"
+                            size="small"
                             v-model="scope.row[item]"
                             v-if="
                               scope.$index == tabRowindex &&
@@ -3712,7 +3711,7 @@ export default {
           >
         </div>
       </div>
-      <div slot="footer" class="dialog-footer">
+      <template #footer><div  class="dialog-footer">
         <div
           class="colorInfo"
           v-if="
@@ -3761,20 +3760,20 @@ export default {
               activeName == 'edit' &&
               activeTab == 'ERROR')
           "
-          size="mini"
+          size="small"
           :disabled="!addSuccessData || addSuccessData.length <= 0"
           @click="handleExportResult"
           >下 载</el-button
         >
         <el-button @click="handleClose" size="small">关 闭</el-button>
-      </div>
+      </div></template>
     </el-dialog>
 
     <Filedialog ref="fileRef"></Filedialog>
 
     <el-dialog
       title="高级查询"
-      :visible.sync="searchDialogVisible"
+      v-model="searchDialogVisible"
       width="800px"
       :close-on-press-escape="false"
       :close-on-click-modal="false"
@@ -3783,7 +3782,7 @@ export default {
       <div class="searchDialogBox">
         <div class="inputRow">
           <el-select
-            size="mini"
+            size="small"
             v-model="searchDialogForm.columnTitle"
             placeholder="请选择表头字段"
             @change="filterTitle"
@@ -3798,7 +3797,7 @@ export default {
             ></el-option>
           </el-select>
           <el-select
-            size="mini"
+            size="small"
             clearable
             style="width: 130px; margin-left: 10px"
             v-model="searchDialogForm.sql"
@@ -3824,7 +3823,7 @@ export default {
               type="datetime"
               placeholder="选择日期时间"
               clearable
-              size="mini"
+              size="small"
               value-format="yyyy-MM-dd hh:mm:ss"
               default-time="12:00:00"
             ></el-date-picker>
@@ -3834,15 +3833,15 @@ export default {
               clearable
               placeholder="请输入内容"
               style="width: 285px; margin-left: 10px"
-              size="mini"
+              size="small"
             ></el-input>
           </template>
         </div>
         <div class="btnBox">
-          <el-button size="mini" plain @click="addSearchForm('And')"
+          <el-button size="small" plain @click="addSearchForm('And')"
             >Add to Filter(And)</el-button
           >
-          <el-button size="mini" plain @click="addSearchForm('Or')"
+          <el-button size="small" plain @click="addSearchForm('Or')"
             >Add to Filter(Or)</el-button
           >
         </div>
@@ -3854,28 +3853,28 @@ export default {
           v-model="pageSql"
         ></el-input>
         <div class="btnBox">
-          <el-button size="mini" plain @click="addSearchForm2('(')"
+          <el-button size="small" plain @click="addSearchForm2('(')"
             >Add (</el-button
           >
-          <el-button size="mini" plain @click="addSearchForm2(')')"
+          <el-button size="small" plain @click="addSearchForm2(')')"
             >Add )</el-button
           >
         </div>
       </div>
-      <span slot="footer">
+      <template #footer><span >
         <el-button plain @click="clearAdvancedQuery">清 空</el-button>
         <el-button plain @click="closeAdvancedQuery">关 闭</el-button>
         <el-button plain @click="confirmAdvancedQuery">确 定</el-button>
-      </span>
+      </span></template>
     </el-dialog>
-    <el-dialog title="物化视图 DDL" :visible.sync="materializedDdlVisible" width="70%">
+    <el-dialog title="物化视图 DDL" v-model="materializedDdlVisible" width="70%">
       <pre class="materialized-ddl">{{ materializedDdl }}</pre>
-      <span slot="footer">
+      <template #footer><span >
         <el-button @click="materializedDdlVisible = false">关闭</el-button>
         <el-button type="primary" @click="exportMaterializedDdl">导出 DDL</el-button>
-      </span>
+      </span></template>
     </el-dialog>
-    <el-dialog title="物化视图授权" :visible.sync="materializedGrantVisible" width="800px" append-to-body>
+    <el-dialog title="物化视图授权" v-model="materializedGrantVisible" width="800px" append-to-body>
       <ViewGrantPanel v-if="materializedGrantVisible" :query-result-data="queryResultData" />
     </el-dialog>
   </div>

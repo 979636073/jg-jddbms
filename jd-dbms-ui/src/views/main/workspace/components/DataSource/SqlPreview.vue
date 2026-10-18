@@ -40,7 +40,7 @@ export default {
 <template>
   <el-dialog
     :title="title"
-    :visible.sync="dialogVisible"
+    v-model="dialogVisible"
     width="800"
     :before-close="handleClose"
     :close-on-click-modal="false"

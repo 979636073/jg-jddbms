@@ -9,9 +9,9 @@
     >
       <el-table-column prop="name" label="视图名称"></el-table-column>
       <el-table-column label="类型" width="90">
-        <template slot-scope="scope">
+        <template #default="scope">
           <el-tag
-            size="mini"
+            size="small"
             :type="isMaterializedView(scope.row) ? 'primary' : 'info'"
           >{{ isMaterializedView(scope.row) ? '物化视图' : '普通视图' }}</el-tag>
         </template>
@@ -21,7 +21,7 @@
       <el-table-column prop="created" label="创建时间"></el-table-column>
       <el-table-column prop="lastDDL" label="最后结构变化时间"></el-table-column>
     </el-table>
-    <el-pagination v-if="filteredViews.length > pageSize" small layout="total, prev, pager, next" :total="filteredViews.length" :page-size="pageSize" :current-page.sync="page" />
+    <el-pagination v-if="filteredViews.length > pageSize" small layout="total, prev, pager, next" :total="filteredViews.length" :page-size="pageSize" v-model:current-page="page" />
   </div>
 </template>
 

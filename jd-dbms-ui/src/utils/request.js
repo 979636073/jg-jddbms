@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Notification, MessageBox, Message, Loading } from 'element-ui'
+import { ElNotification as Notification, ElMessageBox as MessageBox, ElMessage as Message, ElLoading as Loading } from 'element-plus'
 import store from '@/store'
 import { getToken } from '@/utils/auth'
 import errorCode from '@/utils/errorCode'

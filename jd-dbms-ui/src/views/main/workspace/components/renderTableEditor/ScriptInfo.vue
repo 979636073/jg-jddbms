@@ -258,7 +258,7 @@ export default {
 <template>
   <div class="draggable scriptInfo">
     <el-table
-      size="mini"
+      size="small"
       :data="tableData.filter(tabelItem => tabelItem.editStatus !== 'DELETE')"
       row-key="key"
       @cell-click="cellclick"
@@ -272,7 +272,7 @@ export default {
         :width="item.width"
         :fixed="item.fixed"
       >
-        <template slot-scope="{ row }">
+        <template #default="{ row }">
           <template v-if="item.dataIndex === 'nullable' || item.dataIndex === 'primaryKey'">
             <el-checkbox
               v-if="item.dataIndex === 'nullable'"
@@ -316,7 +316,7 @@ export default {
             <el-input
               v-if="item.dataIndex === 'name'"
               v-model="row[item.dataIndex]"
-              size="mini"
+              size="small"
               @change="handleFieldsChange(item.dataIndex, row)"
             />
             <el-select
@@ -324,7 +324,7 @@ export default {
               v-model="row[item.dataIndex]"
               placeholder="请选择"
               filterable
-              size="mini"
+              size="small"
               @change="() => {
                 edit(row)
                 handleFieldsChange(item.dataIndex, row)
@@ -341,14 +341,14 @@ export default {
               v-else-if="item.dataIndex === 'columnSize'"
               v-model="row[item.dataIndex]"
               type="number"
-              size="mini"
+              size="small"
               :disabled="!editingConfig || !editingConfig.supportLength"
               @change="handleFieldsChange(item.dataIndex, row)"
             ></el-input>
             <el-input
               v-else-if="item.dataIndex === 'comment'"
               v-model="row[item.dataIndex]"
-              size="mini"
+              size="small"
               :disabled="editingConfig && !editingConfig.supportComments"
               @change="handleFieldsChange(item.dataIndex, row)"
             />
@@ -357,8 +357,8 @@ export default {
         </template>
       </el-table-column>
       <el-table-column width="120" label="操作">
-        <template slot-scope="scope">
-          <el-button @click="deleteData(scope.row, scope.$index)" size="mini" type="text" plain>
+        <template #default="scope">
+          <el-button @click="deleteData(scope.row, scope.$index)" size="small" type="text" plain>
             <img src="@/assets/main/3-con-ico02.png" alt />
             删除
           </el-button>
@@ -367,7 +367,7 @@ export default {
     </el-table>
     <el-button
       @click="addData"
-      size="mini"
+      size="small"
       icon="el-icon-plus"
       style="width: 100%; margin-top: 10px;"
     >添加列</el-button>
@@ -382,7 +382,7 @@ export default {
         display: flex;
         flex-flow: column;
       "
-      size="mini"
+      size="small"
       ref="form"
       :model="editingData"
       label-width="80px"

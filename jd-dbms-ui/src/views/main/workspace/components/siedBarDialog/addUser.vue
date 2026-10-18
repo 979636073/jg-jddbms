@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog title="新增用户" :visible.sync="userDialogVisible" :before-close="handleClose" width="800px">
+    <el-dialog title="新增用户" :model-value="userDialogVisible" :before-close="handleClose" width="800px">
       <span>
         <el-form
           label-position="right"
@@ -14,7 +14,7 @@
               <el-form-item label="用户名称" class="is-required" prop="userName">
                 <el-input
                   placeholder="请输入用户名称"
-                  size="mini"
+                  size="small"
                   v-model="userFrom.userName"
                 >
                 </el-input>
@@ -25,7 +25,7 @@
               ><el-form-item label="密码" class="is-required" prop="newPassWord">
                 <el-input
                   placeholder="请输入密码"
-                  size="mini"
+                  size="small"
                   v-model="userFrom.newPassWord"
                   type="password"
                 >
@@ -37,7 +37,7 @@
               <el-form-item label="确认密码" class="is-required" prop="verifyPassword">
                 <el-input
                   placeholder="请输入确认密码"
-                  size="mini"
+                  size="small"
                   v-model="userFrom.verifyPassword"
                   type="password"
                 >
@@ -50,7 +50,7 @@
               <el-form-item label="默认表空间" class="is-required" prop="defaultTableSpace">
                 <el-select
                   v-model="userFrom.defaultTableSpace"
-                  size="mini"
+                  size="small"
                   placeholder="请选择表空间"
                 >
                   <el-option
@@ -66,7 +66,7 @@
               <el-form-item label="临时表空间" class="is-required" prop="tempTableSpace">
                 <el-select
                   v-model="userFrom.tempTableSpace"
-                  size="mini"
+                  size="small"
                   placeholder="请选择表空间"
                 >
                   <el-option
@@ -96,17 +96,17 @@
           >
           </el-table-column>
           <el-table-column prop="isGranted" label="Granted">
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-checkbox v-model="scope.row.isGranted" />
             </template>
           </el-table-column>
           <el-table-column prop="isAdmin" label="Admin">
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-checkbox v-model="scope.row.isAdmin" />
             </template>
           </el-table-column>
           <el-table-column prop="isDefault" label="Default">
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-checkbox v-model="scope.row.isDefault" />
             </template>
           </el-table-column>
@@ -119,14 +119,14 @@
           @pagination="getUserRoleList"
         /> -->
       </span>
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="userHandleCloseFn(false)" size="mini"
+      <template #footer><span  class="dialog-footer">
+        <el-button @click="userHandleCloseFn(false)" size="small"
           >取 消</el-button
         >
-        <el-button type="primary" @click="saveUser" size="mini"
+        <el-button type="primary" @click="saveUser" size="small"
           >确 定</el-button
         >
-      </span>
+      </span></template>
     </el-dialog>
   </div>
 </template>

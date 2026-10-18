@@ -91,21 +91,21 @@ export default {
 <template>
   <div class="databaseConfig">
     <div class="table_btn_list">
-      <el-button @click="addOrUpdateDataSource()" size="mini" type="text" class="el-button_before" style="margin-left: 0">
+      <el-button @click="addOrUpdateDataSource()" size="small" type="text" class="el-button_before" style="margin-left: 0">
         <img src="@/assets/main/3-con-ico01.png" alt="">
         添加
       </el-button>
-      <el-button @click="getConnectionList" size="mini" type="text" class="el-button_before">
+      <el-button @click="getConnectionList" size="small" type="text" class="el-button_before">
         <img src="@/assets/main/5-ico3.png" alt="">
         刷新
       </el-button>
       <el-input
         v-model="searchKey"
-        size="mini"
+        size="small"
         placeholder="数据源"
         style="width: 200px;margin: 0 5px"
       />
-      <el-button @click="getConnectionList" size="mini" type="primary">
+      <el-button @click="getConnectionList" size="small" type="primary">
         <img src="@/assets/main/5-ico4.png" alt="">
         查询
       </el-button>
@@ -115,20 +115,20 @@ export default {
       :data="dataSourceList"
       style="width: 100%"
       v-loading="dataSourceLoading"
-      size="mini"
+      size="small"
       height="calc(100% - 100px)"
     >
       <el-table-column label="操作" width="240">
-        <template slot-scope="scope">
-          <el-button @click="addOrUpdateDataSource(scope.row)" size="mini" type="text" plain>
+        <template #default="scope">
+          <el-button @click="addOrUpdateDataSource(scope.row)" size="small" type="text" plain>
             <img src="@/assets/main/3-con-ico03.png" alt="">
             修改
           </el-button>
-          <el-button @click="copyConnection(scope.row)" size="mini" type="text" plain>
+          <el-button @click="copyConnection(scope.row)" size="small" type="text" plain>
             <img src="@/assets/main/3-con-ico06.png" alt="">
             复制
           </el-button>
-          <el-button @click="handelDelete(scope.row)" size="mini" type="text" plain>
+          <el-button @click="handelDelete(scope.row)" size="small" type="text" plain>
             <img src="@/assets/main/3-con-ico02.png" alt="">
             删除
           </el-button>

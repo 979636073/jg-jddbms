@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="批量导入确认"
-    :visible.sync="dialogImportVisible"
+    :model-value="dialogImportVisible"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="false"
@@ -35,7 +35,7 @@
               将文件拖到此处，或
               <em>点击上传</em>
             </div>
-            <div class="el-upload__tip" slot="tip">只能上传.xls、 .xlsx文件，且不超过50MB</div>
+            <template #tip><div class="el-upload__tip" >只能上传.xls、 .xlsx文件，且不超过50MB</div></template>
           </el-upload>
         </el-form-item>
       </el-form>
@@ -102,9 +102,9 @@
                 :label="item"
                 :prop="item"
               >
-                <template slot-scope="scope">
+                <template #default="scope">
                   <el-input
-                    size="mini"
+                    size="small"
                     v-model="scope.row[item]"
                     v-if="
                     scope.row.index == tabRowindex &&
@@ -145,9 +145,9 @@
                 :label="item"
                 :prop="item"
               >
-                <template slot-scope="scope">
+                <template #default="scope">
                   <el-input
-                    size="mini"
+                    size="small"
                     v-model="scope.row[item]"
                     v-if="
                     scope.row.index == tabRowindex &&
@@ -219,9 +219,9 @@
                     :label="item"
                     :prop="item"
                   >
-                    <template slot-scope="scope">
+                    <template #default="scope">
                       <el-input
-                        size="mini"
+                        size="small"
                         v-model="scope.row[item]"
                         v-if="
                         scope.row.index == tabRowindex &&
@@ -288,9 +288,9 @@
                     :label="item"
                     :prop="item"
                   >
-                    <template slot-scope="scope">
+                    <template #default="scope">
                       <el-input
-                        size="mini"
+                        size="small"
                         v-model="scope.row[item]"
                         v-if="scope.row.index == tabRowindex && scope.column.index == tabColumnIndex"
                         @blur="inputBlurFn"
@@ -316,7 +316,7 @@
     </div>
     <!-- <div class="noData" v-show="!tableData.length">正在加载中...</div> -->
 
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div  class="dialog-footer">
       <el-button type="primary" size="small" v-if="importRounds === 3" @click="backRounds">上一步</el-button>
       <el-button
         type="primary"
@@ -332,7 +332,7 @@
         @click="executeFileData"
       >执行</el-button>
       <el-button @click="handleClose" size="small">关 闭</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

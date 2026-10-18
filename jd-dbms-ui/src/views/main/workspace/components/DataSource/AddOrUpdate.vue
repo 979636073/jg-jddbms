@@ -224,11 +224,11 @@ export default {
 </script>
 
 <template>
-  <el-dialog :title="title" :visible.sync="dialogVisible" width="800" :before-close="handleClose">
+  <el-dialog :title="title" v-model="dialogVisible" width="800" :before-close="handleClose">
     <el-scrollbar>
       <el-form
         v-if="dataSourceInfo && dataSourceInfo.type"
-        size="mini"
+        size="small"
         ref="form"
         :model="dataSourceInfo"
         label-width="80px"
@@ -279,7 +279,7 @@ export default {
         </div>
       </div>
     </el-scrollbar>
-    <span slot="footer" class="dialog-footer">
+    <template #footer><span  class="dialog-footer">
       <el-button
         v-if="dataSourceInfo && dataSourceInfo.type"
         type="primary"
@@ -288,7 +288,7 @@ export default {
       >测试链接</el-button>
       <el-button type="primary" plain @click="dialogClose">取 消</el-button>
       <el-button type="primary" @click="saveConnection(dataSourceInfo.id ? 'update' : 'save')">确 定</el-button>
-    </span>
+    </span></template>
   </el-dialog>
 </template>
 

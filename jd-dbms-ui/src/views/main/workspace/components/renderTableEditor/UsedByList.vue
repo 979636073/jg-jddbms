@@ -1,16 +1,16 @@
 <template>
   <div>
-    <el-button size="mini" type="text" @click="refreshFn">
+    <el-button size="small" type="text" @click="refreshFn">
         <img src="@/assets/main/5-ico3.png" alt="" />
         刷新
       </el-button>
-    <el-button v-if="isLoading" size="mini" type="danger" plain @click="cancelQuery">取消查询</el-button>
-    <el-select v-model="relationTypeValue" size="mini" style="width: 130px; margin-left: 12px" @change="changeRelationType">
+    <el-button v-if="isLoading" size="small" type="danger" plain @click="cancelQuery">取消查询</el-button>
+    <el-select v-model="relationTypeValue" size="small" style="width: 130px; margin-left: 12px" @change="changeRelationType">
       <el-option label="外键关联" value="table" />
       <el-option label="视图依赖" value="view" />
     </el-select>
     <div class="isRadioBox">
-      <el-tabs v-model="displayMode" type="card" size="mini">
+      <el-tabs v-model="displayMode" type="card" size="small">
         <el-tab-pane label="关系树" name="tree">
       <el-table
         height="700"
@@ -27,7 +27,7 @@
         </el-table-column>
         <el-table-column prop="tableName" label="名称"> </el-table-column>
         <el-table-column label="列关系" min-width="220">
-          <template slot-scope="scope">
+          <template #default="scope">
             <span v-if="scope.row.column || scope.row.foreignColumnName">{{ relationLabel(scope.row) }}</span>
             <span v-else class="relation-empty">—</span>
           </template>
@@ -39,9 +39,9 @@
         <el-tab-pane label="ER图" name="graph">
           <div class="graph-toolbar">
             <el-button-group>
-              <el-button size="mini" icon="el-icon-zoom-in" @click="zoomGraph(1.1)" />
-              <el-button size="mini" icon="el-icon-zoom-out" @click="zoomGraph(0.9)" />
-              <el-button size="mini" icon="el-icon-aim" @click="fitGraph" />
+              <el-button size="small" icon="el-icon-zoom-in" @click="zoomGraph(1.1)" />
+              <el-button size="small" icon="el-icon-zoom-out" @click="zoomGraph(0.9)" />
+              <el-button size="small" icon="el-icon-aim" @click="fitGraph" />
             </el-button-group>
             <span v-if="graphTruncated" class="graph-limit-tip">
               关系较多，仅展示前 {{ graphNodeLimit }} 个节点（其余 {{ graphTruncated }} 个可在关系树中展开查看）
@@ -221,7 +221,7 @@ export default {
       this.$emit("cancelRelationQuery");
     },
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.destroyGraph();
   },
 };

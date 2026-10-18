@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const compiler = require('vue-template-compiler')
+const compiler = require('./helpers/vue-compiler')
 const sass = require('sass')
 const source = compiler.parseComponent(fs.readFileSync(path.join(__dirname,
   '../src/views/main/workspace/components/reanderSqlExecute/SqlResultTable.vue'), 'utf8'))

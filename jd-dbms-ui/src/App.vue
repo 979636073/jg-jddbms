@@ -11,12 +11,16 @@ import ThemePicker from "@/components/ThemePicker";
 export default {
   name: "App",
   components: { ThemePicker },
-  metaInfo() {
-    return {
-      title: this.$store.state.settings.dynamicTitle && this.$store.state.settings.title,
-      titleTemplate: title => {
-        return title ? `${title} - ${process.env.VUE_APP_TITLE}` : process.env.VUE_APP_TITLE
-      }
+  computed: {
+    pageTitle() {
+      const title = this.$store.state.settings.dynamicTitle && this.$store.state.settings.title;
+      return title ? `${title} - ${process.env.VUE_APP_TITLE}` : process.env.VUE_APP_TITLE;
+    }
+  },
+  watch: {
+    pageTitle: {
+      immediate: true,
+      handler(title) { document.title = title; }
     }
   }
 };

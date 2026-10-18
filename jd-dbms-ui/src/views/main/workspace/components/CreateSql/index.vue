@@ -100,15 +100,15 @@ export default {
         <span>{{ currentConfig.uniqueData.schemaName }}</span>
       </div>
       <div class="monaco_btn">
-        <el-button size="mini" @click="executeSQL" :loading="executing" type="text" class="el-button_before" style="margin-left: 0">
+        <el-button size="small" @click="executeSQL" :loading="executing" type="text" class="el-button_before" style="margin-left: 0">
           <img src="@/assets/main/1-con-ico01.png" alt="">
           保存并编译
         </el-button>
-        <el-button size="mini" @click="emptySql" type="text" class="el-button_before">
+        <el-button size="small" @click="emptySql" type="text" class="el-button_before">
           <img src="@/assets/main/1-con-ico03.png" alt="">
           清空
         </el-button>
-        <el-button size="mini" @click="formatSql" type="text">
+        <el-button size="small" @click="formatSql" type="text">
           <img src="@/assets/main/1-con-ico04.png" alt="">
           美化
         </el-button>

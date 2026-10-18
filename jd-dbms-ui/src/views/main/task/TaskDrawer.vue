@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     title="后台任务中心"
-    :visible="visible"
+    :model-value="visible"
     direction="rtl"
     size="480px"
     :before-close="close"
@@ -10,15 +10,15 @@
       <div class="task-drawer__toolbar">
         <span><i class="el-icon-info" /> 导入、导出等任务会在后台执行</span>
         <div>
-          <el-button type="text" size="mini" icon="el-icon-refresh" :loading="loading" @click="getList">刷新</el-button>
-          <el-button type="text" size="mini" :disabled="!hasFinishedTask()" @click="clearFinished">清除已结束</el-button>
-          <el-button type="text" size="mini" @click="openTaskCenter">完整列表</el-button>
+          <el-button type="text" size="small" icon="el-icon-refresh" :loading="loading" @click="getList">刷新</el-button>
+          <el-button type="text" size="small" :disabled="!hasFinishedTask()" @click="clearFinished">清除已结束</el-button>
+          <el-button type="text" size="small" @click="openTaskCenter">完整列表</el-button>
         </div>
       </div>
 
       <el-table v-loading="loading" :data="list" size="small" border :empty-text="'暂无后台任务'">
         <el-table-column label="任务详情与实时进度" min-width="270">
-          <template slot-scope="scope">
+          <template #default="scope">
             <div class="task-name">{{ scope.row.taskName || scope.row.taskType || '未命名任务' }}</div>
             <div class="task-type">{{ typeText(scope.row.taskType) }}</div>
             <template v-if="isRunning(scope.row.taskStatus)">
@@ -35,37 +35,37 @@
           </template>
         </el-table-column>
         <el-table-column label="状态" width="92" align="center">
-          <template slot-scope="scope">
-            <el-tag :type="statusType(scope.row.taskStatus)" size="mini">{{ statusText(scope.row.taskStatus) }}</el-tag>
+          <template #default="scope">
+            <el-tag :type="statusType(scope.row.taskStatus)" size="small">{{ statusText(scope.row.taskStatus) }}</el-tag>
             <div class="task-time">{{ parseTime(scope.row.gmtCreate) }}</div>
             <el-button
               v-if="scope.row.taskStatus === 'FINISH' && scope.row.downloadUrl"
               type="text"
-              size="mini"
+              size="small"
               icon="el-icon-download"
               @click="download(scope.row)"
             >下载</el-button>
             <el-button
               v-if="!isRunning(scope.row.taskStatus)"
               type="text"
-              size="mini"
+              size="small"
               class="task-clear"
               @click="clearTask(scope.row)"
             >清除</el-button>
             <el-button
               v-if="canCancel(scope.row)"
               type="text"
-              size="mini"
+              size="small"
               class="task-clear"
               @click="cancelTask(scope.row)"
             >取消</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <div class="migration-heading">跨库数据迁移 <el-button type="text" size="mini" @click="openMigrationList">查看全部</el-button></div>
+      <div class="migration-heading">跨库数据迁移 <el-button type="text" size="small" @click="openMigrationList">查看全部</el-button></div>
       <div v-for="task in migrationTasks" :key="task.id" class="migration-task">
-        <el-button type="text" size="mini" @click="openMigration(task)">{{ task.config && task.config.name }}</el-button>
-        <el-tag size="mini" :type="migrationStatusType(task.status)">{{ migrationStatus(task.status) }}</el-tag>
+        <el-button type="text" size="small" @click="openMigration(task)">{{ task.config && task.config.name }}</el-button>
+        <el-tag size="small" :type="migrationStatusType(task.status)">{{ migrationStatus(task.status) }}</el-tag>
         <span v-if="task.status === 'MIG_RUNNING'">已提交 {{ task.committedRows || 0 }} 行</span>
       </div>
     </div>
@@ -100,7 +100,7 @@ export default {
   created() {
     this.getList()
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.stopRefresh()
   },
   methods: {

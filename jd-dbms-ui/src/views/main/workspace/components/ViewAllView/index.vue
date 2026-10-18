@@ -172,15 +172,15 @@ export default {
 <template>
 <div class="table_box">
   <div class="table_btn_list">
-    <el-button @click="createView" size="mini" type="text" class="el-button_before" style="margin-left: 0">
+    <el-button @click="createView" size="small" type="text" class="el-button_before" style="margin-left: 0">
       <img src="@/assets/main/3-con-ico01.png" alt="">
       添加视图
     </el-button>
-    <el-button @click="refresh" size="mini" type="text">
+    <el-button @click="refresh" size="small" type="text">
       <img src="@/assets/main/5-ico3.png" alt="">
       刷新
     </el-button>
-    <el-button @click="submit"  icon="el-icon-caret-right" size="mini" type="text">
+    <el-button @click="submit"  icon="el-icon-caret-right" size="small" type="text">
       编译
     </el-button>
 <!--    <el-input-->
@@ -197,7 +197,7 @@ export default {
   <el-table
     :data="tableData"
     v-loading="tableLoading"
-    size="mini"
+    size="small"
     style="width: 100%"
     height="calc(100% - 80px)"
     @selection-change="handleSelectionChange"

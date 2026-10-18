@@ -8,9 +8,8 @@ import tableServer from "@/api/main/table";
 import connectionServer from "@/api/main/connection";
 import { downloadFile } from "@/utils/file";
 import { copyText } from "@/utils";
-import draggable from "vuedraggable";
 export default {
-  components: { MonacoEditor, SqlResultTable, draggable },
+  components: { MonacoEditor, SqlResultTable },
   props: {
     currentConfig: {
       type: Object,
@@ -32,6 +31,7 @@ export default {
       isCommit: false,
       sessionId: "",
       sqlContent: null,
+      isConsoleActive: true,
       sqlLoading: false,
       currentExecutionId: "",
       cancelRequested: false,
@@ -238,7 +238,7 @@ export default {
       this.$refs.MonacoEditor.setValue(this.currentConfig.uniqueData.sql);
     }
     this.sqlConsoleKeydown = (event) => {
-      if (this._inactive) return;
+      if (!this.isConsoleActive) return;
       if (event.key === "F9" || (event.ctrlKey && event.key === "Enter")) {
         event.preventDefault();
         event.stopPropagation();
@@ -259,7 +259,13 @@ export default {
     };
     document.addEventListener("keydown", this.sqlConsoleKeydown, true);
   },
-  beforeDestroy() {
+  activated() {
+    this.isConsoleActive = true;
+  },
+  deactivated() {
+    this.isConsoleActive = false;
+  },
+  beforeUnmount() {
     if (this.sqlConsoleKeydown) {
       document.removeEventListener("keydown", this.sqlConsoleKeydown, true);
     }
@@ -1032,7 +1038,7 @@ export default {
       <span class="connection-name" :title="connectionLabel">{{ connectionLabel }}</span>
       <el-tag size="small" type="info" effect="plain">{{ currentDataSource.databaseType || currentDataSource.type }}</el-tag>
       <label class="context-label">模式</label>
-      <el-select :value="selectedSchema" filterable size="small" placeholder="选择模式"
+      <el-select :model-value="selectedSchema" filterable size="small" placeholder="选择模式"
         :loading="schemaLoading" :disabled="sqlLoading || disableCommit || disableRollBack"
         @visible-change="loadSchemas" @change="changeSchema">
         <el-option v-for="schema in availableSchemas" :key="schema" :value="schema" :label="schema" />
@@ -1043,7 +1049,7 @@ export default {
       <div class="monaco_btn">
         <input ref="sqlFileInput" type="file" accept=".sql,.txt" style="display:none" @change="handleSqlFileChange" />
         <el-button
-          size="mini"
+          size="small"
           @click="executeSQL('run')"
           type="primary"
           :disabled="sqlLoading"
@@ -1053,9 +1059,9 @@ export default {
           <i class="el-icon-video-play"></i>
           执行选中 / 当前语句
         </el-button>
-        <el-button size="mini" :disabled="sqlLoading" @click="executeSQL('run', false, true)">执行全部</el-button>
+        <el-button size="small" :disabled="sqlLoading" @click="executeSQL('run', false, true)">执行全部</el-button>
         <el-button
-          size="mini"
+          size="small"
           @click="cancelSqlExecution"
           type="danger"
           plain
@@ -1065,12 +1071,12 @@ export default {
           <i :class="cancelRequested ? 'el-icon-loading' : 'el-icon-video-pause'"></i>
           {{ cancelRequested ? "正在停止" : "停止" }}
         </el-button>
-        <el-button size="mini" @click="formatSql" type="text">
+        <el-button size="small" @click="formatSql" type="text">
           <i class="el-icon-s-operation"></i>
           格式化
         </el-button>
         <el-button
-          size="mini"
+          size="small"
           type="primary"
           plain
           @click="handleCommit"
@@ -1081,7 +1087,7 @@ export default {
           提交
         </el-button>
         <el-button
-          size="mini"
+          size="small"
           type="primary"
           plain
           @click="handleBackRoll"
@@ -1094,7 +1100,7 @@ export default {
         <el-popover
           placement="bottom"
           width="300"
-          v-model="visible2"
+          v-model:visible="visible2"
         >
           <el-input
             v-model="inputSqlName"
@@ -1104,22 +1110,22 @@ export default {
             placeholder="请输入文件名称"
           ></el-input>
           <div style="text-align: right; margin-top: 10px">
-            <el-button size="mini" type="text" @click="close">取消</el-button>
-            <el-button type="primary" size="mini" @click="saveConsole"
+            <el-button size="small" type="text" @click="close">取消</el-button>
+            <el-button type="primary" size="small" @click="saveConsole"
               >确定</el-button
             >
           </div>
-          <el-button size="mini" slot="reference" type="primary" plain>
+          <template #reference><el-button size="small"  type="primary" plain>
             <img src="@/assets/main/1-con-ico22.png" alt />
             保存脚本
-          </el-button>
+          </el-button></template>
         </el-popover>
 
-        <el-button size="mini" @click="viewLog" type="text">
+        <el-button size="small" @click="viewLog" type="text">
           <i id="icon" class="el-icon-view"></i>
           执行历史
         </el-button>
-        <el-popover placement="bottom-start" width="360" trigger="click" v-model="recentScriptsVisible">
+        <el-popover placement="bottom-start" width="360" trigger="click" v-model:visible="recentScriptsVisible">
           <div class="recent-sql-title">最近脚本</div>
           <el-empty v-if="!recentSqlScripts.length" description="暂无最近脚本" :image-size="50" />
           <div v-else class="recent-sql-list">
@@ -1129,35 +1135,35 @@ export default {
               <i class="el-icon-delete recent-sql-delete" title="删除" @click="removeRecentSqlScript(script)"></i>
             </div>
           </div>
-          <el-button slot="reference" size="mini" type="text" title="恢复最近脚本">
+          <template #reference><el-button  size="small" type="text" title="恢复最近脚本">
             <i class="el-icon-time"></i>
             最近脚本
-          </el-button>
+          </el-button></template>
         </el-popover>
         <el-dropdown @command="handleMoreAction" trigger="click">
-          <el-button size="mini" type="text">更多<i class="el-icon-arrow-down el-icon--right"></i></el-button>
-          <el-dropdown-menu slot="dropdown">
+          <el-button size="small" type="text">更多<i class="el-icon-arrow-down el-icon--right"></i></el-button>
+          <template #dropdown><el-dropdown-menu >
             <el-dropdown-item command="import">导入 SQL 文件</el-dropdown-item>
             <el-dropdown-item command="compile" :disabled="sqlLoading">过程编译</el-dropdown-item>
             <el-dropdown-item command="plan" :disabled="sqlLoading">执行计划</el-dropdown-item>
             <el-dropdown-item command="export" :disabled="!isSuccessShow">导出结果</el-dropdown-item>
             <el-dropdown-item command="clear" divided>清空编辑器</el-dropdown-item>
             <el-dropdown-item command="results" :disabled="!isShow || sqlLoading">清除结果</el-dropdown-item>
-          </el-dropdown-menu>
+          </el-dropdown-menu></template>
         </el-dropdown>
-        <el-popover placement="bottom-end" width="280" trigger="click" v-model="executionSettingsVisible">
+        <el-popover placement="bottom-end" width="280" trigger="click" v-model:visible="executionSettingsVisible">
           <div class="execution-setting-row"><span>单条 SQL 超时</span>
             <el-select v-model="queryTimeoutSeconds" size="small" :disabled="sqlLoading" style="width:120px">
               <el-option v-for="seconds in [5, 30, 60, 120]" :key="seconds" :label="seconds + ' 秒'" :value="seconds" />
             </el-select>
           </div>
           <div class="execution-setting-row"><span>批量遇错</span>
-            <el-radio-group v-model="radioData" size="mini" :disabled="sqlLoading"><el-radio label="1">继续</el-radio><el-radio label="2">停止</el-radio></el-radio-group>
+            <el-radio-group v-model="radioData" size="small" :disabled="sqlLoading"><el-radio label="1">继续</el-radio><el-radio label="2">停止</el-radio></el-radio-group>
           </div>
-          <el-button slot="reference" size="mini" type="text"><i class="el-icon-setting"></i> 执行设置</el-button>
+          <template #reference><el-button  size="small" type="text"><i class="el-icon-setting"></i> 执行设置</el-button></template>
         </el-popover>
       </div>
-      <draggable class="draggble2" :group="{ name: 'componentsGroup' }">
+      <div class="draggble2">
         <MonacoEditor
           ref="MonacoEditor"
           :dom="'sql-' + currentConfig.id"
@@ -1166,7 +1172,7 @@ export default {
           :editor-config="{ fontSize: 12, lineHeight: 20, formatOnPaste: false }"
           style="width: 100%; height: 100%"
         />
-      </draggable>
+      </div>
     </div>
 
     <!-- v-if="currentConfig.sqlData && currentConfig.sqlData.length" -->
@@ -1264,7 +1270,7 @@ export default {
     </div>
     <el-dialog
       title="查看日志"
-      :visible.sync="dialogTableVisible"
+      v-model="dialogTableVisible"
       width="90%"
       :before-close="handleClose"
     >
@@ -1285,7 +1291,7 @@ export default {
           size="small"
           style="width: 240px; margin-left: 10px"
           placeholder="搜索 SQL 内容"
-          @keyup.enter.native="searchKey"
+          @keyup.enter="searchKey"
         ></el-input>
         <el-select
           v-model="logStatus"
@@ -1359,9 +1365,9 @@ export default {
             label="状态"
             width="80"
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-tag
-                size="mini"
+                size="small"
                 :type="scope.row.status === 'success' ? 'success' : 'danger'"
               >{{ scope.row.status === "success" ? "成功" : "失败" }}</el-tag>
             </template>
@@ -1371,12 +1377,12 @@ export default {
             label="影响行数"
             width="90"
           >
-            <template slot-scope="scope">
+            <template #default="scope">
               {{ scope.row.operationRows == null ? "-" : scope.row.operationRows }}
             </template>
           </el-table-column>
           <el-table-column label="耗时" width="90">
-            <template slot-scope="scope">
+            <template #default="scope">
               {{ scope.row.useTime == null ? "-" : `${scope.row.useTime} ms` }}
             </template>
           </el-table-column>
@@ -1398,20 +1404,20 @@ export default {
           background
         ></el-pagination>
       </span>
-      <div slot="footer" style="margin-top: 30px" class="dialog-footer">
+      <template #footer><div  style="margin-top: 30px" class="dialog-footer">
         <el-button size="small" @click="handleClose">取 消</el-button>
-      </div>
+      </div></template>
     </el-dialog>
     <el-dialog
       title="结果集过滤配置"
-      :visible.sync="dialog"
+      v-model="dialog"
       width="50%"
       :before-close="closeDialog"
     >
       <div class="searchDialogBox">
         <div class="inputRow">
           <el-select
-            size="mini"
+            size="small"
             v-model="searchDialogForm.columnTitle"
             placeholder="请选择表头字段"
             @change="filterTitle"
@@ -1426,7 +1432,7 @@ export default {
             ></el-option>
           </el-select>
           <el-select
-            size="mini"
+            size="small"
             clearable
             style="width: 130px; margin-left: 10px"
             v-model="searchDialogForm.sql"
@@ -1452,7 +1458,7 @@ export default {
               type="datetime"
               placeholder="选择日期时间"
               clearable
-              size="mini"
+              size="small"
               value-format="yyyy-MM-dd hh:mm:ss"
               default-time="12:00:00"
             ></el-date-picker>
@@ -1462,15 +1468,15 @@ export default {
               clearable
               placeholder="请输入内容"
               style="width: 285px; margin-left: 10px"
-              size="mini"
+              size="small"
             ></el-input>
           </template>
         </div>
         <div class="btnBox">
-          <el-button size="mini" plain @click="addSearchForm('And')"
+          <el-button size="small" plain @click="addSearchForm('And')"
             >Add to Filter(And)</el-button
           >
-          <el-button size="mini" plain @click="addSearchForm('Or')"
+          <el-button size="small" plain @click="addSearchForm('Or')"
             >Add to Filter(Or)</el-button
           >
         </div>
@@ -1482,15 +1488,15 @@ export default {
           v-model="searchSql"
         ></el-input>
         <div class="btnBox">
-          <el-button size="mini" plain @click="addSearchForm2('(')"
+          <el-button size="small" plain @click="addSearchForm2('(')"
             >Add (</el-button
           >
-          <el-button size="mini" plain @click="addSearchForm2(')')"
+          <el-button size="small" plain @click="addSearchForm2(')')"
             >Add )</el-button
           >
         </div>
       </div>
-      <div slot="footer" style="margin-top: 30px" class="dialog-footer">
+      <template #footer><div  style="margin-top: 30px" class="dialog-footer">
         <el-button
           plain
           @click="
@@ -1503,7 +1509,7 @@ export default {
         >
         <el-button size="small" @click="closeDialog">取 消</el-button>
         <el-button size="small" @click="saveFilterData">确 定</el-button>
-      </div>
+      </div></template>
     </el-dialog>
   </div>
 </template>

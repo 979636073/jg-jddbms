@@ -12,9 +12,9 @@
       >
         <el-table-column prop="grantee" label="被授权用户"> </el-table-column>
         <el-table-column prop="role" label="角色" sortable>
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-select
-              size="mini"
+              size="small"
               @change="selectNewRole"
               @blur="inputBlur"
               v-if="scope.row.index == tabRowindex && scope.column.index == tabColumnIndex"
