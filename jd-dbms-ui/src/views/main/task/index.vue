@@ -2,7 +2,7 @@
   <div class="app-container">
     <el-form :inline="true" size="small" @submit.prevent="handleQuery">
       <el-form-item label="任务状态">
-        <el-select v-model="queryParams.taskStatus" clearable placeholder="全部状态" @change="handleQuery">
+        <el-select v-model="queryParams.taskStatus" style="width: 160px" clearable placeholder="全部状态" @change="handleQuery">
           <el-option label="初始化" value="INIT" />
           <el-option label="处理中" value="PROCESSING" />
           <el-option label="完成" value="FINISH" />
@@ -27,7 +27,9 @@
       <el-table-column prop="taskProgress" label="进度" width="160">
         <template #default="scope">
           <el-progress :percentage="progress(scope.row.taskProgress)" :status="scope.row.taskStatus === 'ERROR' ? 'exception' : undefined" />
-          <div v-if="taskMessage(scope.row)" class="task-progress-text">{{ taskMessage(scope.row) }}</div>
+          <el-tooltip v-if="taskMessage(scope.row)" :content="taskMessage(scope.row)" placement="top" popper-class="task-message-tooltip">
+            <div class="task-progress-text">{{ taskMessage(scope.row) }}</div>
+          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column prop="gmtCreate" label="创建时间" width="180">
@@ -169,5 +171,9 @@ export default {
 .migration-section { margin-top: 26px; }
 .migration-section h3 { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; font-size: 16px; }
 .muted { color: #909399; }
-.task-progress-text { margin-top: 4px; color: #909399; font-size: 12px; white-space: pre-line; }
+.task-progress-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; margin-top: 4px; color: #909399; font-size: 12px; line-height: 1.5; }
+</style>
+
+<style>
+.task-message-tooltip { max-width: 480px; max-height: 240px; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
 </style>

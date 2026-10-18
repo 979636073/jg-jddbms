@@ -24,6 +24,42 @@ html, body, #app { background: var(--dm-bg); color: var(--dm-text); }
 body { font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif; }
 .el-container, .el-main, .bodyBox { background: var(--dm-bg); }
 
+.app-wrapper .app-main {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.app-wrapper .app-main > .app-container > h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.app-wrapper .app-main, .el-dialog {
+  --el-component-size: 36px;
+  --el-component-size-small: 36px;
+
+  .el-input { --el-input-height: 36px; font-size: 14px; }
+  .el-select__wrapper { min-height: 36px; padding: 5px 12px; font-size: 14px; }
+  .el-range-editor .el-range-input, .el-range-editor .el-range-separator { font-size: 14px; }
+  .el-form-item { --font-size: 14px; margin-bottom: 20px; }
+  .el-form-item__label { height: auto; min-height: 36px; line-height: 36px; font-weight: 500; }
+  .el-form-item__content { line-height: 36px; }
+  .el-button { font-size: 14px; }
+  .el-button:not(.el-button--text):not(.is-text):not(.is-link) { --el-button-size: 32px; min-height: 32px; }
+  .el-form .el-button:not(.el-button--text):not(.is-text):not(.is-link) { --el-button-size: 36px; }
+}
+.app-wrapper .app-main .top-right-btn { margin-left: auto; }
+.app-wrapper .app-main .el-table .fixed-width .cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.app-wrapper .app-main .el-table .fixed-width .el-button { margin-left: 0; padding: 4px 0; }
+.app-wrapper .app-main .el-table .fixed-width .el-dropdown { margin-left: 0; }
+.pagination-container .el-pagination { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
+
 .el-header.header, header.el-header {
   background: var(--dm-surface) !important;
   border-bottom: 1px solid var(--dm-border) !important;
@@ -115,6 +151,8 @@ body { font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif; }
 .el-pagination.is-background .el-pager li.active { background: var(--dm-primary); border-color: var(--dm-primary); box-shadow: 0 2px 6px var(--dm-primary-ring); color: #fff; }
 
 .el-dialog, .el-message-box { border-radius: var(--dm-radius-lg); box-shadow: var(--dm-shadow-lg); }
+.el-dialog:not(.is-fullscreen) { max-width: calc(100vw - 32px); }
+.el-dialog:not(.is-fullscreen) .el-dialog__body { max-height: calc(88vh - 120px); overflow-y: auto; }
 .el-dialog__header { background: var(--dm-surface) !important; border-bottom: 1px solid var(--dm-border); }
 .el-dialog__title { color: var(--dm-text) !important; font-weight: 600; }
 .el-dialog__headerbtn .el-dialog__close { color: var(--dm-text-2) !important; }

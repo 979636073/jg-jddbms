@@ -128,7 +128,7 @@
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
+      <el-table-column label="操作" align="center" width="210" fixed="right" class-name="small-padding fixed-width">
         <template #default="scope">
           <template v-if="scope.row.roleId !== 1">
           <el-button
@@ -631,8 +631,8 @@ export default {
 <style scoped>
 .role-page { height: 100%; min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: #f6f9fc; }
 .role-heading { display: flex; align-items: center; justify-content: space-between; flex: none; margin-bottom: 16px; }
-.role-heading h2 { color: #26354a; font-size: 20px; margin: 0 0 6px; }
-.role-hint { color: #69788e; font-size: 12px; margin: 0; }
+.role-heading h2 { color: #26354a; font-size: 22px; line-height: 1.4; font-weight: 600; margin: 0 0 6px; }
+.role-hint { color: #69788e; font-size: 14px; margin: 0; }
 .role-total { color: #69788e; font-size: 12px; white-space: nowrap; }
 .role-filters { flex: none; padding: 14px 16px 0; margin-bottom: 12px; background: #fff; border: 1px solid #e5e9f2; border-radius: 4px; }
 .role-filters ::v-deep .el-form-item { margin-bottom: 14px; }

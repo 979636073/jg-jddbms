@@ -76,12 +76,12 @@ export default {
 };
 </script>
 <style scoped>
-.profile-page { max-width: 1280px; margin: 0 auto; }
+.profile-page { max-width: 1120px; margin: 0 auto; }
 .profile-page__header { margin-bottom: 20px; }
-.profile-page__header h2 { margin: 0 0 8px; color: #1f2937; font-size: 22px; }
+.profile-page__header h2 { margin: 0 0 8px; color: #1f2937; font-size: 22px; line-height: 1.4; font-weight: 600; }
 .profile-page__header p { margin: 0; color: #667085; font-size: 14px; line-height: 1.6; }
-.profile-page__content > .el-col { margin-bottom: 20px; }
-.profile-page__card { min-height: 100%; border-color: #e5eaf0; border-radius: 10px; }
+.profile-page__content > .el-col { min-width: 0; margin-bottom: 20px; }
+.profile-page__card { border-color: #e5eaf0; border-radius: 10px; }
 .profile-page__card-title { font-size: 16px; font-weight: 600; color: #1f2937; }
 .profile-page__identity { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 4px 0 20px; }
 .profile-page__identity strong { color: #1f2937; font-size: 17px; }

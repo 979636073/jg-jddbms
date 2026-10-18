@@ -152,7 +152,7 @@
               ></el-switch>
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" align="center" prop="createTime" v-if="columns[3].visible" width="160">
+          <el-table-column label="创建时间" align="center" prop="createTime" v-if="columns[3].visible" width="180">
             <template #default="scope">
               <span>{{ parseTime(scope.row.createTime) }}</span>
             </template>
@@ -160,7 +160,8 @@
           <el-table-column
             label="操作"
             align="center"
-            width="160"
+            width="210"
+            fixed="right"
             class-name="small-padding fixed-width"
           >
             <template #default="scope">
