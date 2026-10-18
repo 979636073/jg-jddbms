@@ -2926,7 +2926,7 @@ export default {
         <img src="@/assets/main/1-1-sub侧边.png" alt />
       </div>
       <el-scrollbar ref="objectListScrollbar" class="object-list-scrollbar" style="height: calc(100% - 40px)" v-loading="styleLoading" :element-loading-text="loadingText">
-        <draggable
+        <draggable :item-key="item => item.name || item.tableDetails.tableSpace"
           class="components-draggable"
           :list="filterDataTreeList"
           :group="{ name: 'componentsGroup', pull: 'clone', put: false }"
@@ -2936,9 +2936,9 @@ export default {
           @end="onEnd"
           v-if="isQuery"
         >
-          <div
-            v-for="(item, index) in filterDataTreeList"
-            :key="item.name || item.tableDetails.tableSpace || index"
+          <template #item="{ element: item, index: index }"><div
+
+
             @click.stop="handelClickItem(item, index, $event)"
             @contextmenu="creatRightMenu(item, $event)"
           class="dargitemWrap virtual-list-item"
@@ -3003,7 +3003,7 @@ export default {
             >
               {{ item.comment }}
             </span>
-          </div>
+          </div></template>
         </draggable>
         <div
           v-for="(item, index) in filterDataTreeList"

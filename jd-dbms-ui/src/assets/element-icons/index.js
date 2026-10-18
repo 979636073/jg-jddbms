@@ -6,7 +6,6 @@ const names = "el-icon-ice-cream-round el-icon-ice-cream-square el-icon-lollipop
 export default {
   install(app) {
     names.split(' ').forEach(name => app.component(name, {
-      compatConfig: { MODE: 3 },
       setup: () => () => h('i', { class: name, 'aria-hidden': true })
     }))
   }

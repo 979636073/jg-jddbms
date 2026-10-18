@@ -27,7 +27,6 @@ import { createResourceTreeStore, flattenVisibleTree } from './model'
 
 export default {
   name: 'VirtualResourceTree',
-  compatConfig: { MODE: 3 },
   props: {
     data: { type: Array, default: () => [] },
     props: { type: Object, default: () => ({}) },

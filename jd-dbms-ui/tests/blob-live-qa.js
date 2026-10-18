@@ -5,15 +5,15 @@ const { spawnSync } = require('child_process')
 const compiler = require('./helpers/vue-compiler')
 function component(file, name) {
   const source = compiler.parseComponent(fs.readFileSync(path.join(__dirname, '../src', file), 'utf8'))
-  const template = compiler.compile(source.template.content)
-  if (template.errors.length) throw Error(template.errors.join('\n'))
+  const template = compiler.compileBrowser(source.template.content)
+  if (template.errors?.length) throw Error(template.errors.join('\n'))
   return source.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'const ' + name + ' =') +
-    `\n${name}.render = new Function(${JSON.stringify(template.render)});\n${name}.staticRenderFns = ${JSON.stringify(template.staticRenderFns)}.map(body => new Function(body));`
+    `\n${name}.render = new Function('Vue', ${JSON.stringify(template.code)})(Vue);`
 }
 const helper = fs.readFileSync(path.join(__dirname, '../src/utils/file.js'), 'utf8').replace(/^import .*;?\s*$/gm, '').replace(/export /g, '')
 const script = `(async()=>{
-  const Vue = document.querySelector('#app').__vue__.$options._base;
-  const token = document.querySelector('#app').__vue__.$store.getters.token;
+  ${require('./helpers/browser-vue').runtime}
+  const token = application.config.globalProperties.$store.getters.token;
   const getToken = () => token, process = {env:{VUE_APP_BASE_API:'/dev-api'}};
   const report = {status:'PASS', checks:[], timings:[], downloads:[]};
   const ensure = (ok, name) => { if (!ok) throw Error(name); report.checks.push(name); };
@@ -69,10 +69,10 @@ const script = `(async()=>{
     const rowid=await preview({...locator(1027),tableName:'BLOB_LARGE_TEST_20261015',rowId:rows.dataList[0][1]});
     ensure(rowid.success && rowid.data.base64===png.data.base64,'DM numeric ROWID lookup');
     const host=document.createElement('div');document.body.appendChild(host);
-    app=new Vue({render:h=>h(FileDialog)}).$mount(host);const dialog=app.$children[0];
+    app=createTestApp({render:()=>Vue.h(FileDialog,{ref:'dialog'})});const screen=app.mount(host);const dialog=screen.$refs.dialog;
     const decodedImage=async(width,height)=>{
       for(let attempt=0;attempt<40;attempt++){
-        const image=dialog.$el.querySelector('.el-image__inner');
+        const image=document.querySelector('.el-dialog .el-image__inner');
         if(image?.complete && image.naturalWidth===width && image.naturalHeight===height)return true;
         await new Promise(resolve=>setTimeout(resolve,50));
       }
@@ -85,7 +85,7 @@ const script = `(async()=>{
     ensure(dialog.isShow && dialog.fromData.type==='.jpg','real JPEG dialog preview');
     ensure(await decodedImage(1600,900),'JPEG decodes to 1600 x 900');
     await dialog.open(locator(1029),'large_image');await Vue.nextTick();
-    ensure(dialog.tooLarge && !dialog.isShow && dialog.$el.textContent.includes('8 MiB'),'large image dialog limit message');
+    ensure(dialog.tooLarge && !dialog.isShow && document.querySelector('.el-dialog').textContent.includes('8 MiB'),'large image dialog limit message');
     const opening=dialog.open(locator(1024),'cancel_preview');const signal=dialog._readController.signal;dialog.handleClose();await opening;
     ensure(signal.aborted && !dialog.dialogVisible && !dialog.error,'preview close aborts request');
     const cancelRequest=locator(1024),controller=new AbortController();
@@ -102,11 +102,11 @@ const script = `(async()=>{
     ensure(resumed.success,'cancel releases read ID and next read succeeds: '+resumed.errorMessage);
     return report;
   } finally {
-    if(app){app.$destroy();app.$el.remove()}
+    if(app){const host=app._container;app.unmount();host.remove()}
     await sql('DROP TABLE "TEST-TEST"."'+table+'"');delete window.__phase3TempTable;
   }
 })()`
-const binary = process.platform === 'win32' ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser'
+const binary = process.env.AGENT_BROWSER_BIN || (process.platform === 'win32' ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser')
 const result = spawnSync(binary, ['--session','jddbms','eval','--stdin'], {input:script,encoding:'utf8',timeout:180000,maxBuffer:1024*1024})
 process.stdout.write(result.stdout || '')
 process.stderr.write(result.stderr || '')

@@ -115,7 +115,7 @@ export default {
           if (!this.$store.state.jdTagsView.visitedViews.length) {
             this.$store.state.jdTagsView.visitedViews = visitedData;
           }
-          if (this.$route.params.id !== visitedData[0].params.id) {
+          if (this.$route.path.startsWith('/workspace/') && this.$route.params.id !== visitedData[0].params.id) {
             // 如果选中的是新建查询 在刷新后 替换路由ID为上次缓存窗口数据
             this.$router.push({
               path: "/workspace/look/" + visitedData[0].params.id

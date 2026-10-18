@@ -76,8 +76,7 @@ module.exports = {
   configureWebpack: {
     resolve: {
       alias: {
-        '@': resolve('src'),
-        'vue$': '@vue/compat'
+        '@': resolve('src')
       },
       fallback: { path: require.resolve('path-browserify') }
     },
@@ -98,10 +97,6 @@ module.exports = {
     ],
   },
   chainWebpack(config) {
-    config.module.rule('vue').use('vue-loader').tap(options => ({
-      ...options,
-      compilerOptions: { ...options.compilerOptions, compatConfig: { MODE: 3 } }
-    }))
     config.plugins.delete('preload') // TODO: need test
     config.plugins.delete('prefetch') // TODO: need test
 

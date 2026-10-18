@@ -3,7 +3,7 @@
 const { spawnSync } = require('child_process')
 const script = `
 (async () => {
-  const root = document.querySelector('#app').__vue__;
+  const root = document.querySelector('#app').__vue_app__.config.globalProperties;
   const admin = root.$store.state.user.token;
   const checks = [], users = [];
   let connectionId, teamId;
@@ -129,8 +129,8 @@ const script = `
   }
 })()
 `
-const result = spawnSync('agent-browser', ['--session', 'jddbms', 'eval', '--stdin'],
-  { input: script, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 120000, shell: process.platform === 'win32' })
+const result = spawnSync(process.env.AGENT_BROWSER_BIN || 'agent-browser', ['--session', 'jddbms', 'eval', '--stdin'],
+  { input: script, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 120000, shell: !process.env.AGENT_BROWSER_BIN && process.platform === 'win32' })
 process.stdout.write(result.stdout || '')
 process.stderr.write(result.stderr || '')
 if (result.error) throw result.error

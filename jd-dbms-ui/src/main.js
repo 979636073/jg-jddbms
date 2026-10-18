@@ -1,11 +1,10 @@
-import { createApp, defineAsyncComponent, configureCompat } from 'vue'
+import { createApp, defineAsyncComponent } from 'vue'
 
 import Cookies from 'js-cookie'
 
 import Element, { ElDialog } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
-import * as ElementComponents from 'element-plus'
 import VirtualResourceTree from '@/components/VirtualResourceTree'
 import '@/assets/element-icons/icon.css'
 import elementIcons from '@/assets/element-icons'
@@ -50,14 +49,7 @@ import { createEventBus } from '@/utils/eventBus'
 import Contextmenu from '@imengyu/vue3-context-menu'
 import '@imengyu/vue3-context-menu/lib/vue3-context-menu.css'
 
-configureCompat({ MODE: 3 })
 const app = createApp(App)
-// Vue 3 libraries use native modelValue bindings within the migration runtime.
-Object.entries(ElementComponents).forEach(([name, component]) => {
-  if (name.startsWith('El') && component && typeof component === 'object' && component.props) {
-    component.compatConfig = { MODE: 3 }
-  }
-})
 app.directive("sy-resize", resize);
 
 // 全局方法挂载

@@ -1,5 +1,6 @@
 const { parse, compileTemplate } = require('@vue/compiler-sfc')
 const { parse: parseTemplate } = require('@vue/compiler-dom')
+const { compile } = require('@vue/compiler-dom')
 
 exports.parseComponent = source => {
   const result = parse(source)
@@ -14,6 +15,7 @@ exports.compile = source => {
 }
 
 exports.compileToFunctions = source => ({ render: require('vue').compile(source) })
+exports.compileBrowser = source => compile(source, { mode: 'function', prefixIdentifiers: true })
 
 exports.attribute = (node, name) => node.props?.find(prop => prop.type === 6 && prop.name === name)?.value?.content ??
   (node.props?.some(prop => prop.type === 6 && prop.name === name) ? '' : undefined)

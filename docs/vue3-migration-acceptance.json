@@ -1,0 +1,84 @@
+{
+  "branch": "codex/vue3-migration",
+  "framework": "Vue 3.5.44 native",
+  "compatRemoved": true,
+  "baselineMain": "5c217a95b8c31f705dfb50b639a9b7910eb0cd4a",
+  "core": {
+    "checks": 42,
+    "status": "PASS"
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 699
+  },
+  "build": {
+    "hash": "bc36bcf0d8e1d08a",
+    "durationMs": 19275,
+    "status": "PASS"
+  },
+  "browserSuites": [
+    {
+      "suite": "sql",
+      "status": "PASS",
+      "evidence": ".local/vue3/sql-native-browser.json",
+      "checks": 11
+    },
+    {
+      "suite": "blob",
+      "status": "PASS",
+      "evidence": ".local/vue3/blob-native-browser.json",
+      "checks": 19
+    },
+    {
+      "suite": "components",
+      "status": "PASS",
+      "evidence": ".local/vue3/components-native-browser.json",
+      "checks": 9
+    },
+    {
+      "suite": "pages",
+      "status": "PASS",
+      "evidence": ".local/vue3/pages-native-browser.json",
+      "pages": 8
+    },
+    {
+      "suite": "roles",
+      "status": "PASS",
+      "evidence": ".local/vue3/roles-native-browser.json",
+      "checks": 512
+    },
+    {
+      "suite": "sharing",
+      "status": "PASS",
+      "evidence": ".local/vue3/sharing-native-browser.json",
+      "checks": 14
+    },
+    {
+      "suite": "structure",
+      "status": "PASS",
+      "evidence": ".local/vue3/structure-native-browser.json",
+      "checks": 17
+    }
+  ],
+  "productionSmoke": {
+    "returnedRows": 1,
+    "operationLogRows": 10,
+    "sql": "SELECT 1 AS VUE3_PROD_QA FROM DUAL",
+    "status": "PASS",
+    "port": 8081,
+    "value": 1,
+    "pointerNewQuery": true
+  },
+  "performance": {
+    "after": "vue3-performance-after.json",
+    "baseline": "vue3-performance-baseline.json",
+    "overallSpeedupProven": false
+  },
+  "pending": [
+    "现场 DM 2024",
+    "新版 Oracle",
+    "Linux ARM64",
+    "正式部署/安装包升级",
+    "管理页面全部 CRUD 浏览器逐项验收"
+  ]
+}

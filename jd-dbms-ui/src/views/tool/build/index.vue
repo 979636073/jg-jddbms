@@ -11,7 +11,7 @@
           <div class="components-title">
             <svg-icon icon-class="component" />输入型组件
           </div>
-          <draggable
+          <draggable item-key="tagIcon"
             class="components-draggable"
             :list="inputComponents"
             :group="{ name: 'componentsGroup', pull: 'clone', put: false }"
@@ -20,20 +20,20 @@
             :sort="false"
             @end="onEnd"
           >
-            <div
-              v-for="(element, index) in inputComponents" :key="index" class="components-item"
+            <template #item="{ element: element, index: index }"><div
+                class="components-item"
               @click="addComponent(element)"
             >
               <div class="components-body">
                 <svg-icon :icon-class="element.tagIcon" />
                 {{ element.label }}
               </div>
-            </div>
+            </div></template>
           </draggable>
           <div class="components-title">
             <svg-icon icon-class="component" />选择型组件
           </div>
-          <draggable
+          <draggable item-key="tagIcon"
             class="components-draggable"
             :list="selectComponents"
             :group="{ name: 'componentsGroup', pull: 'clone', put: false }"
@@ -42,9 +42,9 @@
             :sort="false"
             @end="onEnd"
           >
-            <div
-              v-for="(element, index) in selectComponents"
-              :key="index"
+            <template #item="{ element: element, index: index }"><div
+
+
               class="components-item"
               @click="addComponent(element)"
             >
@@ -52,25 +52,25 @@
                 <svg-icon :icon-class="element.tagIcon" />
                 {{ element.label }}
               </div>
-            </div>
+            </div></template>
           </draggable>
           <div class="components-title">
             <svg-icon icon-class="component" /> 布局型组件
           </div>
-          <draggable
+          <draggable item-key="tagIcon"
             class="components-draggable" :list="layoutComponents"
             :group="{ name: 'componentsGroup', pull: 'clone', put: false }" :clone="cloneComponent"
             draggable=".components-item" :sort="false" @end="onEnd"
           >
-            <div
-              v-for="(element, index) in layoutComponents" :key="index" class="components-item"
+            <template #item="{ element: element, index: index }"><div
+                class="components-item"
               @click="addComponent(element)"
             >
               <div class="components-body">
                 <svg-icon :icon-class="element.tagIcon" />
                 {{ element.label }}
               </div>
-            </div>
+            </div></template>
           </draggable>
         </div>
       </el-scrollbar>
@@ -96,10 +96,10 @@
             :disabled="formConf.disabled"
             :label-width="formConf.labelWidth + 'px'"
           >
-            <draggable class="drawing-board" :list="drawingList" :animation="340" group="componentsGroup">
-              <draggable-item
-                v-for="(element, index) in drawingList"
-                :key="element.renderKey"
+            <draggable item-key="formId" class="drawing-board" :list="drawingList" :animation="340" group="componentsGroup">
+              <template #item="{ element: element, index: index }"><draggable-item
+
+
                 :drawing-list="drawingList"
                 :element="element"
                 :index="index"
@@ -108,7 +108,7 @@
                 @activeItem="activeFormItem"
                 @copyItem="drawingItemCopy"
                 @deleteItem="drawingItemDelete"
-              />
+              /></template>
             </draggable>
             <div v-show="!drawingList.length" class="empty-info">
               从左侧拖入或点选组件进行表单设计

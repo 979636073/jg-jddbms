@@ -1,10 +1,10 @@
 // Opt-in local DM acceptance. Uses session jddbms and two disposable schemas only.
 const path = require('path')
 const { spawnSync } = require('child_process')
-const binary = process.platform === 'win32'
-  ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser'
+const binary = process.env.AGENT_BROWSER_BIN || (process.platform === 'win32'
+  ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser')
 const script = async () => {
-  const root = document.querySelector('#app').__vue__;
+  const root = document.querySelector('#app').__vue_app__._instance.proxy;
   const token = root.$store.getters.token;
   const report = { status: 'PASS', checks: [], failures: [], schemas: [] };
   const suffix = Date.now().toString(36).toUpperCase();
@@ -22,12 +22,21 @@ const script = async () => {
     return result[0];
   };
   const inventory = (schema, table = 'T') => api('/api/rdb/schema-inventory?dataSourceId=226&schemaName=' + schema + '&tableName=' + table);
-  const find = vm => vm.$options.name === 'TableCompare' ? vm : vm.$children.map(find).find(Boolean);
+  const find = () => {
+    for (const el of document.querySelectorAll('#app *')) {
+      for (let instance = el.__vueParentComponent; instance; instance = instance.parent) {
+        if (instance.type.name === 'TableCompare') return instance.proxy;
+      }
+    }
+  };
   let vm;
   try {
     if (root.$route.path !== '/table-compare/index') await root.$router.push('/table-compare/index');
     await root.$nextTick();
-    vm = find(root);
+    for (let attempt = 0; attempt < 50 && !vm; attempt++) {
+      vm = find();
+      if (!vm) await new Promise(resolve => setTimeout(resolve, 100));
+    }
     if (!vm) throw Error('请先打开表结构对比页面');
     for (const schema of [source, target]) {
       await sql('CREATE SCHEMA "' + schema + '" AUTHORIZATION SYSDBA'); report.schemas.push(schema);

@@ -60,7 +60,7 @@
             <el-date-picker
               v-model="dateRange"
               style="width: 240px"
-              value-format="yyyy-MM-dd"
+              value-format="YYYY-MM-DD"
               type="daterange"
               range-separator="-"
               start-placeholder="开始日期"
@@ -163,7 +163,8 @@
             width="160"
             class-name="small-padding fixed-width"
           >
-            <template #default="scope" v-if="scope.row.userId !== 1">
+            <template #default="scope">
+              <template v-if="scope.row.userId !== 1">
               <el-button
                 size="small"
                 type="text"
@@ -187,6 +188,7 @@
                     v-hasPermi="['system:user:edit']">分配角色</el-dropdown-item>
                 </el-dropdown-menu></template>
               </el-dropdown>
+              </template>
             </template>
           </el-table-column>
         </el-table>
@@ -455,13 +457,13 @@ export default {
     saveSelectedAvatar() {
       if (!this.selectedAvatar || !this.avatarTarget) return;
       if (!this.avatarTarget.userId) {
-        this.$set(this.avatarTarget, 'avatar', this.selectedAvatar);
+        this.avatarTarget['avatar'] = this.selectedAvatar;
         this.avatarOpen = false;
         return;
       }
       this.avatarSaving = true;
       selectUserAvatar(this.avatarTarget.userId, this.selectedAvatar).then(() => {
-        this.$set(this.avatarTarget, 'avatar', this.selectedAvatar);
+        this.avatarTarget['avatar'] = this.selectedAvatar;
         if (String(this.avatarTarget.userId) === String(this.$store.getters.id)) {
           this.$store.commit('SET_AVATAR', avatarUrl(this.selectedAvatar));
         }
@@ -481,7 +483,7 @@ export default {
       if (!this.avatarTarget || !this.avatarTarget.userId) return;
       this.avatarSaving = true;
       uploadUserAvatar(this.avatarTarget.userId, file).then(response => {
-        this.$set(this.avatarTarget, 'avatar', response.imgUrl);
+        this.avatarTarget['avatar'] = response.imgUrl;
         if (String(this.avatarTarget.userId) === String(this.$store.getters.id)) {
           this.$store.commit('SET_AVATAR', avatarUrl(response.imgUrl));
         }
@@ -598,8 +600,8 @@ export default {
         this.form = response.data;
         this.postOptions = response.posts;
         this.roleOptions = response.roles;
-        this.$set(this.form, "postIds", response.postIds);
-        this.$set(this.form, "roleIds", response.roleIds);
+        this.form["postIds"] = response.postIds;
+        this.form["roleIds"] = response.roleIds;
         this.open = true;
         this.title = "修改用户";
         this.form.password = "";

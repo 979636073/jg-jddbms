@@ -19,6 +19,7 @@
 
 <script>
 import Quill from "quill";
+import { markRaw } from 'vue';
 import "quill/dist/quill.core.css";
 import "quill/dist/quill.snow.css";
 import "quill/dist/quill.bubble.css";
@@ -26,9 +27,10 @@ import { getToken } from "@/utils/auth";
 
 export default {
   name: "Editor",
+  emits: ['update:modelValue', 'on-change', 'on-text-change', 'on-selection-change', 'on-editor-change'],
   props: {
     /* 编辑器的内容 */
-    value: {
+    modelValue: {
       type: String,
       default: "",
     },
@@ -103,7 +105,7 @@ export default {
     },
   },
   watch: {
-    value: {
+    modelValue: {
       handler(val) {
         if (val !== this.currentValue) {
           this.currentValue = val === null ? "" : val;
@@ -124,15 +126,15 @@ export default {
   methods: {
     init() {
       const editor = this.$refs.editor;
-      this.Quill = new Quill(editor, this.options);
+      this.Quill = markRaw(new Quill(editor, this.options));
       // 如果设置了上传地址则自定义图片上传事件
       if (this.type == 'url') {
         let toolbar = this.Quill.getModule("toolbar");
         toolbar.addHandler("image", (value) => {
           if (value) {
-            this.$refs.upload.$children[0].$refs.input.click();
+            this.$refs.upload.$el.querySelector('input[type="file"]').click();
           } else {
-            this.quill.format("image", false);
+            this.Quill.format("image", false);
           }
         });
       }
@@ -142,7 +144,7 @@ export default {
         const text = this.Quill.getText();
         const quill = this.Quill;
         this.currentValue = html;
-        this.$emit("input", html);
+        this.$emit("update:modelValue", html);
         this.$emit("on-change", { html, text, quill });
       });
       this.Quill.on("text-change", (delta, oldDelta, source) => {

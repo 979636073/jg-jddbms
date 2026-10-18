@@ -95,7 +95,7 @@ function mixinMethod(type) {
         this.$refs['${confGlobal.formRef}'].resetFields()
       },`,
         close: `close() {
-        this.$emit('update:visible', false)
+        this.$emit('update:modelValue', false)
       },`,
         handleConfirm: `handleConfirm() {
         this.$refs['${confGlobal.formRef}'].validate(valid => {

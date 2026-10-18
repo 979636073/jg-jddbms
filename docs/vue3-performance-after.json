@@ -1,0 +1,29 @@
+{
+  "editor": {
+    "editToTwoFrames": {
+      "maxMs": 25,
+      "medianMs": 17
+    }
+  },
+  "fixture": {
+    "sqlLines": 1000,
+    "treeNodes": 10000
+  },
+  "longTasksMs": [],
+  "note": "Development build, warm authenticated page, two animation frames per sample; includes browser scheduling, not pure input latency. No cold-load comparison.",
+  "page": {
+    "domContentLoadedMs": 116,
+    "heapMiB": 257
+  },
+  "status": "PASS",
+  "tree": {
+    "lastNodeVisible": true,
+    "mountMs": 217,
+    "renderedNodes": 34,
+    "scrollTwoFrames": {
+      "maxMs": 22,
+      "medianMs": 17
+    }
+  },
+  "version": "3.5.44"
+}

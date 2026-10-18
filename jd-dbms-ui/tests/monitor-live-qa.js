@@ -1,10 +1,10 @@
 // Opt-in real DM acceptance; uses disposable connection clone and administrator session jddbms.
 const path = require('path')
 const { spawnSync } = require('child_process')
-const binary = process.platform === 'win32'
-  ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser'
+const binary = process.env.AGENT_BROWSER_BIN || (process.platform === 'win32'
+  ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser')
 const script = async keep => {
-  const token = document.querySelector('#app').__vue__.$store.getters.token;
+  const token = document.querySelector('#app').__vue_app__.config.globalProperties.$store.getters.token;
   const report = { status: 'PASS', checks: [], failures: [], fixtureId: null };
   const check = (value, name) => { if (!value) throw Error(name); report.checks.push(name); };
   const api = async (url, method = 'GET', body) => {

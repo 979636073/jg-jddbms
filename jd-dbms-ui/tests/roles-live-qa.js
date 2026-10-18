@@ -9,8 +9,9 @@ function saveRecovery(f) {
     tables: f.tables, connections: f.connections, tasks: f.tasks.map(task => task.id), auxUsers: f.auxUsers, roles: f.roles }))
 }
 const session = 'roles-qa'
-const browserBinary = process.platform === 'win32'
-  ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser'
+const baseUrl = process.env.QA_BASE_URL || 'http://localhost:8081'
+const browserBinary = process.env.AGENT_BROWSER_BIN || (process.platform === 'win32'
+  ? path.join(path.dirname(process.execPath), 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe') : 'agent-browser')
 function cli(args, input) {
   const opening = args[2] === 'open';
   const result = spawnSync(browserBinary, args, { input, stdio: [input === undefined ? 'ignore' : 'pipe', opening ? 'ignore' : 'pipe', opening ? 'ignore' : 'pipe'],
@@ -47,8 +48,9 @@ const expected = {
 let fixtures
 const report = { status: 'PASS', checks: [], ui: [], failures: [] }
 try {
-  const adminToken = evaluate(() => document.querySelector('#app').__vue__.$store.getters.token, null, 'jddbms')
-  cli(['--session', session, 'open', 'http://localhost:8080'])
+  const adminToken = evaluate(() => document.querySelector('#app').__vue_app__.config.globalProperties.$store.getters.token, null, 'jddbms')
+  cli(['--session', session, 'open', baseUrl])
+  cli(['--session', session, 'wait', '--fn', "document.querySelector('#app')?.__vue_app__?.config.globalProperties.$route.path === '/login'"])
   fixtures = evaluate(async ({ expected, all, adminToken: token }) => {
     const api = async (url, method = 'GET', body, auth = token) => (await fetch('/dev-api' + url,
       { method, headers: { Authorization: 'Bearer ' + auth, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) })).json();
@@ -248,11 +250,17 @@ try {
   // Each role uses the real application and its own authenticated browser state.
   for (const user of fixtures.users) {
     evaluate(({ token }) => { sessionStorage.clear(); localStorage.clear(); document.cookie = 'JDDBMS-Token=' + token + '; path=/'; return true }, user)
-    cli(['--session', session, 'open', 'http://localhost:8080/workspace'])
-    cli(['--session', session, 'wait', '--fn', "Boolean(document.querySelector('#app')?.__vue__?.$store.getters.name)"])
+    cli(['--session', session, 'open', baseUrl + '/workspace'])
+    cli(['--session', session, 'wait', '--fn', "Boolean(document.querySelector('#app')?.__vue_app__?.config.globalProperties.$store.getters.name)"])
     const result = evaluate(async ({ user }) => {
-      const root = document.querySelector('#app').__vue__;
-      const components = []; const visit = vm => { components.push(vm); vm.$children.forEach(visit); }; visit(root);
+      const root = document.querySelector('#app').__vue_app__._instance.proxy;
+      const components = [], seen = new Set();
+      for (const el of document.querySelectorAll('*')) {
+        for (let instance = el.__vueParentComponent; instance; instance = instance.parent) {
+          if (seen.has(instance)) break;
+          seen.add(instance); if (instance.proxy) components.push(instance.proxy);
+        }
+      }
       const sidebar = components.find(vm => vm.$options.name === 'leftTree');
       const header = components.find(vm => vm.$options.name === 'databaseHeader');
       const actual = { name: root.$store.getters.name, roles: root.$store.getters.roles, menus: header?.navList.filter(x => header.canSeeNav(x)).map(x => x.name), sidebar: !!sidebar };
@@ -267,7 +275,7 @@ try {
       const label = Array.from(document.querySelectorAll('.resource-node-label')).find(el => el.textContent.trim() === 'QA_' + user.key);
       if (!label) { actual.error = 'Connection node missing'; return actual; }
       label.click();
-      const connectButton = () => Array.from(document.querySelectorAll('.datasource-dialog button')).find(el => el.textContent.trim() === '连接' && !el.disabled);
+      const connectButton = () => Array.from(document.querySelectorAll('.el-dialog button')).find(el => el.textContent.trim() === '连接' && !el.disabled);
       if (!await wait(connectButton)) { actual.error = 'Connect dialog not ready'; return actual; }
       connectButton().click();
       if (!await wait(() => sidebar.isDataSourceConnected(user.owned))) { actual.error = 'Connection failed'; return actual; }
@@ -279,7 +287,12 @@ try {
       const tables = schema.childNodes.find(x => x.data.groupType === 'tables');
       await sidebar.expandResourceNode(tables);
       const targetNode = tables.childNodes.find(x => x.data.label === 'BLOB_LARGE_TEST_20261015');
-      if (targetNode) tree.scrollToItem(targetNode.key);
+      if (targetNode) {
+        const viewport = document.querySelector('.virtual-resource-tree');
+        const virtualTree = viewport.__vueParentComponent.proxy;
+        viewport.scrollTop = virtualTree.rows.findIndex(node => node.key === targetNode.key) * virtualTree.itemSize;
+        viewport.dispatchEvent(new Event('scroll'));
+      }
       await root.$nextTick();
       await wait(() => Array.from(document.querySelectorAll('.resource-node-label')).some(el => el.textContent.trim() === 'BLOB_LARGE_TEST_20261015'));
       const table = Array.from(document.querySelectorAll('.resource-node-label')).find(el => el.textContent.trim() === 'BLOB_LARGE_TEST_20261015');
@@ -307,12 +320,14 @@ try {
 } catch (error) {
   report.failures.push({ name: 'runner', error: error.message })
 } finally {
-  if (!fixtures) fixtures = evaluate(() => window.__roleFixtures || null)
+  // An interrupted API suite may have created extra disposable objects before returning.
+  // Recover that in-page list before the browser session is closed.
+  try { fixtures = evaluate(() => window.__roleFixtures || null) || fixtures } catch (_) {}
   // The admin session remains untouched; fixture IDs never include existing connections or users.
   let cleanup
   try { cleanup = evaluate(async f => {
     if (!f) return { skipped: true };
-    const token = document.querySelector('#app').__vue__.$store.getters.token;
+    const token = document.querySelector('#app').__vue_app__.config.globalProperties.$store.getters.token;
     const api = async (url, method = 'GET', body) => (await fetch('/dev-api' + url, { method,
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) })).json();
     const sql = statement => api('/api/rdb/dml/execute', 'POST', { dataSourceId: 226, consoleId: 1, sql: statement, pageNo: 1, pageSize: 100, confirmDangerousSql: true });

@@ -96,7 +96,7 @@
               :model-value="activeData.min"
               :min="0"
               placeholder="至少应选"
-              @input="$set(activeData, 'min', $event?$event:undefined)"
+              @input="activeData.min = $event ? $event : undefined"
             />
           </el-form-item>
           <el-form-item v-if="activeData.tag==='el-checkbox-group'" label="最多可选">
@@ -104,7 +104,7 @@
               :model-value="activeData.max"
               :min="0"
               placeholder="最多可选"
-              @input="$set(activeData, 'max', $event?$event:undefined)"
+              @input="activeData.max = $event ? $event : undefined"
             />
           </el-form-item>
           <el-form-item v-if="activeData.prepend!==undefined" label="前缀">
@@ -272,13 +272,13 @@
           </el-form-item>
           <template v-if="['el-checkbox-group', 'el-radio-group', 'el-select'].indexOf(activeData.tag) > -1">
             <el-divider>选项</el-divider>
-            <draggable
+            <draggable :item-key="optionKey"
               :list="activeData.options"
               :animation="340"
               group="selectItem"
               handle=".option-drag"
             >
-              <div v-for="(item, index) in activeData.options" :key="index" class="select-item">
+              <template #item="{ element: item, index: index }"><div   class="select-item">
                 <div class="select-line-icon option-drag">
                   <i class="el-icon-s-operation" />
                 </div>
@@ -292,7 +292,7 @@
                 <div class="close-btn select-line-icon" @click="activeData.options.splice(index, 1)">
                   <i class="el-icon-remove-outline" />
                 </div>
-              </div>
+              </div></template>
             </draggable>
             <div style="margin-left: 20px;">
               <el-button
@@ -414,13 +414,13 @@
             label="选项尺寸"
           >
             <el-radio-group v-model="activeData.size">
-              <el-radio-button label="medium">
+              <el-radio-button label="default">
                 中等
               </el-radio-button>
               <el-radio-button label="small">
                 较小
               </el-radio-button>
-              <el-radio-button label="mini">
+              <el-radio-button label="small">
                 迷你
               </el-radio-button>
             </el-radio-group>
@@ -571,8 +571,8 @@
   </div>
 </template>
 
-<script lang="jsx">
-import { isArray } from 'util'
+<script>
+import { h } from 'vue'
 import draggable from 'vuedraggable'
 import TreeNodeDialog from './TreeNodeDialog'
 import { isNumberStr } from '@/utils/index'
@@ -584,15 +584,18 @@ import {
 } from '@/utils/generator/config'
 
 const dateTimeFormat = {
-  date: 'yyyy-MM-dd',
-  week: 'yyyy 第 WW 周',
-  month: 'yyyy-MM',
-  year: 'yyyy',
-  datetime: 'yyyy-MM-dd HH:mm:ss',
-  daterange: 'yyyy-MM-dd',
-  monthrange: 'yyyy-MM',
-  datetimerange: 'yyyy-MM-dd HH:mm:ss'
+  date: 'YYYY-MM-DD',
+  week: 'YYYY 第 ww 周',
+  month: 'YYYY-MM',
+  year: 'YYYY',
+  datetime: 'YYYY-MM-DD HH:mm:ss',
+  daterange: 'YYYY-MM-DD',
+  monthrange: 'YYYY-MM',
+  datetimerange: 'YYYY-MM-DD HH:mm:ss'
 }
+
+const optionKeys = new WeakMap()
+let nextOptionKey = 0
 
 export default {
   components: {
@@ -728,6 +731,10 @@ export default {
     }
   },
   methods: {
+    optionKey(item) {
+      if (!optionKeys.has(item)) optionKeys.set(item, ++nextOptionKey)
+      return optionKeys.get(item)
+    },
     addReg() {
       this.activeData.regList.push({
         pattern: '',
@@ -745,26 +752,18 @@ export default {
       this.dialogVisible = true
       this.currentNode = this.activeData.options
     },
-    renderContent(h, { node, data, store }) {
-      return (
-        <div class="custom-tree-node">
-          <span>{node.label}</span>
-          <span class="node-operation">
-            <i on-click={() => this.append(data)}
-              class="el-icon-plus"
-              title="添加"
-            ></i>
-            <i on-click={() => this.remove(node, data)}
-              class="el-icon-delete"
-              title="删除"
-            ></i>
-          </span>
-        </div>
-      )
+    renderContent(_, { node, data }) {
+      return h('div', { class: 'custom-tree-node' }, [
+        h('span', node.label),
+        h('span', { class: 'node-operation' }, [
+          h('i', { class: 'el-icon-plus', title: '添加', onClick: () => this.append(data) }),
+          h('i', { class: 'el-icon-delete', title: '删除', onClick: () => this.remove(node, data) })
+        ])
+      ])
     },
     append(data) {
       if (!data.children) {
-        this.$set(data, 'children', [])
+        data['children'] = []
       }
       this.dialogVisible = true
       this.currentNode = data.children
@@ -794,53 +793,41 @@ export default {
       return val
     },
     onDefaultValueInput(str) {
-      if (isArray(this.activeData.defaultValue)) {
+      if (Array.isArray(this.activeData.defaultValue)) {
         // 数组
-        this.$set(
-          this.activeData,
-          'defaultValue',
-          str.split(',').map(val => (isNumberStr(val) ? +val : val))
-        )
+        this.activeData['defaultValue'] = str.split(',').map(val => (isNumberStr(val) ? +val : val))
       } else if (['true', 'false'].indexOf(str) > -1) {
         // 布尔
-        this.$set(this.activeData, 'defaultValue', JSON.parse(str))
+        this.activeData['defaultValue'] = JSON.parse(str)
       } else {
         // 字符串和数字
-        this.$set(
-          this.activeData,
-          'defaultValue',
-          isNumberStr(str) ? +str : str
-        )
+        this.activeData['defaultValue'] = isNumberStr(str) ? +str : str
       }
     },
     onSwitchValueInput(val, name) {
       if (['true', 'false'].indexOf(val) > -1) {
-        this.$set(this.activeData, name, JSON.parse(val))
+        this.activeData[name] = JSON.parse(val)
       } else {
-        this.$set(this.activeData, name, isNumberStr(val) ? +val : val)
+        this.activeData[name] = isNumberStr(val) ? +val : val
       }
     },
     setTimeValue(val, type) {
       const valueFormat = type === 'week' ? dateTimeFormat.date : val
-      this.$set(this.activeData, 'defaultValue', null)
-      this.$set(this.activeData, 'value-format', valueFormat)
-      this.$set(this.activeData, 'format', val)
+      this.activeData['defaultValue'] = null
+      this.activeData['value-format'] = valueFormat
+      this.activeData['format'] = val
     },
     spanChange(val) {
       this.formConf.span = val
     },
     multipleChange(val) {
-      this.$set(this.activeData, 'defaultValue', val ? [] : '')
+      this.activeData['defaultValue'] = val ? [] : ''
     },
     dateTypeChange(val) {
       this.setTimeValue(dateTimeFormat[val], val)
     },
     rangeChange(val) {
-      this.$set(
-        this.activeData,
-        'defaultValue',
-        val ? [this.activeData.min, this.activeData.max] : this.activeData.min
-      )
+      this.activeData['defaultValue'] = val ? [this.activeData.min, this.activeData.max] : this.activeData.min
     },
     rateTextChange(val) {
       if (val) this.activeData['show-score'] = false

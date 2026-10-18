@@ -587,7 +587,8 @@ export default {
       </el-table-column>
       <el-table-column width="250" label="操作">
         <!-- v-if="scope.row.constraintsDesc && scope.row.constraintsDesc.includes('IS NOT NULL')" -->
-        <template #default="scope" v-if="showOperation(scope.row)">
+      <template #default="scope">
+        <template v-if="showOperation(scope.row)">
           <el-button
             @click="deleteData(scope.row)"
             size="small"
@@ -606,6 +607,7 @@ export default {
             <img src="@/assets/main/3-con-ico03.png" alt="" />
             修改
           </el-button>
+        </template>
         </template>
       </el-table-column>
     </el-table>

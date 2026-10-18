@@ -1278,7 +1278,7 @@ export default {
         <el-date-picker
           v-model="dateRange"
           style="width: 300px"
-          value-format="yyyy-MM-dd"
+          value-format="YYYY-MM-DD"
           type="daterange"
           range-separator="-"
           start-placeholder="开始日期"
@@ -1459,8 +1459,8 @@ export default {
               placeholder="选择日期时间"
               clearable
               size="small"
-              value-format="yyyy-MM-dd hh:mm:ss"
-              default-time="12:00:00"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              :default-time="new Date(2000, 0, 1, 12, 0, 0)"
             ></el-date-picker>
             <el-input
               v-else

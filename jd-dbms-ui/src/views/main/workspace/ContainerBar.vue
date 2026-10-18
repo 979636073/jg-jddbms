@@ -2,7 +2,6 @@
 import { defineAsyncComponent, h } from 'vue';
 const renderSqlExecute = defineAsyncComponent(() => import("./components/reanderSqlExecute/index.vue"));
 const ObjectLoading = {
-  compatConfig: { MODE: 3 },
   render() {
     return h("div", { class: "object-component-loading", role: "status" }, "正在渲染数据，请稍候…");
   }

@@ -1,6 +1,6 @@
 <template>
   <div class="icon-dialog">
-    <el-dialog
+    <el-dialog :model-value="visible" @update:model-value="$emit('update:visible', $event)"
       v-bind="$attrs"
       width="980px"
       :modal-append-to-body="false"
@@ -40,7 +40,8 @@ const originList = iconList.map(name => `el-icon-${name}`)
 
 export default {
   inheritAttrs: false,
-  props: ['current'],
+  props: ['current', 'visible'],
+  emits: ['update:visible', 'select'],
   data() {
     return {
       iconList: originList,

@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog
+    <el-dialog :model-value="visible" @update:model-value="$emit('update:visible', $event)"
       v-bind="$attrs"
       :close-on-click-modal="false"
       :modal-append-to-body="false"
@@ -76,7 +76,8 @@ import { isNumberStr } from '@/utils/index'
 export default {
   components: {},
   inheritAttrs: false,
-  props: [],
+  props: ['visible'],
+  emits: ['update:visible', 'commit'],
   data() {
     return {
       id: 100,

@@ -43,7 +43,7 @@
         <el-date-picker
           v-model="dateRange"
           style="width: 220px"
-          value-format="yyyy-MM-dd"
+          value-format="YYYY-MM-DD"
           type="daterange"
           range-separator="-"
           start-placeholder="开始日期"
@@ -129,7 +129,8 @@
         </template>
       </el-table-column>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
-        <template #default="scope" v-if="scope.row.roleId !== 1">
+        <template #default="scope">
+          <template v-if="scope.row.roleId !== 1">
           <el-button
             size="small"
             type="text"
@@ -153,6 +154,7 @@
                 v-hasPermi="['system:role:edit']">分配用户</el-dropdown-item>
             </el-dropdown-menu></template>
           </el-dropdown>
+          </template>
         </template>
       </el-table-column>
     </el-table>

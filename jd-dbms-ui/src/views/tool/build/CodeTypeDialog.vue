@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog
+    <el-dialog :model-value="visible" @update:model-value="$emit('update:visible', $event)"
       v-bind="$attrs"
       width="500px"
       :close-on-click-modal="false"
@@ -51,7 +51,8 @@
 <script>
 export default {
   inheritAttrs: false,
-  props: ['showFileName'],
+  props: ['showFileName', 'visible'],
+  emits: ['update:visible', 'confirm'],
   data() {
     return {
       formData: {

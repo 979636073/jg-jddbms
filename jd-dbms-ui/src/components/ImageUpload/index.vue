@@ -46,8 +46,9 @@
 import { getToken } from "@/utils/auth";
 
 export default {
+  emits: ['update:modelValue'],
   props: {
-    value: [String, Object, Array],
+    modelValue: [String, Object, Array],
     // 图片数量限制
     limit: {
       type: Number,
@@ -85,11 +86,11 @@ export default {
     };
   },
   watch: {
-    value: {
+    modelValue: {
       handler(val) {
         if (val) {
           // 首先将值转为数组
-          const list = Array.isArray(val) ? val : this.value.split(',');
+          const list = Array.isArray(val) ? val : this.modelValue.split(',');
           // 然后将数组转为对象数组
           this.fileList = list.map(item => {
             if (typeof item === "string") {
@@ -170,7 +171,7 @@ export default {
       const findex = this.fileList.map(f => f.name).indexOf(file.name);
       if (findex > -1) {
         this.fileList.splice(findex, 1);
-        this.$emit("input", this.listToString(this.fileList));
+        this.$emit("update:modelValue", this.listToString(this.fileList));
       }
     },
     // 上传失败
@@ -184,7 +185,7 @@ export default {
         this.fileList = this.fileList.concat(this.uploadList);
         this.uploadList = [];
         this.number = 0;
-        this.$emit("input", this.listToString(this.fileList));
+        this.$emit("update:modelValue", this.listToString(this.fileList));
         this.$modal.closeLoading();
       }
     },

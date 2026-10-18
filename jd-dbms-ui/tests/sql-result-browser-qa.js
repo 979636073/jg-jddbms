@@ -7,20 +7,20 @@ const compiler = require('./helpers/vue-compiler')
 const sass = require('sass')
 const source = compiler.parseComponent(fs.readFileSync(path.join(__dirname,
   '../src/views/main/workspace/components/reanderSqlExecute/SqlResultTable.vue'), 'utf8'))
-const template = compiler.compile(source.template.content)
-if (template.errors.length) throw new Error(template.errors.join('\n'))
+const template = compiler.compileBrowser(source.template.content)
+if (template.errors?.length) throw new Error(template.errors.join('\n'))
 const script = source.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'const component =')
 const helper = fs.readFileSync(path.join(__dirname, '../src/utils/sqlResult.js'), 'utf8').replace(/export /g, '')
 const css = sass.renderSync({ data: source.styles[0].content }).css.toString()
 const fileSource = compiler.parseComponent(fs.readFileSync(path.join(__dirname,
   '../src/views/main/workspace/components/renderSearchResult/filedialog.vue'), 'utf8'))
-const fileTemplate = compiler.compile(fileSource.template.content)
-if (fileTemplate.errors.length) throw new Error(fileTemplate.errors.join('\n'))
+const fileTemplate = compiler.compileBrowser(fileSource.template.content)
+if (fileTemplate.errors?.length) throw new Error(fileTemplate.errors.join('\n'))
 const fileScript = fileSource.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'const FileDialog =')
 const fileHelpers = fs.readFileSync(path.join(__dirname, '../src/utils/file.js'), 'utf8').replace(/^import .*;?\s*$/gm, '').replace(/export /g, '')
 const browserScript = `
 (async () => {
-  const Vue = document.querySelector('#app').__vue__.$options._base;
+  ${require('./helpers/browser-vue').runtime}
   ${helper}
   const requests = [];
   const binaryRequests = [];
@@ -31,8 +31,7 @@ const browserScript = `
   };
   ${fileHelpers}
   ${fileScript}
-  FileDialog.render = new Function(${JSON.stringify(fileTemplate.render)});
-  FileDialog.staticRenderFns = ${JSON.stringify(fileTemplate.staticRenderFns)}.map(body => new Function(body));
+  FileDialog.render = new Function('Vue', ${JSON.stringify(fileTemplate.code)})(Vue);
   let copied = '';
   const copyText = text => { copied = text; };
   const fixture = (pageNo, pageSize, descending = false) => prepareSqlResult({
@@ -48,25 +47,26 @@ const browserScript = `
     return {success: true, data: [fixture(params.pageNo, params.pageSize, params.isAsc === false)]};
   }};
   ${script}
-  component.render = new Function(${JSON.stringify(template.render)});
-  component.staticRenderFns = ${JSON.stringify(template.staticRenderFns)}.map(body => new Function(body));
+  component.render = new Function('Vue', ${JSON.stringify(template.code)})(Vue);
   const style = document.createElement('style'); style.textContent = ${JSON.stringify(css)};
   document.head.appendChild(style);
   const host = document.createElement('div'); document.body.appendChild(host);
   const started = performance.now();
-  const app = new Vue({data: () => ({result: fixture(1, 1000)}), render(h) {
+  const app = createTestApp({data: () => ({result: fixture(1, 1000)}), render() {
+    const h = Vue.h;
     return h('div', {style: {position:'fixed',inset:'0',zIndex:9999,background:'white',display:'flex',padding:'20px'}},
-      [h(component, {props:{queryResultData:this.result}, on:{setQueryResultData: result => {this.result = result;}}})]);
-  }}).$mount(host);
+      [h(component, {ref:'table', queryResultData:this.result, onSetQueryResultData: result => {this.result = result;}})]);
+  }});
+  const screen = app.mount(host);
   try {
   const tick = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   await tick();
-  const table = app.$children[0];
+  const table = screen.$refs.table;
   const viewport = table.$refs.viewport;
   const ensure = (value, message) => { if (!value) throw new Error(message); };
   const cellCount = () => table.$el.querySelectorAll('[role=gridcell]').length;
   ensure(table.rows.length === 1000 && table.columns.length === 300, 'stress fixture incomplete');
-  ensure(!table.rows.__ob__ && cellCount() < 600, 'full matrix rendered/observed');
+  ensure(Object.isFrozen(table.rows) && cellCount() < 600, 'full matrix rendered/observed');
   const mountMs = performance.now() - started;
   const frames = [];
   for (let i = 0; i < 30; i++) {
@@ -91,7 +91,7 @@ const browserScript = `
   await table.changeSort(table.columns[0], false); await tick();
   ensure(table.pageNo === 1 && table.rows[0][0] === '10001', 'sorting reset failed');
   ensure(requests.every(p => p.skipCount === false && p.queryTemplate && p.sessionId === 'qa-only'), 'pagination context lost');
-  app.result = prepareSqlResult({success:true, pageNo:1, pageSize:200, totalExact:true, fuzzyTotal:'3',
+  screen.result = prepareSqlResult({success:true, pageNo:1, pageSize:200, totalExact:true, fuzzyTotal:'3',
     originalSql:'SELECT ID, NOTE, PAYLOAD FROM QA ORDER BY ID',
     params:{sql:'SELECT ID, NOTE, PAYLOAD FROM QA ORDER BY ID', dataSourceId:42, schemaName:'QA'},
     headerList:[{name:'行号',dataType:'CHAT2DB_ROW_NUMBER'},{name:'ID'}, {name:'NOTE'},{name:'PAYLOAD',dataType:'BLOB'}],
@@ -126,12 +126,12 @@ const browserScript = `
     requests:requests.length, binaryRequests:binaryRequests.length,
     checks:['virtual-scroll','pagination','sorting','copy','auto-width','pointer-resize','double-click-fit','lazy-BLOB','PNG-preview','NULL','empty-BLOB'], status:'PASS'};
   } finally {
-    app.$destroy(); app.$el.remove(); style.remove();
+    app.unmount(); host.remove(); style.remove();
   }
 })()
 `
-const result = spawnSync('agent-browser', ['--session', 'sqlfix', 'eval', '--stdin'],
-  { input: browserScript, encoding: 'utf8', shell: process.platform === 'win32', timeout: 60000 })
+const result = spawnSync(process.env.AGENT_BROWSER_BIN || 'agent-browser', ['--session', process.env.AGENT_BROWSER_SESSION || 'jddbms', 'eval', '--stdin'],
+  { input: browserScript, encoding: 'utf8', shell: !process.env.AGENT_BROWSER_BIN && process.platform === 'win32', timeout: 60000 })
 process.stdout.write(result.stdout || '')
 process.stderr.write(result.stderr || '')
 if (result.error) throw result.error
