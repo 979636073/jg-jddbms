@@ -68,19 +68,16 @@ body { font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif; }
 .table_name.table-name-clickable:hover { color: var(--dm-primary) !important; }
 .sidebar-resizer:hover { background: var(--dm-primary-soft) !important; }
 
-.el-input__inner, .el-textarea__inner {
-  background: var(--dm-surface);
-  border-color: var(--dm-border-strong);
-  border-radius: var(--dm-radius-sm);
-  color: var(--dm-text);
-  transition: border-color .15s ease, box-shadow .15s ease;
+.el-input, .el-textarea {
+  --el-input-bg-color: var(--dm-surface);
+  --el-input-border-color: var(--dm-border-strong);
+  --el-input-hover-border-color: #c2cad8;
+  --el-input-focus-border-color: var(--dm-primary);
+  --el-input-border-radius: var(--dm-radius-sm);
+  --el-input-text-color: var(--dm-text);
+  --el-disabled-bg-color: var(--dm-surface-2);
+  --el-disabled-text-color: var(--dm-text-3);
 }
-.el-input__inner:hover, .el-textarea__inner:hover { border-color: #c2cad8; }
-.el-input__inner:focus, .el-textarea__inner:focus {
-  border-color: var(--dm-primary);
-  box-shadow: 0 0 0 3px var(--dm-primary-ring);
-}
-.el-input.is-disabled .el-input__inner { background: var(--dm-surface-2); color: var(--dm-text-3); }
 .el-select-dropdown, .el-dropdown-menu, .el-picker-panel, .el-popover {
   border-color: var(--dm-border) !important;
   border-radius: var(--dm-radius) !important;

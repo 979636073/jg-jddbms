@@ -3949,6 +3949,10 @@ export default {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
+    :deep(.focusInput .el-input__wrapper) {
+      background: transparent;
+      box-shadow: none;
+    }
     ::v-deep .table-custom-class {
       display: flex;
       flex-direction: column;
@@ -4038,6 +4042,7 @@ export default {
   }
   .table_bottom_box {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     flex: 0 0 auto;
@@ -4046,6 +4051,8 @@ export default {
     border-top: 1px solid #e7ebf2;
 
     .table_bottom_info {
+      flex-shrink: 0;
+      white-space: nowrap;
       font-size: 12px;
       color: rgba(35, 36, 41, 0.88);
 
@@ -4352,6 +4359,10 @@ export default {
   .inputRow {
     flex: 1;
     width: 0;
+    display: flex;
+    align-items: center;
+    > .el-select:first-child { flex: 1; min-width: 0; }
+    > .el-select:not(:first-child), > .el-input, > .el-date-editor { flex-shrink: 0; }
   }
   .btnBox {
     display: flex;

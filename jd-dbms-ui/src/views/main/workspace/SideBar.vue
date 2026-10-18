@@ -3461,6 +3461,10 @@ export default {
 }
 .resource-search {
   padding: 8px;
+  --el-input-height: 28px;
+  --el-input-bg-color: #f8f9fb;
+  --el-input-border-color: #dfe4ec;
+  --el-input-border-radius: 3px;
 }
 .resource-tree-scrollbar {
   flex: 1;
@@ -3606,13 +3610,6 @@ export default {
 .resource-overview-indent {
   width: 24px;
   flex: 0 0 24px;
-}
-::v-deep .resource-search .el-input__inner {
-  height: 28px;
-  border-color: #dfe4ec;
-  border-radius: 3px;
-  background: #f8f9fb;
-  font-size: 12px;
 }
 ::v-deep .resource-tree-scrollbar .el-scrollbar__wrap {
   overflow-x: auto;

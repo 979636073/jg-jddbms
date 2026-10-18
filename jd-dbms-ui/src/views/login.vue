@@ -215,10 +215,7 @@ export default {
     padding: 0;
   }
   .el-input {
-    height: 38px;
-    input {
-      height: 38px;
-    }
+    --el-input-height: 38px;
   }
   .input-icon {
     height: 39px;
@@ -244,9 +241,8 @@ export default {
   height: 38px;
 }
   .show-pwd {
-    position: absolute;
-    right: 10px;
-    top: 3px;
+    display: inline-flex;
+    align-items: center;
     font-size: 16px;
     color: #889aa4;
     cursor: pointer;
