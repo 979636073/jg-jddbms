@@ -35,18 +35,18 @@ body { font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif; }
   font-weight: 600;
 }
 .app-wrapper .app-main, .el-dialog {
-  --el-component-size: 36px;
-  --el-component-size-small: 36px;
+  --el-component-size: 32px;
+  --el-component-size-small: 32px;
 
-  .el-input { --el-input-height: 36px; font-size: 14px; }
-  .el-select__wrapper { min-height: 36px; padding: 5px 12px; font-size: 14px; }
+  .el-input { --el-input-height: 32px; font-size: 14px; }
+  .el-select__wrapper { min-height: 32px; padding: 3px 12px; font-size: 14px; }
   .el-range-editor .el-range-input, .el-range-editor .el-range-separator { font-size: 14px; }
-  .el-form-item { --font-size: 14px; margin-bottom: 20px; }
-  .el-form-item__label { height: auto; min-height: 36px; line-height: 36px; font-weight: 500; }
-  .el-form-item__content { line-height: 36px; }
+  .el-form-item { --font-size: 14px; margin-bottom: 16px; }
+  .el-form-item__label { height: auto; min-height: 32px; line-height: 32px; font-weight: 500; }
+  .el-form-item__content { line-height: 32px; }
   .el-button { font-size: 14px; }
-  .el-button:not(.el-button--text):not(.is-text):not(.is-link) { --el-button-size: 32px; min-height: 32px; }
-  .el-form .el-button:not(.el-button--text):not(.is-text):not(.is-link) { --el-button-size: 36px; }
+  .el-button:not(.el-button--text):not(.is-text):not(.is-link) { --el-button-size: 30px; min-height: 30px; }
+  .el-form .el-button:not(.el-button--text):not(.is-text):not(.is-link) { --el-button-size: 32px; }
 }
 .app-wrapper .app-main .top-right-btn { margin-left: auto; }
 .app-wrapper .app-main .el-table .fixed-width .cell {

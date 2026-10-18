@@ -52,7 +52,7 @@ for (const [route, title] of routes) {
       check(document.documentElement.scrollHeight <= innerHeight + 1, 'no phantom footer');
       check(!errors.length, 'no Vue render errors');
       const formControls = Array.from(document.querySelectorAll('.app-main .el-form .el-input, .app-main .el-form .el-select__wrapper')).filter(visible);
-      check(formControls.every(element => element.getBoundingClientRect().height >= 35 && parseFloat(getComputedStyle(element).fontSize) >= 14), 'form controls have comfortable size');
+      check(formControls.every(element => element.getBoundingClientRect().height >= 31 && element.getBoundingClientRect().height <= 33 && parseFloat(getComputedStyle(element).fontSize) >= 14), 'form controls have balanced size');
       check(!Array.from(document.querySelectorAll('.el-loading-mask')).some(visible), 'loading completed');
       if (innerWidth >= 992) {
         if (!globals.$store.state.app.sidebar.opened) document.querySelector('#hamburger-container').click();

@@ -563,7 +563,7 @@ export default {
     >
       <i class="el-icon-back"></i> 返回模式总览
     </el-button>
-    <el-tabs v-model="activeName" @tab-click="handleClick">
+    <el-tabs v-model="activeName" @tab-change="handleClick">
       <el-tab-pane label="数据" name="sixth">
         <renderSearchResult :queryResultData="queryResultData" ref="renderSearchResult"></renderSearchResult>
       </el-tab-pane>

@@ -2,6 +2,8 @@ const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
+const { compile } = require('@vue/compiler-dom')
+const Vue = require('vue')
 
 const file = path.join(__dirname, '../src/views/main/workspace/components/renderTableEditor/index.vue')
 const source = fs.readFileSync(file, 'utf8')
@@ -41,6 +43,22 @@ function create() {
 }
 
 async function run() {
+  const firstVisit = create()
+  await firstVisit.initData()
+  const renderTabs = new Function('Vue', compile(source.match(/<el-tabs\b[^>]*>/)[0] + '</el-tabs>', {
+    mode: 'function', prefixIdentifiers: true, bindingMetadata: { 'el-tabs': 'setup-const' }
+  }).code)(Vue)
+  for (const [tab, section] of [['second', 'columns'], ['third', 'indexes'], ['forth', 'constraints'], ['seventh', 'ddl'], ['first', 'basic']]) {
+    const listeners = renderTabs(firstVisit, [], null, { 'el-tabs': {} }).props
+    const before = calls.length
+    // Element Plus emits tabClick before updating v-model, then emits tabChange.
+    if (listeners.onTabClick) await listeners.onTabClick({ props: { name: tab } })
+    listeners['onUpdate:modelValue'](tab)
+    if (listeners.onTabChange) await listeners.onTabChange(tab)
+    assert.deepStrictEqual(calls.slice(before).filter(name => name !== 'types'), [section], '首次切换必须加载目标页签，不能读取上一个页签')
+    assert(firstVisit.loadedSections[tab], '首次点击后应完成加载，无需刷新或切回')
+  }
+  calls.length = 0
   const state = create()
   await state.initData()
   assert.deepStrictEqual(calls, [], '打开数据页不得请求结构或字段类型')

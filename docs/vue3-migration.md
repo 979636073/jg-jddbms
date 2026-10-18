@@ -50,6 +50,14 @@
 
 核心回归 42 项通过；本轮 Vue 文件及新增脚本 lint 为 0 错误、16 项既有警告；生产构建成功。可复用浏览器检查脚本为 jd-dbms-ui/tests/management-layout-browser-qa.js，使用已登录管理员的 agent-browser 会话执行；截图和逐项结果保存在忽略目录 .local/vue3/management-layout。以上为本轮视觉及指定交互覆盖，不代表全部业务 CRUD、所有角色和所有弹窗均已重新验收。
 
+### 控件密度微调与表结构首次加载修复
+
+随后按用户反馈，将管理区及弹窗输入/下拉/表单按钮从 36px 微调为 32px，普通工具栏按钮最小高度从 32px 调整为 30px，表单项间距从 20px 调整为 16px，保留 14px 字号。1560×905 下 9 个管理页面的 141 个布局断言通过。
+
+表结构页签首次点击为空的根因是 Element Plus 在 tabClick 后才更新 v-model，原 handleClick 读取到上一个 activeName，导致查询落后一次点击。改用更新后的 tabChange 事件触发加载，覆盖列、索引、约束、建表语句和基本信息。回归用例编译真实模板事件绑定，按组件的事件顺序验证第一次切换即请求目标内容；42 项核心回归通过。
+
+8081 生产包真实 DM 验证：TEST.DIM_DICT_10 从未加载结构的状态依次首次打开五个结构页签，分别加载到 2 列、1 个索引、1 个约束、200 字符建表语句及正确表名；TEST.DIM_DICT_100 快速切换列/索引，两项均完成加载，再次切换保留已加载数组。未保存任何表结构或数据修改。结果保存在 .local/vue3/table-tab-first-click-after.json 和 table-tab-rapid-after.json。
+
 ## 本地验收
 
 Windows、Node 24、本地后端与 DM 数据源。统计与证据索引见 vue3-migration-acceptance.json；原始运行日志保存在忽略目录 .local/vue3，不提交登录资料和连接凭据。
