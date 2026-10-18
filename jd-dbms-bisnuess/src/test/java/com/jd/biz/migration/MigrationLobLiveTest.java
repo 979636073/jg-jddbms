@@ -12,7 +12,7 @@ import static org.junit.Assert.*;
 
 /** Opt-in: only uniquely named tables in the dedicated DM/Oracle QA schemas. */
 public class MigrationLobLiveTest {
-    private static final String DM_SCHEMA = "JQDMO_260926", ORACLE_SCHEMA = "JQORO_260926";
+    private static final String DM_SCHEMA = "JQDMO_260926", ORACLE_SCHEMA = System.getenv().getOrDefault("JDDBMS_QA_ORACLE_USERNAME", "JQORO_260926");
 
     @Test public void textAndNclobHaveTheSameDmMetadata() throws Exception {
         DataSource dm = dm(); String name = name("M");

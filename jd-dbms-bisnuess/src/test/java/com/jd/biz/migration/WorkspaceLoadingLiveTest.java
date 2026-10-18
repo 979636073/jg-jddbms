@@ -36,7 +36,7 @@ public class WorkspaceLoadingLiveTest {
             source.setUrl(MigrationLiveTest.hostUrl(System.getenv("JDDBMS_META_DB_URL")));
             source.setUserName(System.getenv("JDDBMS_META_DB_USERNAME")); source.setPassword(System.getenv("JDDBMS_META_DB_PASSWORD"));
         }
-        String schema = "DM".equals(type) ? "JQDMO_260926" : "JQORO_260926";
+        String schema = "DM".equals(type) ? "JQDMO_260926" : source.getUserName();
         String prefix = "JQA_W" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
         String parent = prefix + "_P", wide = prefix + "_W";
         List<String> owned = new ArrayList<>();

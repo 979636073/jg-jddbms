@@ -79,10 +79,13 @@ public class MigrationHttpLiveTest {
                 ddl(database, "CREATE TABLE " + qualified(dm.getUserName(), taskTable) + " (ID BIGINT IDENTITY(1,1) PRIMARY KEY, GMT_CREATE TIMESTAMP, GMT_MODIFIED TIMESTAMP, DATA_SOURCE_ID BIGINT, DATABASE_NAME VARCHAR(128), SCHEMA_NAME VARCHAR(128), TABLE_NAME VARCHAR(128), DELETED CHAR(1), USER_ID BIGINT, TASK_TYPE VARCHAR(64), TASK_STATUS VARCHAR(64), TASK_PROGRESS VARCHAR(64), TASK_NAME VARCHAR(256), DOWNLOAD_URL VARCHAR(512), CONTENT BLOB)"); metadataCreated = true;
                 ddl(database, "CREATE TABLE " + qualified(dm.getUserName(), sourceTable) + " (ID NUMBER(10,0) PRIMARY KEY)"); sourceCreated = true;
                 for (int i = 1; i <= 50; i++) ddl(database, "INSERT INTO " + qualified(dm.getUserName(), sourceTable) + " VALUES(" + i + ")");
-                connections = new MigrationConnections() { @Override public DataSource authorized(Long id) { if (SecurityUtil.getUserId() != 42L || id != 1L && id != 2L) throw new IllegalStateException("Not QA owner or datasource"); return dm; } };
+                connections = new MigrationConnections() {
+                    @Override public DataSource authorized(Long id) { if (SecurityUtil.getUserId() != 42L || id != 1L && id != 2L) throw new IllegalStateException("Not QA owner or datasource"); return dm; }
+                    @Override public DataSource authorized(Long id, com.jd.biz.domain.api.enums.DataSourceAction action) { return authorized(id); }
+                };
                 service = new MigrationService(MigrationWorkflowLiveTest.persistentMapper(raw, dm, taskTable), connections, new MigrationMetadata());
                 app = (ServletWebServerApplicationContext) new SpringApplicationBuilder(QaApplication.class).properties(
-                        "spring.config.location=optional:classpath:/migration-qa-unused.properties", "server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off", "logging.level.root=WARN",
+                        "spring.config.location=optional:classpath:/migration-qa-unused.properties", "server.address=127.0.0.1", "server.port=0", "spring.main.banner-mode=off", "logging.level.root=WARN", "dbms.profile=" + System.getProperty("java.io.tmpdir"),
                         "spring.redis.host=" + Optional.ofNullable(System.getenv("JDDBMS_MIGRATION_HOST")).orElse("127.0.0.1"), "spring.redis.port=36379",
                         "token.header=Authorization", "token.secret=" + UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", ""), "token.expireTime=30").run();
                 int port = app.getWebServer().getPort();

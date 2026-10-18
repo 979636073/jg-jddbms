@@ -19,31 +19,34 @@ import static org.junit.Assert.*;
 
 /** Opt-in HTTP acceptance; only uniquely named tables in dedicated QA schemas are changed. */
 public class TableMetadataHttpLiveTest {
-    @Test public void dmEditingMetadataAndPagination() throws Exception { run("DM", 3L, "JQDMO_260926"); }
-    @Test public void oracleEditingMetadataAndPagination() throws Exception { run("ORACLE", 2L, "JQORO_260926"); }
+    @Test public void dmEditingMetadataAndPagination() throws Exception { run("DM", source("DM", 3L), schema("DM", "JQDMO_260926")); }
+    @Test public void oracleEditingMetadataAndPagination() throws Exception { run("ORACLE", source("ORACLE", 2L), schema("ORACLE", "JQORO_260926")); }
+
+    private long source(String type, long fallback) { return Long.parseLong(System.getenv().getOrDefault("JDDBMS_QA_" + type + "_DATASOURCE_ID", String.valueOf(fallback))); }
+    private String schema(String type, String fallback) { return System.getenv().getOrDefault("JDDBMS_QA_" + type + "_SCHEMA", fallback); }
 
     @Test public void dmIdentityDoesNotLeakAcrossSchemasWithTheSameTableName() throws Exception {
         authenticate();
         String table = "JQA_META_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
         List<String> created = new ArrayList<>();
         try {
-            for (String schema : Arrays.asList("JQDMO_260926", "JQDM4_260926")) {
+            for (String schema : Arrays.asList(schema("DM", "JQDMO_260926"), System.getenv().getOrDefault("JDDBMS_QA_DM_SECOND_SCHEMA", "JQDM4_260926"))) {
                 String qualified = "\"" + schema + "\".\"" + table + "\"";
-                execute("DM", 3L, schema, null, "CREATE TABLE " + qualified + " (ID INT" +
-                        (schema.equals("JQDMO_260926") ? " IDENTITY(1,1)" : "") + ")", 1, 100, false);
+                execute("DM", source("DM", 3L), schema, null, "CREATE TABLE " + qualified + " (ID INT" +
+                        (schema.equals(schema("DM", "JQDMO_260926")) ? " IDENTITY(1,1)" : "") + ")", 1, 100, false);
                 created.add(schema);
             }
             for (String schema : created) {
-                JSONObject response = post("/api/rdb/dml/execute", params("DM", 3L, schema, table,
+                JSONObject response = post("/api/rdb/dml/execute", params("DM", source("DM", 3L), schema, table,
                         "SELECT * FROM \"" + schema + "\".\"" + table + "\"", 1, 100, false));
                 assertTrue(response.getString("errorMessage"), response.getBooleanValue("success"));
                 JSONObject result = response.getJSONArray("data").getJSONObject(0);
-                assertEquals(schema.equals("JQDMO_260926") ? 1 : 0, header(result, "ID").getIntValue("autoIncrement"));
+                assertEquals(schema.equals(schema("DM", "JQDMO_260926")) ? 1 : 0, header(result, "ID").getIntValue("autoIncrement"));
                 assertEquals("0", result.getString("fuzzyTotal")); assertTrue(result.getBooleanValue("totalExact"));
             }
             System.out.println("METADATA HTTP DM PASS: identity isolated across same-name tables in two schemas, exact empty total");
         } finally {
-            for (String schema : created) execute("DM", 3L, schema, null,
+            for (String schema : created) execute("DM", source("DM", 3L), schema, null,
                     "DROP TABLE \"" + schema + "\".\"" + table + "\"", 1, 100, false);
             if (!created.isEmpty()) System.out.println("METADATA HTTP cleaned owned DM identity tables " + table);
         }
@@ -149,7 +152,7 @@ public class TableMetadataHttpLiveTest {
         return body;
     }
     private JSONObject post(String path, Map<String, Object> body) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:38181" + path).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(System.getenv().getOrDefault("JDDBMS_QA_HTTP_URL", "http://127.0.0.1:38181") + path).openConnection();
         connection.setRequestMethod("POST"); connection.setConnectTimeout(10000); connection.setReadTimeout(60000);
         connection.setRequestProperty("Authorization", "Bearer " + token);
         connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8"); connection.setDoOutput(true);

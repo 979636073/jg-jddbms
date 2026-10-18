@@ -46,8 +46,8 @@ public class RoutineManagementLiveTest {
     public void triggerListAndExecutableDetailWorkForDmAndOracle() throws Exception {
         verifyTrigger(dm(), new DMMetaData(), "JQDMO_260926", "DM");
         DataSource oracle = new MigrationLiveTest().environment("ORACLE");
-        verifyTrigger(oracle, new OracleMetaData(), "JQORO_260926", "ORACLE");
-        verifyProcedureList(oracle, new OracleMetaData(), "JQORO_260926");
+        verifyTrigger(oracle, new OracleMetaData(), oracle.getUserName(), "ORACLE");
+        verifyProcedureList(oracle, new OracleMetaData(), oracle.getUserName());
     }
 
     private void verifyProcedureList(DataSource source, MetaData metadata, String schema) throws Exception {

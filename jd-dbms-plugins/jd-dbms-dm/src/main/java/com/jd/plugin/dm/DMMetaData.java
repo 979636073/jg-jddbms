@@ -1469,8 +1469,23 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
 
     @Override
     public List<Table> tableViews(Connection connection, String databaseName, String schemaName) {
+        try {
+            return readTableViews(connection, databaseName, String.format(SELECT_TABLE_VIEW_SQL, sqlLiteral(schemaName)));
+        } catch (RuntimeException error) {
+            if (!(error.getCause() instanceof SQLException) || ((SQLException) error.getCause()).getErrorCode() != -5504) {
+                throw error;
+            }
+            String sql = "select A.object_name, A.owner, A.status, A.created, A.last_ddl_time, " +
+                    "case when M.MVIEW_NAME is not null then 'MATERIALIZED VIEW' else A.object_type end as object_type " +
+                    "from SYS.ALL_OBJECTS A left join ALL_MVIEWS M on SF_GET_SCHEMA_NAME_BY_ID(M.SCHID) = A.OWNER and M.MVIEW_NAME = A.OBJECT_NAME " +
+                    "where A.owner = '" + sqlLiteral(schemaName) + "' and A.object_type IN ('VIEW', 'MATERIALIZED VIEW') order by A.object_name";
+            return readTableViews(connection, databaseName, sql);
+        }
+    }
+
+    private List<Table> readTableViews(Connection connection, String databaseName, String sql) {
         List<Table> tableSpaces = new ArrayList<>();
-        return SQLExecutor.getInstance().execute(connection, String.format(SELECT_TABLE_VIEW_SQL, sqlLiteral(schemaName)), resultSet -> {
+        return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             while (resultSet.next()) {
                 Table tableSpace = new Table();
                 TableDetails tableDetails = new TableDetails();

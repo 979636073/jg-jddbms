@@ -1,0 +1,863 @@
+{
+  "date": "2026-10-18",
+  "baseRevision": "698de41d77cd03c191af9e34ba316d49594ecb5a",
+  "workingTreeChanges": true,
+  "conclusion": "本机可执行的数据库、权限、HTTP、性能和安装恢复回归已通过；修复 DM 普通账号视图目录读取问题。现场 DM 2024、其他 Oracle 服务器版本和原生 ARM64 等待环境验收。",
+  "defaultVerify": {
+    "tests": 398,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 51
+  },
+  "liveVerify": {
+    "tests": 49,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "liveClasses": {
+    "com.jd.biz.migration.MaterializedViewCatalogLiveTest": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "catalog-fix"
+    },
+    "com.jd.biz.migration.MigrationAdvancedLiveTest": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "migration-rerun"
+    },
+    "com.jd.biz.migration.MigrationFaultLiveTest": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "migration-rerun"
+    },
+    "com.jd.biz.migration.MigrationHttpLiveTest": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "http-final"
+    },
+    "com.jd.biz.migration.MigrationLiveTest": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.MigrationLobLiveTest": {
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.MigrationPerformanceLiveTest": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.MigrationWorkflowLiveTest": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "migration-rerun"
+    },
+    "com.jd.biz.migration.RoutineManagementLiveTest": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.SqlConsolePaginationLiveTest": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.TableFileTransferLiveTest": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.TablePaginationLiveTest": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.WorkspaceLoadingLiveTest": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "representative-live"
+    },
+    "com.jd.biz.migration.MigrationBoundaryLiveTest": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "udt-final + cancellation-final + boundary-privilege-quota"
+    },
+    "com.jd.biz.domain.core.impl.TableUserPrivilegeLiveTest": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "remaining-http-privileges"
+    },
+    "com.jd.biz.migration.TableMetadataHttpLiveTest": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "remaining-http-privileges"
+    },
+    "com.jd.biz.migration.TableRelationshipHttpLiveTest": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidence": "remaining-http-privileges"
+    }
+  },
+  "frontendCore": {
+    "checks": 40,
+    "status": "PASS"
+  },
+  "browser": {
+    "roles": {
+      "status": "PASS",
+      "checks": 512,
+      "uiRoles": 6
+    },
+    "sharing": {
+      "auditRows": 9,
+      "checks": [
+        "reader-read",
+        "reader-write-SQL-denied",
+        "non-manager-denied",
+        "cross-connection-denied",
+        "role-escalation-denied",
+        "multi-role-team",
+        "grant-union",
+        "team-disable",
+        "member-removal",
+        "team-revoke-immediate",
+        "user-revoke-immediate",
+        "user-disable-session",
+        "preview-role-intersection",
+        "success-failure-audit"
+      ],
+      "status": "PASS"
+    },
+    "blob": {
+      "cancellation": {
+        "accepted": false,
+        "cleanupReadSucceeded": true
+      },
+      "checks": [
+        "query returns BLOB marker only",
+        "reordered rows retain original PK target",
+        "deleted row fails explicitly",
+        "missing key fails explicitly",
+        "real PNG and JPEG signatures",
+        "large image only returns header",
+        "NULL and zero bytes distinguished",
+        "PNG download equals preview",
+        "large image download complete",
+        "16 MiB file download complete",
+        "empty file downloads zero bytes",
+        "DM numeric ROWID lookup",
+        "real PNG dialog preview",
+        "PNG decodes to 640 x 360",
+        "real JPEG dialog preview",
+        "JPEG decodes to 1600 x 900",
+        "large image dialog limit message",
+        "preview close aborts request",
+        "cancel releases read ID and next read succeeds: null"
+      ],
+      "downloads": [
+        {
+          "bytes": 27010,
+          "contentLength": "27010",
+          "ms": 16,
+          "sha256": "e719c5798cb448a52dbf66b267addb845ec7dbb8421eefd8ef586ffd554426a6"
+        },
+        {
+          "bytes": 11879648,
+          "contentLength": "11879648",
+          "ms": 383,
+          "sha256": "835e60b99942bf629c573fb1de28964e8161b92f27d3470c122af252ae577d15"
+        },
+        {
+          "bytes": 16777216,
+          "contentLength": "16777216",
+          "ms": 511,
+          "sha256": "bf5a30014269f69e14c921ab738d050a27e36ab91cdf4e059099f31546381bb0"
+        },
+        {
+          "bytes": 0,
+          "contentLength": "0",
+          "ms": 26,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "status": "PASS",
+      "timings": [
+        {
+          "bytes": 843,
+          "endpoint": "execute",
+          "ms": 41
+        },
+        {
+          "bytes": 903,
+          "endpoint": "execute",
+          "ms": 41
+        },
+        {
+          "bytes": 1369,
+          "endpoint": "execute",
+          "ms": 45
+        },
+        {
+          "bytes": 903,
+          "endpoint": "execute",
+          "ms": 31
+        },
+        {
+          "bytes": 789,
+          "endpoint": "execute",
+          "ms": 29
+        },
+        {
+          "bytes": 36246,
+          "endpoint": "preview",
+          "ms": 47
+        },
+        {
+          "bytes": 36246,
+          "endpoint": "preview",
+          "ms": 15
+        },
+        {
+          "bytes": 771,
+          "endpoint": "execute",
+          "ms": 29
+        },
+        {
+          "bytes": 154,
+          "endpoint": "preview",
+          "ms": 18
+        },
+        {
+          "bytes": 220,
+          "endpoint": "preview",
+          "ms": 14
+        },
+        {
+          "bytes": 57002,
+          "endpoint": "preview",
+          "ms": 17
+        },
+        {
+          "bytes": 234,
+          "endpoint": "preview",
+          "ms": 16
+        },
+        {
+          "bytes": 198,
+          "endpoint": "preview",
+          "ms": 14
+        },
+        {
+          "bytes": 196,
+          "endpoint": "preview",
+          "ms": 16
+        },
+        {
+          "bytes": 1374,
+          "endpoint": "execute",
+          "ms": 33
+        },
+        {
+          "bytes": 36246,
+          "endpoint": "preview",
+          "ms": 28
+        },
+        {
+          "bytes": 100,
+          "endpoint": "cancel",
+          "ms": 11
+        },
+        {
+          "bytes": 101,
+          "endpoint": "cancel",
+          "ms": 8
+        },
+        {
+          "bytes": 234,
+          "endpoint": "preview",
+          "ms": 22
+        },
+        {
+          "bytes": 747,
+          "endpoint": "execute",
+          "ms": 68
+        }
+      ]
+    },
+    "structure": {
+      "checks": [
+        "DM 索引、表达式、约束清单完整读取",
+        "单表读取仅包含所选表",
+        "复合索引顺序和降序元数据",
+        "函数索引读取实际表达式",
+        "复合外键逐列引用映射",
+        "table 对比接口与页面完成",
+        "跨模式等价定义及系统生成索引匹配一致",
+        "table 对比接口与页面完成",
+        "唯一性与复合索引顺序差异",
+        "函数索引表达式差异",
+        "检查约束条件差异",
+        "外键逐列映射与删除规则差异",
+        "上述差异不依赖字段变化",
+        "database 对比接口与页面完成",
+        "整库汇总识别仅索引或约束变化",
+        "table 对比接口与页面完成",
+        "不同表名的同名索引合并为一项差异"
+      ],
+      "cleaned": true,
+      "failures": [],
+      "schemas": [
+        "QA_CMP_L_MVDNRFCM",
+        "QA_CMP_R_MVDNRFCM"
+      ],
+      "status": "PASS",
+      "visibleChanged": 4
+    },
+    "monitor": {
+      "checks": [
+        "新连接默认不采集",
+        "管理员具备配置权限",
+        "真实 DM 后台采集完整",
+        "表空间使用率来自实测",
+        "阈值触发持久化告警",
+        "未打开监控页面仍持续采集",
+        "连续命中不重复创建告警",
+        "调整阈值后实测恢复并记录恢复时间",
+        "连接故障显示未知指标",
+        "连接故障记录采集异常告警",
+        "持久化错误不包含连接串",
+        "连接恢复后重新采集并恢复异常告警",
+        "关闭后台采集后记录数保持不变"
+      ],
+      "cleaned": true,
+      "failures": [],
+      "fixtureId": 432,
+      "status": "PASS"
+    },
+    "syntheticSqlResult": {
+      "binaryRequests": 2,
+      "cells": 12,
+      "checks": [
+        "virtual-scroll",
+        "pagination",
+        "sorting",
+        "copy",
+        "auto-width",
+        "pointer-resize",
+        "double-click-fit",
+        "lazy-BLOB",
+        "PNG-preview",
+        "NULL",
+        "empty-BLOB"
+      ],
+      "fixture": "synthetic 1000 rows x 300 columns",
+      "maxScrollTwoFramesMs": 52,
+      "mountMs": 375,
+      "requests": 4,
+      "status": "PASS"
+    },
+    "restrictedCatalogHttp": {
+      "checks": [
+        "running backend with restricted DM account",
+        "ordinary view listed",
+        "materialized view listed and classified"
+      ],
+      "cleaned": true,
+      "status": "PASS"
+    }
+  },
+  "capabilities": [
+    {
+      "type": "DM",
+      "productVersion": "DM Database Server 64 V8---03134284458-20251113-301923-20178",
+      "driverVersion": "8.1.2.141",
+      "probes": [
+        {
+          "query": "SELECT * FROM V$VERSION",
+          "available": true,
+          "columns": "BANNER",
+          "firstColumn": "DM Database Server 64 V8 | DB Version: 0x7000d | 03134284458-20251113-301923-20178 | Msg Version: 1 | Gsu level(5) cnt: 102",
+          "ms": 1.0429
+        },
+        {
+          "query": "SELECT * FROM ALL_MVIEWS WHERE 1=0",
+          "available": true,
+          "columns": "SCHID,MVIEW_NAME,QUERY,QUERY_LEN,REWRITE_ENABLED,REFRESH_MODE,REFRESH_METHOD,MVIEW_TYPE,LAST_REFRESH_TYPE,STALENESS,LAST_REFRESH_DATE,LAST_REFRESH_END_DATE",
+          "firstColumn": "",
+          "ms": 0.8506
+        },
+        {
+          "query": "SELECT * FROM SYS.ALL_OBJECTS WHERE 1=0",
+          "available": true,
+          "columns": "OWNER,OBJECT_NAME,SUBOBJECT_NAME,OBJECT_ID,DATA_OBJECT_ID,OBJECT_TYPE,CREATED,LAST_DDL_TIME,TIMESTAMP,STATUS,TEMPORARY,GENERATED,SECONDARY,NAMESPACE,EDITION_NAME",
+          "firstColumn": "",
+          "ms": 0.5342
+        },
+        {
+          "query": "SELECT * FROM SYSOBJECTS WHERE 1=0",
+          "available": false,
+          "errorCode": -5504,
+          "sqlState": "28000",
+          "ms": 14.169
+        },
+        {
+          "query": "SELECT * FROM ALL_SOURCE WHERE 1=0",
+          "available": true,
+          "columns": "OWNER,NAME,TYPE,LINE,TEXT",
+          "firstColumn": "",
+          "ms": 0.3501
+        },
+        {
+          "query": "SELECT COUNT(*) FROM USER_OBJECTS",
+          "available": true,
+          "columns": "COUNT(*)",
+          "firstColumn": "0",
+          "ms": 21.756
+        }
+      ]
+    },
+    {
+      "type": "ORACLE",
+      "productVersion": "Oracle Database 11g Enterprise Edition Release 11.2.0.1.0 - 64bit Production\nWith the Partitioning, OLAP, Data Mining and Real Application Testing options",
+      "driverVersion": "21.1.0.0.0",
+      "probes": [
+        {
+          "query": "SELECT * FROM V$VERSION",
+          "available": true,
+          "columns": "BANNER",
+          "firstColumn": "Oracle Database 11g Enterprise Edition Release 11.2.0.1.0 - 64bit Production | PL/SQL Release 11.2.0.1.0 - Production | CORE\t11.2.0.1.0\tProduction | TNS for 64-bit Windows: Version 11.2.0.1.0 - Production | NLSRTL Version 11.2.0.1.0 - Production",
+          "ms": 64.525
+        },
+        {
+          "query": "SELECT * FROM ALL_MVIEWS WHERE 1=0",
+          "available": true,
+          "columns": "OWNER,MVIEW_NAME,CONTAINER_NAME,QUERY,QUERY_LEN,UPDATABLE,UPDATE_LOG,MASTER_ROLLBACK_SEG,MASTER_LINK,REWRITE_ENABLED,REWRITE_CAPABILITY,REFRESH_MODE,REFRESH_METHOD,BUILD_MODE,FAST_REFRESHABLE,LAST_REFRESH_TYPE,LAST_REFRESH_DATE,STALENESS,AFTER_FAST_REFRESH,UNKNOWN_PREBUILT,UNKNOWN_PLSQL_FUNC,UNKNOWN_EXTERNAL_TABLE,UNKNOWN_CONSIDER_FRESH,UNKNOWN_IMPORT,UNKNOWN_TRUSTED_FD,COMPILE_STATE,USE_NO_INDEX,STALE_SINCE,NUM_PCT_TABLES,NUM_FRESH_PCT_REGIONS,NUM_STALE_PCT_REGIONS",
+          "firstColumn": "",
+          "ms": 3.3876
+        },
+        {
+          "query": "SELECT * FROM SYS.ALL_OBJECTS WHERE 1=0",
+          "available": true,
+          "columns": "OWNER,OBJECT_NAME,SUBOBJECT_NAME,OBJECT_ID,DATA_OBJECT_ID,OBJECT_TYPE,CREATED,LAST_DDL_TIME,TIMESTAMP,STATUS,TEMPORARY,GENERATED,SECONDARY,NAMESPACE,EDITION_NAME",
+          "firstColumn": "",
+          "ms": 0.5504
+        },
+        {
+          "query": "SELECT * FROM ALL_SOURCE WHERE 1=0",
+          "available": true,
+          "columns": "OWNER,NAME,TYPE,LINE,TEXT",
+          "firstColumn": "",
+          "ms": 0.5409
+        },
+        {
+          "query": "SELECT COUNT(*) FROM USER_OBJECTS",
+          "available": true,
+          "columns": "COUNT(*)",
+          "firstColumn": "0",
+          "ms": 7.9653
+        }
+      ]
+    }
+  ],
+  "performance": {
+    "workspace": [
+      {
+        "type": "ORACLE",
+        "operations": [
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 678.4012
+          },
+          {
+            "operation": "jdbc:SELECT * FROM (SELECT x.*, ROWNUM rn FROM (SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME) x WHERE ROWNUM <= ?) WHERE rn > ?",
+            "ms": 1915.1446
+          },
+          {
+            "operation": "tablePage200-0",
+            "ms": 2618.9369
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 17.5231
+          },
+          {
+            "operation": "jdbc:SELECT * FROM (SELECT x.*, ROWNUM rn FROM (SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME) x WHERE ROWNUM <= ?) WHERE rn > ?",
+            "ms": 19.6535
+          },
+          {
+            "operation": "tablePage200-1",
+            "ms": 42.758
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 16.1436
+          },
+          {
+            "operation": "jdbc:SELECT * FROM (SELECT x.*, ROWNUM rn FROM (SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME) x WHERE ROWNUM <= ?) WHERE rn > ?",
+            "ms": 14.7008
+          },
+          {
+            "operation": "tablePage200-2",
+            "ms": 37.2805
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 14.3209
+          },
+          {
+            "operation": "jdbc:SELECT * FROM (SELECT x.*, ROWNUM rn FROM (SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME) x WHERE ROWNUM <= ?) WHERE rn > ?",
+            "ms": 16.3066
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 14.6935
+          },
+          {
+            "operation": "jdbc:SELECT * FROM (SELECT x.*, ROWNUM rn FROM (SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND NOT EXISTS (SELECT 1 FROM SYS.ALL_OBJECTS m WHERE m.OBJECT_TYPE = 'MATERIALIZED VIEW' AND m.OWNER = t.OWNER AND m.OBJECT_NAME = t.TABLE_NAME) AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME) x WHERE ROWNUM <= ?) WHERE rn > ?",
+            "ms": 19.2462
+          },
+          {
+            "operation": "jdbc:SELECT atc.column_id, atc.column_name, atc.data_type, atc.data_length, atc.data_type_mod, atc.nullable, atc.data_default, acc.comments, atc.DATA_PRECISION, atc.DATA_SCALE, atc.CHAR_USED, pk.CONSTRAINT_NAME AS PK_NAME, pk.POSITION AS PK_POSITION FROM all_tab_columns atc LEFT JOIN all_col_comments acc ON atc.owner = acc.owner AND atc.table_name = acc.table_name AND atc.column_name = acc.column_name LEFT JOIN (SELECT cc.COLUMN_NAME, cc.CONSTRAINT_NAME, cc.POSITION FROM all_constraints c JOIN all_cons_columns cc ON c.OWNER = cc.OWNER AND c.TABLE_NAME = cc.TABLE_NAME AND c.CONSTRAINT_NAME = cc.CONSTRAINT_NAME WHERE c.OWNER = 'JQA_C_84260845' AND c.TABLE_NAME = 'JQA_WB18393_W' AND c.CONSTRAINT_TYPE = 'P') pk ON pk.COLUMN_NAME = atc.COLUMN_NAME WHERE atc.OWNER = 'JQA_C_84260845' AND atc.TABLE_NAME = 'JQA_WB18393_W' ORDER BY atc.COLUMN_ID",
+            "ms": 273.4679
+          },
+          {
+            "operation": "wideColumns100",
+            "ms": 289.8124
+          },
+          {
+            "operation": "jdbc:SELECT CONS.TABLE_NAME   AS \"forTableName\",\n\t\t\t\tCONS.STATUS as \"status\",\n               COLS.COLUMN_NAME  AS \"forTableColumn\",\n               COLS.CONSTRAINT_NAME  CONSTRAINT_NAME,\n               CONS.R_OWNER AS \"forSchema\",\n               CONS_R.TABLE_NAME AS \"table\",\n               CONS.OWNER AS \"schema\",\n               (\n                   SELECT COLS_R.COLUMN_NAME\n                   FROM SYS.ALL_CONS_COLUMNS COLS_R\n                   WHERE COLS_R.OWNER = CONS.R_OWNER\n                     AND COLS_R.CONSTRAINT_NAME = CONS.R_CONSTRAINT_NAME\n                     AND COLS_R.POSITION = COLS.POSITION\n               )                 \"tableColumn\"\n        FROM SYS.ALL_CONSTRAINTS CONS,\n             SYS.ALL_CONS_COLUMNS COLS,\n             SYS.ALL_CONSTRAINTS CONS_R\n        WHERE COLS.OWNER(+) = CONS.OWNER\n          AND COLS.TABLE_NAME(+) = CONS.TABLE_NAME\n          AND COLS.CONSTRAINT_NAME(+) = CONS.CONSTRAINT_NAME\n          AND CONS_R.OWNER(+) = CONS.R_OWNER\n          AND CONS_R.CONSTRAINT_NAME(+) = CONS.R_CONSTRAINT_NAME\n          AND CONS.OWNER = 'JQA_C_84260845'\n          AND CONS.TABLE_NAME = 'JQA_WB18393_T397'\n          AND CONS.CONSTRAINT_TYPE = 'R'\n        ORDER BY CONS.CONSTRAINT_NAME, COLS.POSITION",
+            "ms": 566.0564
+          },
+          {
+            "operation": "foreignKeys4",
+            "ms": 566.8672
+          },
+          {
+            "operation": "jdbc:SELECT * FROM (SELECT * FROM \"JQA_C_84260845\".\"JQA_WB18393_W\" ORDER BY ID) WHERE ROWNUM<=50",
+            "ms": 3.6376
+          },
+          {
+            "operation": "dataPage50WithoutLobBody",
+            "ms": 4.5369
+          }
+        ]
+      },
+      {
+        "type": "DM",
+        "operations": [
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 124.3166
+          },
+          {
+            "operation": "jdbc:SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME LIMIT ? OFFSET ?",
+            "ms": 179.7134
+          },
+          {
+            "operation": "tablePage200-0",
+            "ms": 305.6866
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 121.2883
+          },
+          {
+            "operation": "jdbc:SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME LIMIT ? OFFSET ?",
+            "ms": 185.5652
+          },
+          {
+            "operation": "tablePage200-1",
+            "ms": 308.592
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 127.5734
+          },
+          {
+            "operation": "jdbc:SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME LIMIT ? OFFSET ?",
+            "ms": 177.8221
+          },
+          {
+            "operation": "tablePage200-2",
+            "ms": 307.1099
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 129.2534
+          },
+          {
+            "operation": "jdbc:SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME LIMIT ? OFFSET ?",
+            "ms": 184.7566
+          },
+          {
+            "operation": "jdbc:SELECT COUNT(*) FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0)",
+            "ms": 127.5455
+          },
+          {
+            "operation": "jdbc:SELECT t.TABLE_NAME, t.OWNER, t.TABLESPACE_NAME, t.LAST_ANALYZED, t.NUM_ROWS, c.COMMENTS, o.CREATED, o.LAST_DDL_TIME FROM ALL_TABLES t LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_TYPE = 'TABLE' LEFT JOIN ALL_OBJECTS o ON o.OWNER = t.OWNER AND o.OBJECT_NAME = t.TABLE_NAME AND o.OBJECT_TYPE = 'TABLE' WHERE t.OWNER = ? AND (INSTR(UPPER(t.TABLE_NAME), ?) > 0 OR INSTR(UPPER(c.COMMENTS), ?) > 0) ORDER BY t.TABLE_NAME LIMIT ? OFFSET ?",
+            "ms": 183.0552
+          },
+          {
+            "operation": "jdbc: SELECT /*+ RULE */  ATC.OWNER,  ATC.TABLE_NAME                  ,  ATC.COLUMN_ID                   ,  ATC.COLUMN_NAME  ,  ATC.DATA_TYPE    ,  ATC.DATA_LENGTH  ,  ATC.DATA_TYPE_MOD               ,  ATC.NULLABLE                    ,  ATC.DATA_DEFAULT,  ACC.COMMENTS                    ,  ATC.DATA_PRECISION              ,  ATC.DATA_SCALE                  ,  ATC.CHAR_USED, PK.CONSTRAINT_NAME AS PK_NAME, PK.POSITION AS PK_POSITION  FROM ALL_TAB_COLUMNS ATC  LEFT JOIN ALL_COL_COMMENTS ACC ON ATC.OWNER = ACC.SCHEMA_NAME  AND ATC.TABLE_NAME = ACC.TABLE_NAME AND ATC.COLUMN_NAME = ACC.COLUMN_NAME  LEFT JOIN (SELECT CC.COLUMN_NAME, CC.CONSTRAINT_NAME, CC.POSITION  FROM ALL_CONSTRAINTS C JOIN ALL_CONS_COLUMNS CC  ON C.OWNER = CC.OWNER AND C.TABLE_NAME = CC.TABLE_NAME AND C.CONSTRAINT_NAME = CC.CONSTRAINT_NAME  WHERE C.OWNER = 'JQDMO_260926' AND C.TABLE_NAME = 'JQA_WBB242D_W' AND C.CONSTRAINT_TYPE = 'P') PK  ON PK.COLUMN_NAME = ATC.COLUMN_NAME  WHERE ATC.OWNER = 'JQDMO_260926' AND ATC.TABLE_NAME = 'JQA_WBB242D_W'  ORDER BY ATC.COLUMN_ID ",
+            "ms": 311.115
+          },
+          {
+            "operation": "jdbc:SELECT\n        B.OWNER        ,\n        B.TABLE_NAME   ,\n        A.NAME COL_NAME,\n        A.TYPE$\nFROM\n        SYSCOLUMNS A,\n        ALL_TABLES B    ,\n        SYSOBJECTS C\nWHERE\n        (A.INFO2 & 1)=1\n    AND A.ID         =C.ID\n    AND C.NAME       = B.TABLE_NAME\n    AND B.OWNER      = 'JQDMO_260926'\n    AND B.TABLE_NAME = 'JQA_WBB242D_W'\n    AND C.SCHID = (SELECT ID FROM SYSOBJECTS WHERE TYPE$ = 'SCH' AND NAME = 'JQDMO_260926')",
+            "ms": 30.9507
+          },
+          {
+            "operation": "wideColumns100",
+            "ms": 344.3194
+          },
+          {
+            "operation": "jdbc:SELECT CONS.TABLE_NAME   AS \"forTableName\",\n\t\t\t\tCONS.STATUS as \"status\",\n               COLS.COLUMN_NAME  AS \"forTableColumn\",\n               COLS.CONSTRAINT_NAME  CONSTRAINT_NAME,\n               CONS.R_OWNER AS \"forSchema\",\n               CONS_R.TABLE_NAME AS \"table\",\n              \tCASE\n              \tWHEN CONS_R.R_OWNER IS NULL\n              \tTHEN CONS.R_OWNER\n              \tELSE CONS_R.R_OWNER\n                END AS \"schema\",\n               (\n                   SELECT COLS_R.COLUMN_NAME\n                   FROM SYS.ALL_CONS_COLUMNS COLS_R\n                   WHERE COLS_R.OWNER = CONS.R_OWNER\n                     AND COLS_R.CONSTRAINT_NAME = CONS.R_CONSTRAINT_NAME\n                     AND COLS_R.POSITION = COLS.POSITION\n               )                 \"tableColumn\"\n        FROM SYS.ALL_CONSTRAINTS CONS,\n             SYS.ALL_CONS_COLUMNS COLS,\n             SYS.ALL_CONSTRAINTS CONS_R\n        WHERE COLS.OWNER(+) = CONS.OWNER\n          AND COLS.TABLE_NAME(+) = CONS.TABLE_NAME\n          AND COLS.CONSTRAINT_NAME(+) = CONS.CONSTRAINT_NAME\n          AND CONS_R.OWNER(+) = CONS.R_OWNER\n          AND CONS_R.CONSTRAINT_NAME(+) = CONS.R_CONSTRAINT_NAME\n          AND CONS.OWNER = 'JQDMO_260926'\n          AND CONS.TABLE_NAME = 'JQA_WBB242D_T397'\n          AND CONS.CONSTRAINT_TYPE = 'R'\n        ORDER BY CONS.CONSTRAINT_NAME, COLS.POSITION",
+            "ms": 408.8476
+          },
+          {
+            "operation": "foreignKeys4",
+            "ms": 409.4551
+          },
+          {
+            "operation": "jdbc:SELECT * FROM \"JQDMO_260926\".\"JQA_WBB242D_W\" ORDER BY ID LIMIT 50",
+            "ms": 2.2159
+          },
+          {
+            "operation": "dataPage50WithoutLobBody",
+            "ms": 2.3596
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "schema": "SYSDBA",
+      "tables": 10009,
+      "pageSize": 200,
+      "p50Ms": 846,
+      "p95Ms": 871,
+      "samplesMs": [
+        828,
+        844,
+        846,
+        857,
+        870,
+        871
+      ]
+    },
+    "migration": {
+      "architecture": "amd64",
+      "os": "Windows 11",
+      "java": "17.0.20.1",
+      "sourceVersion": "DM Database Server 64 V8---03134284458-20251113-301923-20178",
+      "targetVersion": "DM Database Server 64 V8---03134284458-20251113-301923-20178",
+      "rows": 10001,
+      "blobBytes": 8388608,
+      "clobCharacters": 1200000,
+      "copySeconds": 1.548957,
+      "baselineCopyVerificationSeconds": 3.5112369,
+      "copyRowsPerSecond": 6456.602733323133,
+      "jvmMaxHeapBytes": 8472494080,
+      "sumOfHeapPoolPeaksBytesNotRss": 222805008,
+      "verification": "FULL_CONTENT_HASH_PASS"
+    }
+  },
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "FIXED_AND_RETESTED",
+      "title": "DM 普通账号读取普通/物化视图失败",
+      "cause": "原查询直接访问 SYS.SYSOBJECTS，普通账号返回 -5504。",
+      "fix": "仅在该权限错误时回退 ALL_MVIEWS，并通过 SF_GET_SCHEMA_NAME_BY_ID(SCHID) 关联模式；其他错误继续上抛。",
+      "verification": "普通账号真实库 + 管理员真实库 + 7 项目录单元测试 + 当前运行后端 HTTP 分类验证均通过。"
+    },
+    {
+      "severity": "ENVIRONMENT",
+      "status": "RECOVERED_AND_RETESTED",
+      "title": "历史 Oracle 专用 QA 连接恢复",
+      "cause": "旧 QA 连接保存的密文无法由当前及现有历史密钥解密，且地址为容器宿主别名。",
+      "fix": "私下备份原密文，仅重置本地 JQORO_260926 专用测试账号密码，以现有密钥重新加密，并将此本地连接地址改为回环地址。",
+      "verification": "原连接 ID 219 凭据读取与 SELECT 1 真实 HTTP 查询通过；没有更换平台密钥或其他账号密码。"
+    }
+  ],
+  "gaps": [
+    "现场 DM8 2024 构建尚无测试环境，需在现场账号下核对已知普通视图、物化视图和存储过程；本地 DM 2025 的结果不能替代。",
+    "较新 Oracle 服务器版本尚无环境；当前 JDBC 21.1 连接的实测服务器为 Oracle 11.2.0.1，不代表 Oracle 19c/21c 服务端。",
+    "原生 Linux ARM64 和 ARM64 仿真环境不可用；本轮安装/升级/重启/H2 与配置备份恢复使用 Windows amd64，未验证 ARM64 Nginx/Redis 二进制运行与整机恢复。",
+    "15 秒黑洞测试在本机 TCP 接受但登录无响应的条件下完成；现场 DNS、SSH、网关与网络丢包耗时仍需复测，显式高级超时配置仍优先。",
+    "SQL 编辑性能基于实际 Monaco 组件的 4000 条语句、100 次输入；不能等同于任意生产脚本或多人高并发性能承诺。",
+    "旧 MetadataInstallLiveTest 针对已停止分发的 DM 初始化 SQL；当前采用 H2 安装恢复流程验证。历史账号授权准备方法未启用，不属于产品功能验收。"
+  ],
+  "cleanup": {
+    "historicalOracle": "仅本地专用 JQORO_260926 账号恢复，连接 ID219 保留并验证查询成功",
+    "originalFixtures": "原业务连接及 TEST-TEST 图片/BLOB 测试表保留",
+    "installFixtures": "隔离安装目录仅保留本地验证与备份证据，未进入安装包",
+    "temporaryPlatformFixtures": "临时平台用户、共享授权及测试连接已删除并验证",
+    "temporaryRedis": "隔离 36379 Redis 已停止；应用 6379 保留",
+    "temporaryDatabaseUsers": "本轮 DM、Oracle 随机 QA 账号和专用 Oracle 测试管理员均已删除；临时对象由 finally 清理"
+  },
+  "runtime": {
+    "mode": "qa",
+    "jarSha256": "64DA1C351C68B8EDD1094C6A154BCA22FDE11701D918FF868424BE4F99E0E6BD",
+    "revision": "698de41d77cd03c191af9e34ba316d49594ecb5a",
+    "releaseDirectory": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\releases\\698de41d77cd",
+    "jar": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\run\\jd-dbms-admin-qa-20261018-182118.jar",
+    "processes": [
+      {
+        "pid": 55524,
+        "startedAtTicks": 639279156786357500,
+        "marker": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\run\\jd-dbms-admin-qa-20261018-182118.jar"
+      },
+      {
+        "pid": 33484,
+        "startedAtTicks": 639279141848858800,
+        "marker": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\releases\\698de41d77cd\\local-web-server.mjs"
+      }
+    ],
+    "sourceDirty": true
+  },
+  "rerun": {
+    "default": "mvn --batch-mode -DargLine=-Duser.home=<隔离测试目录> verify",
+    "ui": "cd jd-dbms-ui; npm run test:core",
+    "live": "设置现有 LIVE 开关与 JDDBMS_QA_DM_URL/USERNAME/PASSWORD、JDDBMS_QA_ORACLE_URL/USERNAME/PASSWORD；使用独立 QA 账号。DM 目录专项还需现有元库管理账号创建随机对象。",
+    "note": "不提供密码、token 或密钥；正式现场验收需执行相同能力与关键对象检查并保留版本信息。"
+  },
+  "additionalAcceptance": {
+    "catalogFaultInjection": {
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "scope": "DM/Oracle missing catalog, missing column and insufficient privileges; failure must remain explicit"
+    },
+    "historicalOracle": {
+      "status": "PASS",
+      "historicalOracleQA": {
+        "id": 219,
+        "savedCredentialReadable": true,
+        "realQuerySucceeded": true
+      },
+      "scope": "Only local JQORO_260926 password reset and re-encrypted; existing key and other users retained"
+    },
+    "activeBlobCancellation": {
+      "status": "PASS",
+      "accepted": true,
+      "readIdReleased": true,
+      "nextReadSucceeded": true
+    },
+    "connectionTimeout": {
+      "status": "PASS",
+      "scenario": "TCP accepted, login silent",
+      "results": [
+        {
+          "type": "ORACLE",
+          "ms": 15058,
+          "success": false
+        },
+        {
+          "type": "DM",
+          "ms": 15032,
+          "success": false
+        }
+      ]
+    },
+    "actualSqlEditor": {
+      "characters": 194889,
+      "loadMs": 19,
+      "longTasksMs": [],
+      "maxTwoFramesMs": 27,
+      "p50TwoFramesMs": 17,
+      "p95TwoFramesMs": 17,
+      "scenario": "Actual Monaco editor, 4000 SQL statements, 100 edits",
+      "status": "PASS"
+    },
+    "tableLoading": {
+      "elapsedMs": 474,
+      "loadingSamples": 7,
+      "loadingText": "正在打开对象，请稍候…",
+      "minContainerHeight": 766,
+      "rows": 100,
+      "scenario": "Actual route opens existing large BLOB table",
+      "status": "PASS"
+    }
+  },
+  "followupStages": [
+    {
+      "stage": 1,
+      "status": "PASS",
+      "scope": "授权/撤权、结构/关系 HTTP、Oracle 缺权限与零配额重试、历史 QA 连接恢复"
+    },
+    {
+      "stage": 2,
+      "status": "LOCAL_PASS_EXTERNAL_PENDING",
+      "scope": "DM/Oracle 目录错误注入与代表环境通过；现场 DM 2024 和较新 Oracle 待环境"
+    },
+    {
+      "stage": 3,
+      "status": "PASS",
+      "scope": "实际 SQL 编辑、表加载提示、TCP 黑洞超时、活动 BLOB 取消及已有冷/热基准"
+    },
+    {
+      "stage": 4,
+      "status": "LOCAL_PASS_ARM64_PENDING",
+      "scope": "Windows H2 安装恢复与打包配置验证；原生 ARM64 待环境"
+    },
+    {
+      "stage": 5,
+      "status": "PENDING_PACKAGE",
+      "scope": "源码固化、构建、更新包、完整安装包、哈希与回退说明"
+    }
+  ],
+  "installLifecycle": {
+    "status": "PASS",
+    "platform": "Windows amd64 / JDK 17 / Redis 5.0.14 / H2 2.2.224",
+    "checks": [
+      "PASS: fresh-install backend started and captcha HTTP is healthy",
+      "PASS: single bootstrap, user metadata, 64 KiB BLOB content and encryption-key fingerprint retained",
+      "PASS: application-upgrade backend started and captcha HTTP is healthy",
+      "PASS: single bootstrap, user metadata, 64 KiB BLOB content and encryption-key fingerprint retained",
+      "PASS: restart backend started and captcha HTTP is healthy",
+      "PASS: single bootstrap, user metadata, 64 KiB BLOB content and encryption-key fingerprint retained",
+      "PASS: backup-restore backend started and captcha HTTP is healthy",
+      "PASS: single bootstrap, user metadata, 64 KiB BLOB content and encryption-key fingerprint retained",
+      "PASS: fresh install, application upgrade, restart, offline H2+configuration backup/restore; Windows amd64 only; evidence=D:\\code\\28\\dbms\\jg-jddbms\\.local\\install-lifecycle-f1f63691"
+    ],
+    "limitation": "H2+configuration restore, not a Linux ARM64 whole-machine restore"
+  }
+}

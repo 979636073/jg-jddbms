@@ -17,8 +17,11 @@ import static org.junit.Assert.*;
 /** Only uniquely named objects in dedicated local QA schemas are changed. */
 public class TableRelationshipHttpLiveTest {
     private String token;
-    @Test public void dmRelationsRemainExactAfterCachingAndDDL() throws Exception { run("DM", 3, "JQDMO_260926", "JQDM4_260926"); }
-    @Test public void oracleRelationsRemainExactAfterCachingAndDDL() throws Exception { run("ORACLE", 2, "JQORO_260926", "JQORO_260926"); }
+    @Test public void dmRelationsRemainExactAfterCachingAndDDL() throws Exception { run("DM", Integer.parseInt(System.getenv().getOrDefault("JDDBMS_QA_DM_DATASOURCE_ID", "3")), System.getenv().getOrDefault("JDDBMS_QA_DM_SCHEMA", "JQDMO_260926"), System.getenv().getOrDefault("JDDBMS_QA_DM_SECOND_SCHEMA", "JQDM4_260926")); }
+    @Test public void oracleRelationsRemainExactAfterCachingAndDDL() throws Exception {
+        String schema = System.getenv().getOrDefault("JDDBMS_QA_ORACLE_SCHEMA", "JQORO_260926");
+        run("ORACLE", Integer.parseInt(System.getenv().getOrDefault("JDDBMS_QA_ORACLE_DATASOURCE_ID", "2")), schema, schema);
+    }
     private void run(String type, int source, String schema, String childSchema) throws Exception {
         Assume.assumeTrue("1".equals(System.getenv("JDDBMS_RELATION_HTTP_LIVE")));
         String curl = Files.readString(Paths.get(System.getenv("JDDBMS_QA_CURL")), StandardCharsets.UTF_8);
@@ -80,7 +83,7 @@ public class TableRelationshipHttpLiveTest {
         assertTrue(result.getString("errorMessage"), result.getBooleanValue("success"));
     }
     private JSONObject http(String path, Map<String,Object> body) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:38181" + path).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(System.getenv().getOrDefault("JDDBMS_QA_HTTP_URL", "http://127.0.0.1:38181") + path).openConnection();
         connection.setConnectTimeout(10000); connection.setReadTimeout(60000);
         connection.setRequestProperty("Authorization", "Bearer " + token);
         if (body != null) {

@@ -50,6 +50,7 @@ public class MigrationWorkflowLiveTest {
         config.sourceSchema = sourceInfo.getUserName(); config.targetSchema = targetInfo.getUserName(); config.commitSize = 1;
         config.parallelism = 3;
         MigrationConnections connections = new MigrationConnections() {
+            @Override public DataSource authorized(Long id, com.jd.biz.domain.api.enums.DataSourceAction action) { return authorized(id); }
             @Override public DataSource authorized(Long id) {
                 if (SecurityUtil.getUserId() != 700000L) throw new BusinessException("测试身份无权访问数据源");
                 if (id.equals(config.sourceId)) return sourceInfo; if (id.equals(config.targetId)) return targetInfo; throw new BusinessException("不存在的数据源");

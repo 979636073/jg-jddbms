@@ -9,6 +9,7 @@ import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,6 +57,50 @@ public class ResourceTreeMetadataTest {
     }
 
     @Test
+    public void dmRestrictedUserShouldUseAccessibleMaterializedViewCatalog() {
+        Query query = new Query();
+        query.failure = new SQLException("no SYSOBJECTS permission", "28000", -5504);
+        List<Table> views = new DMMetaData().tableViews(query.connection(), "DM", "APP'QA");
+        assertEquals(2, query.executions);
+        assertTrue(query.sql.contains("ALL_MVIEWS"));
+        assertFalse(query.sql.contains("SYS.SYSOBJECTS"));
+        assertTrue(query.sql.contains("A.owner = 'APP''QA'"));
+        assertEquals("MATERIALIZED VIEW", views.get(0).getTableDetails().getType());
+    }
+
+    @Test
+    public void dmCatalogFailureShouldNotReturnAnEmptyList() {
+        for (int code : new int[]{-5504, -70028, -2106, -2007}) {
+            Query query = new Query();
+            query.failure = new SQLException("catalog unavailable", "28000", code);
+            query.alwaysFail = true;
+            try {
+                new DMMetaData().tableViews(query.connection(), "DM", "APP");
+                fail("Unreadable catalogs must fail explicitly");
+            } catch (RuntimeException expected) {
+                assertSame(query.failure, expected.getCause());
+                assertEquals(code == -5504 ? 2 : 1, query.executions);
+            }
+        }
+    }
+
+    @Test
+    public void oracleMissingCatalogColumnOrPrivilegeShouldFailExplicitly() {
+        for (int code : new int[]{942, 904, 1031}) {
+            Query query = new Query();
+            query.failure = new SQLException("catalog capability unavailable", "42000", code);
+            query.alwaysFail = true;
+            try {
+                new OracleMetaData().tableViews(query.connection(), "ORCL", "APP");
+                fail("Unavailable catalogs must not look like an empty schema");
+            } catch (RuntimeException expected) {
+                assertSame(query.failure, expected.getCause());
+                assertEquals(1, query.executions);
+            }
+        }
+    }
+
+    @Test
     public void oracleMaterializedViewsShouldUseCatalogAndOneQuery() {
         Query query = new Query();
         List<Table> views = new OracleMetaData().tableViews(query.connection(), "ORCL", "APP'QA");
@@ -84,6 +129,8 @@ public class ResourceTreeMetadataTest {
     private static class Query {
         String sql;
         int executions;
+        SQLException failure;
+        boolean alwaysFail;
         List<String> parameters = new ArrayList<>();
 
         Connection connection() {
@@ -103,7 +150,10 @@ public class ResourceTreeMetadataTest {
             return Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{type}, (proxy, method, args) -> {
                 switch (method.getName()) {
                     case "setString": parameters.add((String) args[1]); return null;
-                    case "execute": sql = (String) args[0]; executions++; return true;
+                    case "execute":
+                        sql = (String) args[0]; executions++;
+                        if (failure != null && (executions == 1 || alwaysFail)) throw failure;
+                        return true;
                     case "executeQuery": executions++; return rows;
                     case "getResultSet": return rows;
                     default: return null;

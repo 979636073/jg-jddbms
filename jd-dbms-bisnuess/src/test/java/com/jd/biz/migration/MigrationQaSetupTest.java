@@ -26,6 +26,12 @@ public class MigrationQaSetupTest {
     }
 
     static DataSource oracleAdministrator(MigrationLiveTest environment, DataSource qa, MigrationConnections connections) throws Exception {
+        if (System.getenv("JDDBMS_QA_ORACLE_ADMIN_USERNAME") != null) {
+            DataSource admin = new DataSource(); admin.setType("ORACLE"); admin.setDriverConfig(environment.driver("ORACLE"));
+            admin.setUrl(System.getenv("JDDBMS_QA_ORACLE_ADMIN_URL")); admin.setUserName(System.getenv("JDDBMS_QA_ORACLE_ADMIN_USERNAME"));
+            admin.setPassword(System.getenv("JDDBMS_QA_ORACLE_ADMIN_PASSWORD"));
+            return admin;
+        }
         DataSource meta = new DataSource(); meta.setType("DM"); meta.setDriverConfig(environment.driver("DM")); meta.setUrl(MigrationLiveTest.hostUrl(System.getenv("JDDBMS_META_DB_URL")));
         meta.setUserName(System.getenv("JDDBMS_META_DB_USERNAME")); meta.setPassword(System.getenv("JDDBMS_META_DB_PASSWORD"));
         try (Connection store = connections.open(meta); PreparedStatement query = store.prepareStatement("SELECT URL, USER_NAME, PASSWORD, EXTEND_INFO FROM DATA_SOURCE WHERE TYPE='ORACLE' AND USER_NAME IN ('SYSTEM','SYS') ORDER BY ID DESC"); ResultSet rows = query.executeQuery()) {

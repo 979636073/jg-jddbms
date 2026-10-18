@@ -82,7 +82,10 @@ public class MigrationAdvancedLiveTest {
         try (Connection source = raw.open(sourceInfo); Connection target = raw.open(targetInfo); Connection store = raw.open(storeInfo)) {
             try {
                 execute(store, "CREATE TABLE " + qualified(storeInfo.getUserName(), storeName) + " (ID BIGINT IDENTITY(1,1) PRIMARY KEY, GMT_CREATE TIMESTAMP, GMT_MODIFIED TIMESTAMP, DATA_SOURCE_ID BIGINT, DATABASE_NAME VARCHAR(128), SCHEMA_NAME VARCHAR(128), TABLE_NAME VARCHAR(128), DELETED CHAR(1), USER_ID BIGINT, TASK_TYPE VARCHAR(64), TASK_STATUS VARCHAR(64), TASK_PROGRESS VARCHAR(64), TASK_NAME VARCHAR(256), DOWNLOAD_URL VARCHAR(512), CONTENT BLOB)"); storeCreated = true;
-                MigrationConnections connections = new MigrationConnections() { @Override public DataSource authorized(Long id) { return id == 1L ? sourceInfo : targetInfo; } };
+                MigrationConnections connections = new MigrationConnections() {
+                    @Override public DataSource authorized(Long id) { return id == 1L ? sourceInfo : targetInfo; }
+                    @Override public DataSource authorized(Long id, DataSourceAction action) { return authorized(id); }
+                };
                 service = new MigrationService(MigrationWorkflowLiveTest.persistentMapper(raw, storeInfo, storeName), connections, new MigrationMetadata());
                 for (int i = 0; i < 3; i++) {
                     Mapping mapping = new Mapping(); mapping.source = prefix + "_S" + i; mapping.target = prefix + "_T" + i; config.tables.add(mapping);

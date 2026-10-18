@@ -42,6 +42,7 @@ public class MigrationFaultLiveTest {
                         DataSource sourceInfo = dm, targetInfo = forwarded;
                         MigrationConnections routed = new MigrationConnections() {
                             @Override public DataSource authorized(Long id) { return id == 1L ? sourceInfo : targetInfo; }
+                            @Override public DataSource authorized(Long id, com.jd.biz.domain.api.enums.DataSourceAction action) { return authorized(id); }
                             @Override public Connection open(DataSource info) throws SQLException {
                                 Connection delegate = connections.open(info);
                                 if (info != targetInfo) return delegate;

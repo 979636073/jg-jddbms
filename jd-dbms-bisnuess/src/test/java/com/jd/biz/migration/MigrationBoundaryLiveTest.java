@@ -130,7 +130,10 @@ public class MigrationBoundaryLiveTest {
     private static String prefix() { return "JQA_B_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT); }
     private static void quiet() { ((ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)).setLevel(ch.qos.logback.classic.Level.WARN); }
     private static Config config(DataSource source, DataSource target, String from, String to) { Config config = new Config(); config.name = "边界条件 QA"; config.sourceId = 1L; config.targetId = 2L; config.sourceSchema = source.getUserName(); config.targetSchema = target.getUserName(); Mapping mapping = new Mapping(); mapping.source = from; mapping.target = to; config.tables.add(mapping); return config; }
-    private static MigrationService service(MigrationConnections raw, DataSource source, DataSource target, DataSource store, String storeName) throws Exception { return new MigrationService(MigrationWorkflowLiveTest.persistentMapper(raw, store, storeName), new MigrationConnections() { @Override public DataSource authorized(Long id) { return id == 1L ? source : target; } }, new MigrationMetadata()); }
+    private static MigrationService service(MigrationConnections raw, DataSource source, DataSource target, DataSource store, String storeName) throws Exception { return new MigrationService(MigrationWorkflowLiveTest.persistentMapper(raw, store, storeName), new MigrationConnections() {
+        @Override public DataSource authorized(Long id) { return id == 1L ? source : target; }
+        @Override public DataSource authorized(Long id, com.jd.biz.domain.api.enums.DataSourceAction action) { return authorized(id); }
+    }, new MigrationMetadata()); }
     private static Task run(MigrationService service, Task checked) throws Exception {
         StartRequest request = new StartRequest(); request.offlineConfirmed = true; request.fingerprint = checked.assessment.fingerprint; service.start(checked.id, 42L, request);
         long deadline = System.currentTimeMillis() + 30000;

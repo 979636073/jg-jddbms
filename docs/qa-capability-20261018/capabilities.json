@@ -1,0 +1,93 @@
+[
+  {
+    "type": "DM",
+    "productVersion": "DM Database Server 64 V8---03134284458-20251113-301923-20178",
+    "driverVersion": "8.1.2.141",
+    "probes": [
+      {
+        "query": "SELECT * FROM V$VERSION",
+        "available": true,
+        "columns": "BANNER",
+        "firstColumn": "DM Database Server 64 V8 | DB Version: 0x7000d | 03134284458-20251113-301923-20178 | Msg Version: 1 | Gsu level(5) cnt: 102",
+        "ms": 1.0429
+      },
+      {
+        "query": "SELECT * FROM ALL_MVIEWS WHERE 1=0",
+        "available": true,
+        "columns": "SCHID,MVIEW_NAME,QUERY,QUERY_LEN,REWRITE_ENABLED,REFRESH_MODE,REFRESH_METHOD,MVIEW_TYPE,LAST_REFRESH_TYPE,STALENESS,LAST_REFRESH_DATE,LAST_REFRESH_END_DATE",
+        "firstColumn": "",
+        "ms": 0.8506
+      },
+      {
+        "query": "SELECT * FROM SYS.ALL_OBJECTS WHERE 1=0",
+        "available": true,
+        "columns": "OWNER,OBJECT_NAME,SUBOBJECT_NAME,OBJECT_ID,DATA_OBJECT_ID,OBJECT_TYPE,CREATED,LAST_DDL_TIME,TIMESTAMP,STATUS,TEMPORARY,GENERATED,SECONDARY,NAMESPACE,EDITION_NAME",
+        "firstColumn": "",
+        "ms": 0.5342
+      },
+      {
+        "query": "SELECT * FROM SYSOBJECTS WHERE 1=0",
+        "available": false,
+        "errorCode": -5504,
+        "sqlState": "28000",
+        "ms": 14.169
+      },
+      {
+        "query": "SELECT * FROM ALL_SOURCE WHERE 1=0",
+        "available": true,
+        "columns": "OWNER,NAME,TYPE,LINE,TEXT",
+        "firstColumn": "",
+        "ms": 0.3501
+      },
+      {
+        "query": "SELECT COUNT(*) FROM USER_OBJECTS",
+        "available": true,
+        "columns": "COUNT(*)",
+        "firstColumn": "0",
+        "ms": 21.756
+      }
+    ]
+  },
+  {
+    "type": "ORACLE",
+    "productVersion": "Oracle Database 11g Enterprise Edition Release 11.2.0.1.0 - 64bit Production\nWith the Partitioning, OLAP, Data Mining and Real Application Testing options",
+    "driverVersion": "21.1.0.0.0",
+    "probes": [
+      {
+        "query": "SELECT * FROM V$VERSION",
+        "available": true,
+        "columns": "BANNER",
+        "firstColumn": "Oracle Database 11g Enterprise Edition Release 11.2.0.1.0 - 64bit Production | PL/SQL Release 11.2.0.1.0 - Production | CORE\t11.2.0.1.0\tProduction | TNS for 64-bit Windows: Version 11.2.0.1.0 - Production | NLSRTL Version 11.2.0.1.0 - Production",
+        "ms": 64.525
+      },
+      {
+        "query": "SELECT * FROM ALL_MVIEWS WHERE 1=0",
+        "available": true,
+        "columns": "OWNER,MVIEW_NAME,CONTAINER_NAME,QUERY,QUERY_LEN,UPDATABLE,UPDATE_LOG,MASTER_ROLLBACK_SEG,MASTER_LINK,REWRITE_ENABLED,REWRITE_CAPABILITY,REFRESH_MODE,REFRESH_METHOD,BUILD_MODE,FAST_REFRESHABLE,LAST_REFRESH_TYPE,LAST_REFRESH_DATE,STALENESS,AFTER_FAST_REFRESH,UNKNOWN_PREBUILT,UNKNOWN_PLSQL_FUNC,UNKNOWN_EXTERNAL_TABLE,UNKNOWN_CONSIDER_FRESH,UNKNOWN_IMPORT,UNKNOWN_TRUSTED_FD,COMPILE_STATE,USE_NO_INDEX,STALE_SINCE,NUM_PCT_TABLES,NUM_FRESH_PCT_REGIONS,NUM_STALE_PCT_REGIONS",
+        "firstColumn": "",
+        "ms": 3.3876
+      },
+      {
+        "query": "SELECT * FROM SYS.ALL_OBJECTS WHERE 1=0",
+        "available": true,
+        "columns": "OWNER,OBJECT_NAME,SUBOBJECT_NAME,OBJECT_ID,DATA_OBJECT_ID,OBJECT_TYPE,CREATED,LAST_DDL_TIME,TIMESTAMP,STATUS,TEMPORARY,GENERATED,SECONDARY,NAMESPACE,EDITION_NAME",
+        "firstColumn": "",
+        "ms": 0.5504
+      },
+      {
+        "query": "SELECT * FROM ALL_SOURCE WHERE 1=0",
+        "available": true,
+        "columns": "OWNER,NAME,TYPE,LINE,TEXT",
+        "firstColumn": "",
+        "ms": 0.5409
+      },
+      {
+        "query": "SELECT COUNT(*) FROM USER_OBJECTS",
+        "available": true,
+        "columns": "COUNT(*)",
+        "firstColumn": "0",
+        "ms": 7.9653
+      }
+    ]
+  }
+]

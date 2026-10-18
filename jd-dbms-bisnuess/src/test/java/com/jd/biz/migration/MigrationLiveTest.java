@@ -45,6 +45,13 @@ public class MigrationLiveTest {
     DataSource environment(String type) throws Exception {
         Assume.assumeTrue("1".equals(System.getenv("JDDBMS_MIGRATION_LIVE")));
         File root = new File(System.getProperty("user.dir")); if (root.getName().equals("jd-dbms-bisnuess")) root = root.getParentFile(); System.setProperty("user.dir", root.getAbsolutePath());
+        String prefix = "JDDBMS_QA_" + type + "_";
+        if (System.getenv(prefix + "URL") != null) {
+            DataSource source = new DataSource(); source.setType(type); source.setDriverConfig(driver(type));
+            source.setUrl(hostUrl(System.getenv(prefix + "URL"))); source.setUserName(Objects.requireNonNull(System.getenv(prefix + "USERNAME")));
+            source.setPassword(Objects.requireNonNull(System.getenv(prefix + "PASSWORD"))); source.setId("DM".equals(type) ? 900001L : 900002L);
+            return source;
+        }
         DataSource meta = new DataSource(); meta.setType("DM"); meta.setDriverConfig(driver("DM"));
         meta.setUrl(hostUrl(System.getenv("JDDBMS_META_DB_URL"))); meta.setUserName(System.getenv("JDDBMS_META_DB_USERNAME")); meta.setPassword(System.getenv("JDDBMS_META_DB_PASSWORD"));
         try (Connection connection = connections.open(meta)) { return saved(connection, type); }
@@ -60,11 +67,8 @@ public class MigrationLiveTest {
         File root = new File(System.getProperty("user.dir")); if (root.getName().equals("jd-dbms-bisnuess")) root = root.getParentFile();
         assertTrue("Bundled drivers must already exist; do not download during QA", new File(root, "assets/jar/DmJdbcDriver18-8.1.2.141.jar").isFile());
         System.setProperty("user.dir", root.getAbsolutePath());
-        DataSource meta = new DataSource(); meta.setType("DM"); meta.setDriverConfig(driver("DM"));
-        meta.setUrl(hostUrl(System.getenv("JDDBMS_META_DB_URL")));
-        meta.setUserName(System.getenv("JDDBMS_META_DB_USERNAME")); meta.setPassword(System.getenv("JDDBMS_META_DB_PASSWORD"));
         DataSource sourceInfo, targetInfo;
-        try (Connection metaConnection = connections.open(meta)) { sourceInfo = saved(metaConnection, sourceType); targetInfo = saved(metaConnection, targetType); }
+        sourceInfo = environment(sourceType); targetInfo = environment(targetType);
         String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
         Config config = new Config(); config.name = "QA " + sourceType + " → " + targetType;
         config.sourceId = sourceInfo.getId(); config.targetId = targetInfo.getId(); config.sourceSchema = sourceInfo.getUserName(); config.targetSchema = targetInfo.getUserName(); config.commitSize = 2;
