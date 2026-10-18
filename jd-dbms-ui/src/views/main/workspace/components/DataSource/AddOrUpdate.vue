@@ -90,11 +90,7 @@ export default {
         };
         connectionServer.getDriverList({ dbType: row.type }).then(res => {
           if (!this.dataSourceInfo.driverConfig) {
-            this.$set(
-              this.dataSourceInfo,
-              "driverConfig",
-              res.data.defaultDriverConfig
-            );
+            this.dataSourceInfo["driverConfig"] = res.data.defaultDriverConfig;
           }
           this.driverConfigList = res.data.driverConfigList;
           this.dataSourceFormConfig = this.getDataSourceFormConfig(row);
@@ -111,11 +107,7 @@ export default {
       connectionServer
         .getDriverList({ dbType: this.dataSourceInfo.type })
         .then(res => {
-          this.$set(
-            this.dataSourceInfo,
-            "driverConfig",
-            res.data.defaultDriverConfig
-          );
+          this.dataSourceInfo["driverConfig"] = res.data.defaultDriverConfig;
           this.driverConfigList = res.data.driverConfigList;
           this.dataSourceFormConfig = this.getDataSourceFormConfig();
         });
@@ -129,12 +121,7 @@ export default {
       function setValue(dataSourceInfo, _newDataItem) {
         _newDataItem &&
           _newDataItem.forEach(item => {
-            that.$set(
-              dataSourceInfo,
-              item.name,
-              item.defaultValue,
-              // row && row[item.name] ? row[item.name] : item.defaultValue
-            );
+            dataSourceInfo[item.name] = item.defaultValue;
             if (item.name === "environmentId") {
               item.selects = that.envList.map(item => {
                 return {
@@ -142,11 +129,7 @@ export default {
                   value: item.id
                 };
               });
-              that.$set(
-                dataSourceInfo,
-                item.name,
-                row && row[item.name] ? row[item.name] : that.envList[0].id
-              );
+              dataSourceInfo[item.name] = row && row[item.name] ? row[item.name] : that.envList[0].id;
             }
             if (item.inputType === "select" && row && row[item.name]) {
               let selectItemInfo = item.selects.find(

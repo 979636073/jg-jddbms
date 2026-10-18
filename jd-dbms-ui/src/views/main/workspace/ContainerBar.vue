@@ -327,7 +327,7 @@ export default {
     setCurrentConfig(key, value) {
       console.log(key, value, "setCurrentConfig");
       // this.currentConfig[key] = value;
-      this.$set(this.currentConfig, key, value);
+      this.currentConfig[key] = value;
       console.log(this.currentConfig, "this.currentConfig");
     }
   }

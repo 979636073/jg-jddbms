@@ -103,7 +103,7 @@ export default {
     resizeColumn(event) {
       if (!this._columnResize) return;
       const { index, startX, width } = this._columnResize;
-      this.$set(this.columnWidths, index, Math.max(64, width + event.clientX - startX));
+      this.columnWidths[index] = Math.max(64, width + event.clientX - startX);
     },
     stopResize() {
       if (!this._columnResize) return;
@@ -112,7 +112,7 @@ export default {
       window.removeEventListener("pointerup", this.stopResize);
       window.removeEventListener("pointercancel", this.stopResize);
     },
-    fitColumn(column) { this.$delete(this.columnWidths, column.index); },
+    fitColumn(column) { delete this.columnWidths[column.index]; },
     measure() {
       const viewport = this.$refs.viewport;
       if (viewport) {

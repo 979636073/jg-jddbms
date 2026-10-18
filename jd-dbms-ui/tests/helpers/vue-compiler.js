@@ -9,11 +9,11 @@ exports.parseComponent = source => {
 
 exports.compile = source => {
   const result = compileTemplate({ source, filename: 'regression.vue', id: 'regression',
-    compilerOptions: { compatConfig: { MODE: 2 } } })
+    compilerOptions: {} })
   return { ...result, ast: parseTemplate(source).children.find(node => node.type === 1), errors: result.errors.map(error => error.message || error) }
 }
 
-exports.compileToFunctions = source => ({ render: require('@vue/compat').compile(source) })
+exports.compileToFunctions = source => ({ render: require('vue').compile(source) })
 
 exports.attribute = (node, name) => node.props?.find(prop => prop.type === 6 && prop.name === name)?.value?.content ??
   (node.props?.some(prop => prop.type === 6 && prop.name === name) ? '' : undefined)

@@ -239,7 +239,7 @@ export default {
         refresh: true,
       };
       await tableServer.getTableSection(params, "columns").then((res) => {
-        this.$set(this, "referencedData", res.data.columnList);
+        this["referencedData"] = res.data.columnList;
       });
     },
     handleRowClick(row) {

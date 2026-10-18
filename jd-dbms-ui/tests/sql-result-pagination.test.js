@@ -3,7 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
 const compiler = require('./helpers/vue-compiler')
-const Vue = require('@vue/compat')
+const { mountOptions } = require('./helpers/vue-runtime')
 const root = path.join(__dirname, '../src')
 const prepareContext = {}
 vm.runInNewContext(fs.readFileSync(path.join(root, 'utils/sqlResult.js'), 'utf8').replace(/export /g, ''), prepareContext)
@@ -58,7 +58,8 @@ async function run() {
   const wide = { ...fixture(), headerList: Array.from({ length: 300 }, (_, index) => ({ name: 'C' + index })),
     dataList: Array.from({ length: 1000 }, () => Array(300).fill('wide')) }
   prepareContext.prepareSqlResult(wide)
-  const screen = new Vue({ ...component, propsData: { queryResultData: wide } })
+  const screenApp = mountOptions(component, { queryResultData: wide })
+  const screen = screenApp.vm
   screen.viewportWidth = 900
   screen.viewportHeight = 420
   screen.scrollTop = 20000
@@ -76,10 +77,11 @@ async function run() {
   assert(countCells(rendered) > 0, 'Vue 3 渲染器应实际生成结果单元格')
   assert(countCells(rendered) <= screen.visibleRows.length * maxVisibleColumns, '30万单元格结果的 DOM 必须保持有界')
   assert.strictEqual(screen.displayValue('x'.repeat(100000)).length, 200, '大字段不能直接铺满单元格 DOM')
-  screen.$destroy()
-  const widths = new Vue({ ...component, propsData: { queryResultData: { ...fixture(),
+  screenApp.unmount()
+  const widthsApp = mountOptions(component, { queryResultData: { ...fixture(),
     headerList: [{ name: '行号', dataType: 'CHAT2DB_ROW_NUMBER' }, { name: 'ID' }, { name: 'DESCRIPTION' }, { name: 'PAYLOAD', dataType: 'BLOB' }],
-    dataList: [['1', '1', '这是一段较长的中文字段内容，用来检查列宽是否适配显示', 'BLOB']] } } })
+    dataList: [['1', '1', '这是一段较长的中文字段内容，用来检查列宽是否适配显示', 'BLOB']] } })
+  const widths = widthsApp.vm
   assert(widths.columns[2].width > widths.columns[1].width, '长内容应比短 ID 列更宽')
   assert.strictEqual(widths.columns[0].width, 64)
   const originalWidth = widths.columns[2].width
@@ -101,7 +103,7 @@ async function run() {
   component.watch.queryResultData.handler.call(watchState, { ...fixture(), params: { sql: 'SELECT * FROM OTHER' } }, fixture())
   assert.strictEqual(Object.keys(watchState.columnWidths).length, 0, '更换查询时应按新结果重新适配')
   widths.startResize({ button: 0, clientX: 100 }, widths.columns[2])
-  widths.$destroy()
+  widthsApp.unmount()
   assert.strictEqual(resizeListeners.size, 0, '销毁结果表必须清理拖拽监听')
   console.log('SQL 结果：精确分页、乱序/失败回退、结果隔离、双向虚拟渲染通过')
 }

@@ -97,7 +97,7 @@ assert(sideBarSource.includes('@node-click="handleResourceNodeClick"'), '资源�
 assert(sideBarSource.includes('async loadRouteObject(route)'), '右侧新窗口应显式加载路由对象，不依赖创建另一棵树')
 assert(!sideBarSource.includes('this.filterName = this.$route.query.tableName'), '路由目标表不应写入搜索框或过滤列表')
 assert(!sideBarSource.includes('revealResourceObject'), '页签打开和切换不能重置共享树的展开与选中状态')
-assert(!sideBarSource.includes('activated()'), '共享树不能在每次页签激活时恢复其他树上下文')
+assert(/activated\(\)\s*{\s*this\.isResourceActive = true;\s*}/.test(sideBarSource), '共享树激活只更新生命周期状态，不应恢复其他树上下文')
 assert(sideBarSource.includes('searchKey: routeTableName'), '首批列表未命中时应精确取回路由目标表')
 assert(sideBarSource.includes('(!routeSchema || routeSchema === this.schema)'), '只应在路由模式与当前模式一致时恢复目标表')
 assert(sideBarSource.includes('ref="objectListScrollbar"'), '表列表应提供滚动定位引用')

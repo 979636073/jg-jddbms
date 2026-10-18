@@ -277,9 +277,9 @@ export default {
             this.formatSql();
           });
         }
-        this.$set(this.loadedSections, tab, true);
+        this.loadedSections[tab] = true;
         if (refresh && tab === "forth") {
-          for (const relatedTab of ["second", "third", "seventh"]) this.$delete(this.loadedSections, relatedTab);
+          for (const relatedTab of ["second", "third", "seventh"]) delete this.loadedSections[relatedTab];
         }
         return true;
       }).catch(() => {
@@ -312,7 +312,7 @@ export default {
         } else {
           this.triggerList = [];
         }
-        this.$set(this.loadedSections, "fifth", true);
+        this.loadedSections["fifth"] = true;
       }).catch(() => {
         this.$message.error("加载触发器失败，请稍后重试");
       });
@@ -329,7 +329,7 @@ export default {
       return tableServer.getGrantList(params).then(res => {
         if (this.currentConfig !== config || !res.success) return;
         this.grantList = res.data;
-        this.$set(this.loadedSections, "eigth", true);
+        this.loadedSections["eigth"] = true;
       }).catch(() => {
         this.$message.error("加载授权失败，请稍后重试");
       });

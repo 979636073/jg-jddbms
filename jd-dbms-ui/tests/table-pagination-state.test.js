@@ -11,20 +11,21 @@ for (const name of ['SqlPreview', 'MonacoEditor', 'ScreeningResult', 'Filedialog
 vm.runInNewContext(source.script.content.replace(/^import .*;?\s*$/gm, '').replace('export default', 'module.exports ='), context)
 const component = context.module.exports
 assert.strictEqual(component.data().valuePanelVisible, false, '表数据字段值面板默认收起')
-const Vue = require('@vue/compat')
+const { mountOptions } = require('./helpers/vue-runtime')
 const summaryTemplate = source.template.content.match(/<div class="table_bottom_info">[\s\S]*?<\/div>/)[0]
 const summaryRender = compiler.compileToFunctions(summaryTemplate)
 const vnodeText = node => typeof node.children === 'string' ? node.children :
   (Array.isArray(node.children) ? node.children : []).map(vnodeText).join('')
-const summary = new Vue({
+const summaryApp = mountOptions({
   data: () => ({ queryResultData: { description: '执行成功', duration: 44, hasNextPage: true }, total: 2000 }),
   ...summaryRender
 })
+const summary = summaryApp.vm
 const summaryText = vnodeText(summaryRender.render.call(summary, summary, [])).replace(/\s+/g, ' ')
 assert(summaryText.includes('【结果】 执行成功') && summaryText.includes('【耗时】 44ms'))
 assert(!summaryText.includes('【查询行数】') && !summaryText.includes('【提示】'),
   '底部状态栏不再重复显示查询行数和翻页提示')
-summary.$destroy()
+summaryApp.unmount()
 const pending = []
 context.sqlServer.executeSql = params => new Promise(resolve => pending.push({ params, resolve }))
 context.sqlServer.viewTable = params => new Promise(resolve => pending.push({ params, resolve, tableRead: true }))

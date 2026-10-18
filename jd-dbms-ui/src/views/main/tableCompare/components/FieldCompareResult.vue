@@ -79,6 +79,7 @@
 </template>
 
 <script>
+import { h } from 'vue'
 const ColumnStructure = {
   props: {
     row: { type: Object, required: true },
@@ -114,7 +115,7 @@ const ColumnStructure = {
       return value === null || value === undefined || value === '' ? '—' : value
     }
   },
-  render(h) {
+  render() {
     const column = this.row[this.side]
     if (!column) {
       return h('span', { class: 'missing-value' }, `${this.side === 'source' ? '源表' : '目标表'}无此字段`)

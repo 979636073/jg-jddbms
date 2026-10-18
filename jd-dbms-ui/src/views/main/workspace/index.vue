@@ -156,7 +156,7 @@ export default {
       this.forwardTreeEvent("queryDetailTable", ...args);
     },
     setObjectLoading(loading, pageId = this.$route.params.id) {
-      this.$set(this.objectLoading, pageId, loading);
+      this.objectLoading[pageId] = loading;
     },
     openRouteObject(route) {
       return this.$refs.databaseTree.loadRouteObject(route);

@@ -50,7 +50,7 @@ import { createEventBus } from '@/utils/eventBus'
 import Contextmenu from '@imengyu/vue3-context-menu'
 import '@imengyu/vue3-context-menu/lib/vue3-context-menu.css'
 
-configureCompat({ COMPONENT_ASYNC: false })
+configureCompat({ MODE: 3 })
 const app = createApp(App)
 // Vue 3 libraries use native modelValue bindings within the migration runtime.
 Object.entries(ElementComponents).forEach(([name, component]) => {

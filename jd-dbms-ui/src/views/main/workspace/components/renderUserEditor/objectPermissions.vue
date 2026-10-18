@@ -196,7 +196,7 @@ export default {
       if (field === 'toRule' && checked) {
         row.rule = true; row.mixedRule = false; change.rule = true;
       }
-      this.$set(this.changes, row.desc, change);
+      this.changes[row.desc] = change;
     },
     toggleAllPrivileges(checked) { this.setAllPrivileges(checked); },
     setAllPrivileges(checked) { this.tableData.forEach(row => this.changePrivilege(row, 'rule', checked)); },

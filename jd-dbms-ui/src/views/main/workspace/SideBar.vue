@@ -74,6 +74,7 @@ export default {
   data() {
     return {
       openIndex:null,
+      isResourceActive: true,
       menuList: [
         {
           value: "1",
@@ -256,6 +257,12 @@ export default {
     this.$EventBus.$on("dataSourceConnected", this.handleDataSourceConnected);
     window.addEventListener("workspace-resource-mutation", this.handleResourceMutation);
   },
+  activated() {
+    this.isResourceActive = true;
+  },
+  deactivated() {
+    this.isResourceActive = false;
+  },
   unmounted() {
     window.removeEventListener("beforeunload", this.beforeunload);
     window.removeEventListener("keydown", this.handelKeyDown);
@@ -370,13 +377,17 @@ export default {
       await this.$nextTick();
       const root = this.$refs.resourceTree?.getNode(`datasource-${dataSource.id}`);
       if (!root) return;
-      root.data.dataSource = dataSource;
+      root.data.dataSource = {
+        ...root.data.dataSource,
+        ...dataSource,
+        canManage: dataSource.canManage ?? root.data.dataSource.canManage,
+      };
       root.data.leaf = false;
       root.isLeafByUser = false;
       root.loaded = false;
       root.updateLeafState();
-      if (this._inactive) return;
-      this.activateDataSourceContext(dataSource);
+      if (!this.isResourceActive) return;
+      this.activateDataSourceContext(root.data.dataSource);
       await this.expandResourceNode(root);
       const hierarchy = root.childNodes.find((node) => ["schemaCollection", "databaseCollection"].includes(node.data.treeNodeType));
       if (hierarchy) await this.expandResourceNode(hierarchy);
@@ -887,7 +898,7 @@ export default {
       const next = selected
         ? Array.from(new Set([...names, data.label]))
         : names.filter((name) => name !== data.label);
-      this.$set(this.treeTableSelections, data.groupKey, next);
+      this.treeTableSelections[data.groupKey] = next;
     },
     loadedTreeTableNames(node) {
       return (node?.childNodes || [])
@@ -909,7 +920,7 @@ export default {
       const next = this.isAllLoadedTreeTablesSelected(data, node)
         ? selected.filter((name) => !loaded.includes(name))
         : Array.from(new Set([...selected, ...loaded]));
-      this.$set(this.treeTableSelections, data.key, next);
+      this.treeTableSelections[data.key] = next;
     },
     async deleteSelectedTreeTables(data, node) {
       const tableNames = this.selectedTreeTableNames(data.key);
@@ -935,14 +946,14 @@ export default {
         if (tableNames.length > BATCH_DELETE_TASK_THRESHOLD) {
           const res = await tableServer.deleteTableDataTask(params);
           if (!res.success) throw new Error(res.errorMessage || "提交删除任务失败");
-          this.$delete(this.treeTableSelections, data.key);
+          delete this.treeTableSelections[data.key];
           this.$message.success("批量删除已转入任务中心，可继续操作");
           this.$EventBus.$emit("openTaskCenter");
           return;
         }
         const res = await tableServer.deleteTableData(params);
         if (!res.success) throw new Error(res.errorMessage || "删除失败");
-        this.$delete(this.treeTableSelections, data.key);
+        delete this.treeTableSelections[data.key];
         this.refreshResourceNode(node);
         this.$message.success("删除成功");
       } catch (error) {
@@ -1595,7 +1606,7 @@ export default {
       }
       this.refresh = true;
       if (!node.expanded) {
-        this.$refs.tree.$set(node, "expanded", true);
+        node["expanded"] = true;
       }
       node.loaded = false;
       node.loadData();

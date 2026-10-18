@@ -144,7 +144,20 @@ async function main() {
 
   const sideBar = load('views/main/workspace/SideBar.vue', { connectionServer: {}, sqlServer: {}, viewServer: {}, tableServer: {}, userServer: {}, tableSpaceServer: {},
     SqlPreview: {}, CreateOption: {}, DataSourceSharingDialog: {}, TableTransferDialog: {}, SchemaSqlTransferDialog: {}, DmpTransferDialog: {}, addTableSpaceVue: {}, addSchema: {}, addUser: {}, addTable: {}, addView: {}, ViewImport: {}, draggable: {}, database: {} })
-  assert.strictEqual(sideBar.activated, undefined, '共享树不能随右侧窗口激活重置状态')
+  const treeLifecycle = { isResourceActive: false, marker: 'current-tree' }
+  sideBar.activated.call(treeLifecycle)
+  assert.deepStrictEqual(treeLifecycle, { isResourceActive: true, marker: 'current-tree' }, '共享树激活只更新生命周期状态')
+  sideBar.deactivated.call(treeLifecycle)
+  assert.strictEqual(treeLifecycle.isResourceActive, false)
+
+  const treeRoot = { data: { dataSource: { id: 7, canManage: true } }, childNodes: [], updateLeafState() {} }
+  const connectedState = { isResourceActive: true, $nextTick: async () => {}, $refs: { resourceTree: { getNode: () => treeRoot } },
+    activateDataSourceContext(data) { this.active = data }, expandResourceNode: async () => {} }
+  await sideBar.methods.handleDataSourceConnected.call(connectedState, { id: 7, canManage: null, alias: '测试' })
+  assert.strictEqual(treeRoot.data.dataSource.canManage, true, '连接响应缺少权限时应保留连接列表返回的管理标记')
+  assert.strictEqual(connectedState.active, treeRoot.data.dataSource)
+  await sideBar.methods.handleDataSourceConnected.call(connectedState, { id: 7, canManage: false })
+  assert.strictEqual(treeRoot.data.dataSource.canManage, false, '显式撤销权限不能被旧管理标记覆盖')
   console.log('SQL 控制台与窗口缓存回归通过')
 }
 main().catch(error => { console.error(error); process.exitCode = 1 })
