@@ -1,10 +1,10 @@
 {
   "date": "2026-10-18",
   "baseRevision": "698de41d77cd03c191af9e34ba316d49594ecb5a",
-  "workingTreeChanges": true,
+  "workingTreeChanges": false,
   "conclusion": "本机可执行的数据库、权限、HTTP、性能和安装恢复回归已通过；修复 DM 普通账号视图目录读取问题。现场 DM 2024、其他 Oracle 服务器版本和原生 ARM64 等待环境验收。",
   "defaultVerify": {
-    "tests": 398,
+    "tests": 399,
     "failures": 0,
     "errors": 0,
     "skipped": 51
@@ -733,24 +733,23 @@
     "temporaryDatabaseUsers": "本轮 DM、Oracle 随机 QA 账号和专用 Oracle 测试管理员均已删除；临时对象由 finally 清理"
   },
   "runtime": {
-    "mode": "qa",
-    "jarSha256": "64DA1C351C68B8EDD1094C6A154BCA22FDE11701D918FF868424BE4F99E0E6BD",
-    "revision": "698de41d77cd03c191af9e34ba316d49594ecb5a",
-    "releaseDirectory": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\releases\\698de41d77cd",
-    "jar": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\run\\jd-dbms-admin-qa-20261018-182118.jar",
+    "revision": "af7917e8800b6b7077feb8af0cef1e65e3c53cdd",
+    "jar": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\run\\jd-dbms-admin-20261018-184453.jar",
+    "releaseDirectory": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\releases\\af7917e8800b",
+    "mode": "release",
     "processes": [
       {
-        "pid": 55524,
-        "startedAtTicks": 639279156786357500,
-        "marker": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\run\\jd-dbms-admin-qa-20261018-182118.jar"
+        "startedAtTicks": 639279170939511000,
+        "pid": 18220,
+        "marker": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\run\\jd-dbms-admin-20261018-184453.jar"
       },
       {
-        "pid": 33484,
-        "startedAtTicks": 639279141848858800,
-        "marker": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\releases\\698de41d77cd\\local-web-server.mjs"
+        "startedAtTicks": 639279170939631900,
+        "pid": 54200,
+        "marker": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\releases\\af7917e8800b\\local-web-server.mjs"
       }
     ],
-    "sourceDirty": true
+    "jarSha256": "41CD390FDD3A8276F964BEAEE0C42F9183A01252FF5EDAACD41A1AE4FEB561DB"
   },
   "rerun": {
     "default": "mvn --batch-mode -DargLine=-Duser.home=<隔离测试目录> verify",
@@ -815,6 +814,16 @@
       "rows": 100,
       "scenario": "Actual route opens existing large BLOB table",
       "status": "PASS"
+    },
+    "releaseSmoke": {
+      "status": "PASS",
+      "gitHead": "af7917e8800b6b7077feb8af0cef1e65e3c53cdd",
+      "mode": "release",
+      "oracleSavedConnection": true,
+      "dmOrdinaryAndMaterializedView": true,
+      "blobLazyMarker": true,
+      "servedFrontendHashMatches": true,
+      "runningBackendHashMatches": true
     }
   },
   "followupStages": [
@@ -840,7 +849,7 @@
     },
     {
       "stage": 5,
-      "status": "PENDING_PACKAGE",
+      "status": "PASS",
       "scope": "源码固化、构建、更新包、完整安装包、哈希与回退说明"
     }
   ],
@@ -859,5 +868,37 @@
       "PASS: fresh install, application upgrade, restart, offline H2+configuration backup/restore; Windows amd64 only; evidence=D:\\code\\28\\dbms\\jg-jddbms\\.local\\install-lifecycle-f1f63691"
     ],
     "limitation": "H2+configuration restore, not a Linux ARM64 whole-machine restore"
+  },
+  "frontendRelease": {
+    "coreChecks": 40,
+    "lintErrors": 0,
+    "lintWarnings": 683,
+    "productionBuild": "PASS"
+  },
+  "release": {
+    "releaseDirectory": "D:\\code\\28\\dbms\\jg-jddbms\\.local\\releases\\af7917e8800b",
+    "arm64RuntimeAcceptance": "PENDING_ENVIRONMENT",
+    "archives": [
+      {
+        "name": "jg-jddbms-update-20261018-af7917e8800b.tar.gz",
+        "path": "D:/code/build/dbms/jg-jddbms-update-20261018-af7917e8800b.tar.gz",
+        "sha256": "38a32635f38c6646ae1ef780fc93dbba68f4bf9a25427305453753cf1a1a5c1e",
+        "bytes": 139769804
+      },
+      {
+        "name": "jg-jddbms-update-20261018-af7917e8800b.zip",
+        "path": "D:/code/build/dbms/jg-jddbms-update-20261018-af7917e8800b.zip",
+        "sha256": "fe5bf1432c5150162c589baed24379535fce474f6ef411c775b00006eee7a95d",
+        "bytes": 139967081
+      },
+      {
+        "name": "jg-jddbms-linux-arm64-20261018-arm-r1-af7917e8800b.tar.gz",
+        "path": "D:/code/build/dbms/jg-jddbms-linux-arm64-20261018-arm-r1-af7917e8800b.tar.gz",
+        "sha256": "bbe0b9d86dc2250c4a1a7d6a2e84ff36078c3bd9f21c7a60e2fa0d29dac06063",
+        "bytes": 155699937
+      }
+    ],
+    "gitHead": "af7917e8800b6b7077feb8af0cef1e65e3c53cdd",
+    "updateFilesVerified": 733
   }
 }
